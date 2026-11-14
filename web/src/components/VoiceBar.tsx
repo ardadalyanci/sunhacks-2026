@@ -34,11 +34,17 @@ export function speak(text: string) {
 type Props = {
   briefing: string;
   onCommand: (transcript: string) => Promise<CommandResult>;
+  onListeningChange?: (listening: boolean) => void;
 };
 
 /** "Hear my day" reads the briefing; the mic or the text box sends a command. */
-export default function VoiceBar({ briefing, onCommand }: Props) {
-  const [listening, setListening] = useState(false);
+export default function VoiceBar({ briefing, onCommand, onListeningChange }: Props) {
+  const [listening, setListeningState] = useState(false);
+
+  function setListening(value: boolean) {
+    setListeningState(value);
+    onListeningChange?.(value);
+  }
   const [heard, setHeard] = useState("");
   const [reply, setReply] = useState("");
   const [typed, setTyped] = useState("");

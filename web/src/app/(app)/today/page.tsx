@@ -44,8 +44,10 @@ export default function TodayPage() {
   const [items, setItems] = useState<DayItem[]>(demoPlan.items);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hotPreview, setHotPreview] = useState(false);
+  const [listening, setListening] = useState(false);
 
   const heat = hotPreview ? demoHotAlert : demoPlan.heatAlert;
+  const mood = listening ? "listening" : heat ? "hot" : "happy";
   const selected = items.find((i) => i.id === selectedId) ?? null;
   const assignments = [...items.filter((i) => i.kind === "assignment"), ...demoDueSoon];
   const tonight = demoPicks.filter(
@@ -96,11 +98,13 @@ export default function TodayPage() {
       <h1 className="font-display text-5xl font-bold tracking-tight">Your day, {demoSetup.name}</h1>
 
       <section className="mt-6 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6">
-        <Mascot size={92} hot={Boolean(heat)} className="shrink-0" />
+        <div className={`shrink-0 self-center sm:self-start ${listening ? "mascot-listening" : ""}`}>
+          <Mascot size={128} mood={mood} animated />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="max-w-prose text-lg leading-relaxed">{demoPlan.briefing}</p>
           <div className="mt-4">
-            <VoiceBar briefing={demoPlan.briefing} onCommand={onCommand} />
+            <VoiceBar briefing={demoPlan.briefing} onCommand={onCommand} onListeningChange={setListening} />
           </div>
         </div>
       </section>

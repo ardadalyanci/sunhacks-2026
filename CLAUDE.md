@@ -40,6 +40,7 @@ If time allows: air-conditioned building shortcuts (3-5 buildings by hand), a Co
 - `GET /api/weather`: Open-Meteo for Tempe → `Weather`
 - `POST /api/plan`: gaps, leave times, heat alert + Gemini briefing → `DayPlan`
 - `POST /api/command`: Gemini turns a voice command into `{ action, id }` → `CommandResult`
+- `POST /api/schedule` (built by B for setup): a schedule photo or pasted MyASU text → `{ classes: ClassBlock[] }` via Gemini (REST, no extra dependency; model from `GEMINI_MODEL`, default `gemini-3.8-flash`)
 
 ## Hackathon rules that bind us
 - Deadline **Sun 2026-11-15 11:00 MST** on Devpost; team target **10:30**. Expo + judging Sun 12:00-14:00 in person: the demo must work live, and we keep a backup video.

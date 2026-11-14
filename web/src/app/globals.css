@@ -77,6 +77,60 @@ body {
   background: linear-gradient(to bottom, #fff1cf 0%, #ffd27a 55%, #ffb000 100%);
 }
 
+/* Mascot motion: a slow float, an occasional blink, and a pulse while listening. */
+@keyframes mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+.mascot-float {
+  animation: mascot-float 3.4s ease-in-out infinite;
+}
+
+@keyframes mascot-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+.mascot-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mascot-blink 5s infinite;
+}
+
+@keyframes mascot-listen {
+  from {
+    box-shadow: 0 0 0 0 rgba(91, 63, 168, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 20px rgba(91, 63, 168, 0);
+  }
+}
+
+.mascot-listening {
+  border-radius: 9999px;
+  animation: mascot-listen 1.2s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-float,
+  .mascot-blink,
+  .mascot-listening {
+    animation: none;
+  }
+}
+
 @keyframes sunrise {
   from {
     transform: translateY(60%);

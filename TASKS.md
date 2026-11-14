@@ -15,12 +15,14 @@ Update this file when you start or finish something. `[ ]` todo, `[~]` in progre
 ## B: UI (repo owner)
 Screens run on mock data from `web/src/mocks/` until A's routes are live.
 - [x] Design system: "Arizona sky" (time of day is color), Bricolage Grotesque + Atkinson Hyperlegible Next
-- [ ] Rebrand to DayPilot
-- [ ] Today screen: sky timeline of classes, assignments, study blocks, events, leave-at and heat alerts
-- [ ] Events screen: picks by interest with "why", add to today, RSVP link
-- [ ] Voice: mic button (Web Speech API) → `/api/command`; spoken briefing (speechSynthesis)
-- [ ] Setup: Canvas token (with how-to), classes entered by hand, interests
-- [ ] Wire each screen to A's routes
+- [x] Rebrand to DayPilot (name lives in `web/src/components/brand.ts`; "DayPilot" is also a JS calendar library, team may rename)
+- [x] Mascot Sol: sun with pilot goggles and scarf; moods happy / listening / hot / proud; float + blink
+- [x] Home page: big Sol with speech bubble, "from your first walk to your last event" timeline, setup CTA
+- [x] Today screen: sky timeline of classes, study blocks, leave-at markers, due pins, events; heat alert + 106°F preview toggle
+- [x] Events screen: picks by interest with "why", RSVP link
+- [x] Voice: Hear my day (speechSynthesis), Ask (Web Speech) + typed fallback → `/api/command`, local fallback until it exists
+- [x] Setup: Canvas token how-to; classes from a photo, pasted text or by hand (`POST /api/schedule`); interests
+- [ ] Wire Today and Events to A's routes (`/api/canvas`, `/api/events`, `/api/weather`, `/api/plan`)
 - [ ] PWA manifest + icons; phone pass at 375px
 
 ## C: content, mascot, demo
