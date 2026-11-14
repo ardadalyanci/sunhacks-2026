@@ -15,6 +15,8 @@ npm run dev                  # http://localhost:3000
 npm test                     # unit + API route tests (Vitest)
 ```
 
+Demo mode needs no keys or network: `GET /api/demo` returns a sample student's day (add `?hot=1` for a heat-warning day); send its `request` to `POST /api/plan`. In the setup screen, the Canvas token `demo` loads sample deadlines.
+
 ## Team
 <!-- names and GitHub handles -->
 

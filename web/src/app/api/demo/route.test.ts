@@ -1,0 +1,91 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { sanitizePlanRequest } from "@/lib/sanitize";
+import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
+
+vi.mock("@/lib/buildings", () => ({
+  loadBuildings: async () => [
+    { id: "BYENG", name: "Brickyard Engineering", lat: 33.4235, lng: -111.9397 },
+    { id: "COOR", name: "Lattie F. Coor Hall", lat: 33.4209, lng: -111.937 },
+    { id: "MU", name: "Memorial Union", lat: 33.4174, lng: -111.9345 },
+    { id: "HAYDEN", name: "Hayden Library", lat: 33.419, lng: -111.9341 },
+    { id: "MANZ", name: "Manzanita Hall", lat: 33.4171, lng: -111.9395, aliases: ["Manzanita"] },
+  ],
+}));
+vi.mock("@/lib/gemini", () => ({ generateJson: async () => null })); // demo must work offline
+
+const { GET } = await import("./route");
+const { POST: plan } = await import("../plan/route");
+const { POST: canvas } = await import("../canvas/route");
+
+async function demo(query = "") {
+  const res = await GET(new Request(`http://test/api/demo${query}`));
+  return { status: res.status, json: await res.json() };
+}
+async function planFor(request: PlanRequest): Promise<DayPlan> {
+  return (await plan(new Request("http://test/api/plan", { method: "POST", body: JSON.stringify(request) }))).json();
+}
+const overlaps = (a: DayItem, b: DayItem) => Date.parse(a.start) < Date.parse(b.end ?? b.start) && Date.parse(b.start) < Date.parse(a.end ?? a.start);
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("GET /api/demo", () => {
+  it("returns a persona and a clean PlanRequest for the given date", async () => {
+    const { status, json } = await demo("?date=2026-11-15");
+    expect(status).toBe(200);
+    expect(json.persona.name).toBe("Alex Rivera");
+    expect(json.request.date).toBe("2026-11-15");
+    expect(json.request.classes.every((c: { days: string[] }) => c.days[0] === "Sun")).toBe(true);
+    // Nothing in the sample data is dropped by the request sanitizer.
+    const cleaned = sanitizePlanRequest(json.request);
+    expect(cleaned.ok && cleaned.value.events?.length).toBe(json.request.events.length);
+    expect(cleaned.ok && cleaned.value.deadlines?.length).toBe(json.request.deadlines.length);
+  });
+
+  it("defaults to today, supports a hot day and rejects bad dates", async () => {
+    expect((await demo()).json.request.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect((await demo("?hot=1")).json.request.weather.isHot).toBe(true);
+    expect((await demo("?date=2026-02-30")).status).toBe(400);
+  });
+});
+
+describe("demo day through /api/plan", () => {
+  it("produces a full, consistent day with no network", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { json } = await demo("?date=2026-11-15&hot=1");
+    const day = await planFor(json.request);
+
+    const classes = day.items.filter((i) => i.type === "class");
+    expect(classes.map((c) => c.title)).toEqual(["CSE 230", "MAT 343", "CSE 240"]);
+    for (const c of classes) expect(Date.parse(c.leaveAt!)).toBeLessThan(Date.parse(c.start));
+
+    const study = day.items.filter((i) => i.type === "study_block");
+    expect(study.length).toBeGreaterThan(0);
+    for (const s of study) {
+      for (const c of classes) expect(overlaps(s, { ...c, start: c.leaveAt! })).toBe(false);
+      for (const sug of day.suggestions) expect(overlaps(s, sug)).toBe(false);
+    }
+
+    expect(day.suggestions.length).toBeGreaterThan(0);
+    expect(day.suggestions.every((s) => s.why)).toBe(true);
+    expect(day.suggestions.map((s) => s.id)).not.toContain("ev-demo-poetry"); // not one of Alex's interests
+    expect(day.briefing).toContain("stay in the shade");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/canvas with the demo token", () => {
+  it("returns the demo deadlines without calling Canvas", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await canvas(new Request("http://test/api/canvas", { method: "POST", body: JSON.stringify({ token: "demo", date: "2026-11-15" }) }));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.deadlines.map((d: DayItem) => [d.title, d.done])).toEqual([
+      ["MAT 343: Homework 9", true],
+      ["CSE 230: Lab 7 (pipelining)", false],
+      ["ENG 102: Reading response", false],
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

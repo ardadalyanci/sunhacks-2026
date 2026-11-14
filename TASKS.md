@@ -11,7 +11,7 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] `POST /api/command`: voice text → `CommandAction` (Gemini, with keyword-rule fallback)
 - [ ] Test `/api/plan` and `/api/command` with a real Gemini key (only the fallbacks were tested so far)
 - [ ] Switch `lib/buildings.ts` to a static import once `data/buildings.json` exists (needed for deploys)
-- [ ] Demo mode: a saved `DayPlan` JSON so the expo demo works without Wi-Fi
+- [x] Demo mode: `GET /api/demo` (sample student + full day for any date, `hot=1` for a heat day) and Canvas token `demo`; works with no Wi-Fi, token or Gemini
 - [ ] Deploy (Vercel or AWS Amplify) + custom domain
 - [ ] Stretch: MongoDB Atlas for profiles and event cache
 
