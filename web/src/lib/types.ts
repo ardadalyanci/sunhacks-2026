@@ -31,8 +31,23 @@ export interface Weather {
 export interface DayPlan {
   date: string; // "2026-11-14"
   items: DayItem[]; // sorted by start
+  suggestions: DayItem[]; // events that fit the student, best first, each with `why`; not on the timeline until accepted
   weather?: Weather;
   briefing: string; // spoken summary written by Gemini (or a template when Gemini is unavailable)
+  aiUsed: boolean; // false when every Gemini step fell back to plain code
+}
+
+// Body of POST /api/plan. Only `classes` is required.
+export interface PlanRequest {
+  date?: string; // "2026-11-14"; default: today in Arizona
+  now?: string; // ISO; default: the server clock. Lets the demo replay a fixed moment.
+  classes: ClassBlock[]; // ClassBlock.location like "BYENG 210" is matched to data/buildings.json
+  deadlines?: DayItem[]; // from POST /api/canvas
+  events?: Opportunity[]; // from GET /api/events
+  acceptedEventIds?: string[]; // Opportunity ids the student added ("add to my day" or voice)
+  interests?: string[];
+  weather?: Weather; // from GET /api/weather
+  startBuildingId?: string; // where the day starts, e.g. the dorm; used for the first leave time
 }
 
 // Result of POST /api/command: what the voice command asked for.
