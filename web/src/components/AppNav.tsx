@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import SunnyMark from "./SunnyMark";
+import { PRODUCT } from "./brand";
+import Mascot from "./Mascot";
 
 const LINKS = [
-  { href: "/week", label: "Week" },
-  { href: "/discover", label: "Discover" },
-  { href: "/futures", label: "Two futures" },
+  { href: "/today", label: "Today" },
+  { href: "/events", label: "Events" },
+  { href: "/setup", label: "Setup" },
 ];
 
 export default function AppNav({ studentName }: { studentName: string }) {
@@ -15,9 +16,9 @@ export default function AppNav({ studentName }: { studentName: string }) {
   return (
     <header className="sticky top-0 z-20 border-b border-ink/10 bg-sky/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:gap-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <SunnyMark size={34} />
-          <span className="hidden font-display text-2xl font-bold tracking-tight sm:inline">Sunny</span>
+        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label={`${PRODUCT} home`}>
+          <Mascot size={38} label="" />
+          <span className="hidden font-display text-2xl font-bold tracking-tight sm:inline">{PRODUCT}</span>
         </Link>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto">
           {LINKS.map((link) => {
@@ -36,7 +37,7 @@ export default function AppNav({ studentName }: { studentName: string }) {
             );
           })}
         </nav>
-        <p className="ml-auto hidden text-ink-soft md:block">Planning for {studentName}</p>
+        <p className="ml-auto hidden text-ink-soft md:block">{studentName}’s plan</p>
       </div>
     </header>
   );

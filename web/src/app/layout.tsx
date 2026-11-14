@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Atkinson_Hyperlegible_Next, Bricolage_Grotesque } from "next/font/google";
+import { PRODUCT } from "@/components/brand";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({
@@ -16,8 +17,8 @@ const body = Atkinson_Hyperlegible_Next({
 });
 
 export const metadata: Metadata = {
-  title: "Sunny",
-  description: "Your week at ASU, planned around where you want to be in May.",
+  title: PRODUCT,
+  description: `ASU Mobile shows you information. ${PRODUCT} plans your day.`,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -48,6 +48,27 @@ body {
   );
 }
 
+/* Same sky with the midday heat glowing through it (heat alert days). */
+.sky-day-hot {
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255, 110, 50, 0) 18%,
+      rgba(255, 110, 50, 0.38) 38%,
+      rgba(255, 110, 50, 0.38) 62%,
+      rgba(255, 110, 50, 0) 76%
+    ),
+    linear-gradient(
+      to bottom,
+      #eef6ff 0%,
+      #d4e8ff 28%,
+      #ffe9bd 57%,
+      #ffcf8f 71%,
+      #9b86d6 82%,
+      #2b2766 100%
+    );
+}
+
 .sky-overcast {
   background: linear-gradient(to bottom, #d3dce6 0%, #aebccb 100%);
 }

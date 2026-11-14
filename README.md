@@ -1,6 +1,6 @@
-# Sunny: the AI copilot for ASU students
+# DayPilot: your day at ASU, planned
 
-Sunny knows your goals, your classes and what you like. It finds the club events, career fairs, hackathons and internships worth your time, fits them into your week and puts them on your calendar. Then it shows you two futures: you next May if nothing changes, and you with the plan.
+ASU Mobile shows you information. DayPilot plans your day: your classes, your Canvas due dates, the Tempe heat and the club events you would actually go to, in one plan you can talk to. It tells you when to leave for class, saves time for the assignment due tonight, warns you before a hot walk, and adds events by voice.
 
 Built at sunhacks 9.0 (November 14-15, 2026, ASU Tempe). Work in progress during the hackathon.
 
