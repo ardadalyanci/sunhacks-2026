@@ -5,6 +5,8 @@ import { addDays, toMstIso } from "./planner";
 
 const CANVAS_BASE = process.env.CANVAS_BASE_URL || "https://canvas.asu.edu";
 const DEADLINE_TYPES = new Set(["assignment", "quiz", "discussion_topic", "wiki_page", "sub_assignment"]);
+const MAX_PAGES = 5;
+const TIMEOUT_MS = 10_000;
 
 // The fields of a planner item we read. https://canvas.instructure.com/doc/api/planner.html
 interface PlannerItem {
@@ -38,12 +40,25 @@ export async function fetchDeadlines(token: string, date: string): Promise<DayIt
   const raw: PlannerItem[] = [];
 
   // Follow Canvas pagination (Link header), capped so a huge account cannot stall the request.
-  for (let page = 0; url && page < 5; page++) {
-    const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  for (let page = 0; url && page < MAX_PAGES; page++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch {
+      throw new CanvasError("Canvas did not answer in time.", 504);
+    }
     if (res.status === 401) throw new CanvasError("Canvas rejected the token. Create a new one in Canvas → Account → Settings.", 401);
+    if (res.status === 403) throw new CanvasError("This Canvas token is not allowed to read your planner. Create a new token without scope limits.", 403);
     if (!res.ok) throw new CanvasError(`Canvas answered ${res.status}.`, 502);
-    raw.push(...((await res.json()) as PlannerItem[]));
-    url = nextLink(res.headers.get("link"));
+    const body: unknown = await res.json().catch(() => null);
+    if (!Array.isArray(body)) throw new CanvasError("Canvas sent an unexpected answer.", 502);
+    raw.push(...(body as PlannerItem[]));
+    // Only ever send the token back to Canvas itself, whatever the Link header says.
+    url = sameOrigin(nextLink(res.headers.get("link")));
   }
 
   return raw.filter((p) => DEADLINE_TYPES.has(p.plannable_type)).map(toDayItem).filter((d): d is DayItem => d !== null);
@@ -51,24 +66,28 @@ export async function fetchDeadlines(token: string, date: string): Promise<DayIt
 
 function toDayItem(p: PlannerItem): DayItem | null {
   const when = p.plannable?.due_at ?? p.plannable?.todo_date ?? p.plannable_date;
-  if (!when) return null;
-  const title = p.plannable?.title ?? "Untitled";
+  const due = when ? new Date(when) : null;
+  if (!due || Number.isNaN(due.getTime())) return null;
+  const title = p.plannable?.title?.trim() || "Untitled";
   const submitted = p.submissions ? Boolean(p.submissions.submitted || p.submissions.excused) : false;
   return {
     id: `canvas-${p.plannable_type}-${p.plannable_id}`,
     type: "deadline",
     title: p.context_name ? `${shortCourse(p.context_name)}: ${title}` : title,
-    start: toMstIso(new Date(when)),
+    start: toMstIso(due),
     source: "canvas",
     done: submitted || Boolean(p.planner_override?.marked_complete),
-    url: p.html_url ? new URL(p.html_url, CANVAS_BASE).toString() : undefined,
+    url: sameOrigin(p.html_url ? new URL(p.html_url, CANVAS_BASE).toString() : null) ?? undefined,
   };
 }
 
-/** "CSE 230: Computer Org/Assemb Lang Prog (2026 Fall)" → "CSE 230" when a course code leads the name. */
-function shortCourse(name: string): string {
-  const m = name.match(/^([A-Z]{2,4}\s?\d{3}[A-Z]?)\b/);
-  return m ? m[1] : name;
+/**
+ * Short course label for the timeline: "CSE 230: Computer Org (2026 Fall)" and
+ * "2026Fall-T-CSE230-71234" both become "CSE 230". Names without a course code stay as they are.
+ */
+export function shortCourse(name: string): string {
+  const m = name.match(/\b([A-Z]{2,4})\s?(\d{3}[A-Z]?)\b/);
+  return m ? `${m[1]} ${m[2]}` : name;
 }
 
 function nextLink(link: string | null): string | null {
@@ -76,4 +95,14 @@ function nextLink(link: string | null): string | null {
   const next = link.split(",").find((part) => part.includes('rel="next"'));
   const m = next?.match(/<([^>]+)>/);
   return m ? m[1] : null;
+}
+
+/** The URL if it points at the configured Canvas host, otherwise null. */
+function sameOrigin(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).origin === new URL(CANVAS_BASE).origin ? url : null;
+  } catch {
+    return null;
+  }
 }

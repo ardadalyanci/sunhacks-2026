@@ -57,21 +57,32 @@ export function addDays(date: string, days: number): string {
 
 // ---------- buildings and walking ----------
 
-/** Matches "BYENG", "BYENG 210", "Brickyard Engineering" or an alias, case-insensitively. */
+/** True when `needle` appears in `hay` as whole words ("mu" is in "MU 202" but not in "Music"). */
+export function hasPhrase(hay: string, needle: string): boolean {
+  const n = needle.trim().toLowerCase();
+  if (!n) return false;
+  const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(hay.toLowerCase());
+}
+
+/**
+ * Matches "BYENG", "BYENG 210", "Brickyard Engineering" or an alias as whole words, case-insensitively.
+ * When several buildings match, the longest matching name wins ("Memorial Union" beats "MU").
+ */
 export function findBuilding(buildings: Building[], ref?: string): Building | undefined {
-  if (!ref) return undefined;
-  const r = ref.trim().toLowerCase();
-  if (!r) return undefined;
-  const exact = buildings.find(
-    (b) => b.id.toLowerCase() === r || b.name.toLowerCase() === r || b.aliases?.some((a) => a.toLowerCase() === r),
-  );
-  if (exact) return exact;
-  return buildings.find(
-    (b) =>
-      r.startsWith(`${b.id.toLowerCase()} `) ||
-      r.includes(b.name.toLowerCase()) ||
-      b.aliases?.some((a) => r.includes(a.toLowerCase())),
-  );
+  if (!ref?.trim() || isOnline(ref)) return undefined;
+  let best: { b: Building; len: number } | undefined;
+  for (const b of buildings) {
+    for (const needle of [b.id, b.name, ...(b.aliases ?? [])]) {
+      if (hasPhrase(ref, needle) && (!best || needle.length > best.len)) best = { b, len: needle.length };
+    }
+  }
+  return best?.b;
+}
+
+/** "Online", "Zoom", "Virtual" and similar: no walking needed. */
+export function isOnline(location?: string): boolean {
+  return Boolean(location && /\b(online|zoom|virtual|remote|teams|webinar)\b/i.test(location));
 }
 
 function metersBetween(a: Building, b: Building): number {
@@ -150,13 +161,27 @@ export function freeGaps(dayStart: number, dayEnd: number, busy: DayItem[], buff
   return gaps.filter((g) => g.end - g.start > 0);
 }
 
-/** Events that start on `date`, after `now`, and fit completely inside a free gap. */
-export function fittingEvents(events: DayItem[], gaps: Gap[], now: number): DayItem[] {
+/** Events after `now` that fit completely inside a free gap, including the walk there. */
+export function fittingEvents(events: DayItem[], gaps: Gap[], now: number, travelMin: number): DayItem[] {
   return events.filter((e) => {
-    const s = new Date(e.start).getTime();
+    // Leave room to walk there after the previous stop (gap ends already allow the walk to the next class).
+    const leave = new Date(e.start).getTime() - (isOnline(e.location) ? 0 : travelMin * MIN);
     const end = new Date(e.end ?? e.start).getTime();
-    return s >= now && gaps.some((g) => s >= g.start && end <= g.end);
+    return leave >= now && gaps.some((g) => leave >= g.start && end <= g.end);
   });
+}
+
+/** Removes [start, end) from the gaps in place, splitting a gap when the window sits in its middle. */
+export function reserveTime(gaps: Gap[], start: number, end: number) {
+  for (let i = gaps.length - 1; i >= 0; i--) {
+    const g = gaps[i];
+    if (end <= g.start || start >= g.end) continue;
+    const pieces = [
+      { start: g.start, end: Math.min(start, g.end) },
+      { start: Math.max(end, g.start), end: g.end },
+    ].filter((p) => p.end > p.start);
+    gaps.splice(i, 1, ...pieces);
+  }
 }
 
 /**
@@ -176,7 +201,8 @@ export function placeStudyBlocks(
 
   for (const d of open) {
     const due = new Date(d.start).getTime();
-    let need = minutesFor(d.id) * MIN;
+    const estimate = minutesFor(d.id);
+    let need = (Number.isFinite(estimate) && estimate > 0 ? estimate : DEFAULT_STUDY_MIN) * MIN;
     for (const g of gaps) {
       if (need <= 0) break;
       const from = Math.max(g.start, now);
@@ -206,6 +232,10 @@ export function addLeaveTimes(items: DayItem[], buildings: Building[], startBuil
   let here = findBuilding(buildings, startBuildingId);
   for (const item of items) {
     if (item.type !== "class" && item.type !== "event") continue;
+    if (isOnline(item.location)) {
+      delete item.leaveAt; // nothing to walk to; the student stays where they are
+      continue;
+    }
     const there = findBuilding(buildings, item.buildingId ?? item.location);
     const minutes = walkMinutes(here, there, hot);
     item.leaveAt = toMstIso(new Date(new Date(item.start).getTime() - minutes * MIN));
@@ -217,13 +247,13 @@ export function sortByStart(items: DayItem[]): DayItem[] {
   return [...items].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
-/** Fallback ranking without Gemini: count shared words between interests and the event's tags and title. */
+/** Fallback ranking without Gemini: interests that appear as whole words in the event's tags or title. */
 export function rankByOverlap(events: DayItem[], interests: string[]): { item: DayItem; why: string }[] {
   const wanted = interests.map((i) => i.toLowerCase());
   return events
     .map((e) => {
-      const hay = [...(e.tags ?? []), e.title].join(" ").toLowerCase();
-      const hits = wanted.filter((w) => hay.includes(w));
+      const hay = [...(e.tags ?? []), e.title].join(" | ");
+      const hits = wanted.filter((w) => hasPhrase(hay, w));
       return { item: e, hits };
     })
     .filter((x) => x.hits.length > 0)

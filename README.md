@@ -12,6 +12,7 @@ cd web
 cp .env.example .env.local   # then fill in your own keys
 npm install
 npm run dev                  # http://localhost:3000
+npm test                     # unit + API route tests (Vitest)
 ```
 
 ## Team
@@ -22,6 +23,7 @@ npm run dev                  # http://localhost:3000
 - Claude skills vendored in `.claude/skills/`: `frontend-design` and `webapp-testing` from [anthropics/skills](https://github.com/anthropics/skills), Apache-2.0. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - App scaffolded with `create-next-app` (Next.js 16).
 - Google's [`@google/genai`](https://www.npmjs.com/package/@google/genai) SDK (Apache-2.0) for the Gemini API.
+- [Vitest](https://vitest.dev/) (MIT) for tests.
 - Data sources and APIs are listed here as we add them, with links and licenses:
   - [Canvas LMS REST API](https://canvas.asu.edu/doc/api/), with each student's own access token
   - [ASU Events feed](https://asuevents.asu.edu/) (`/feed-json/students`)

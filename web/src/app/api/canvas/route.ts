@@ -3,19 +3,20 @@
 // The token comes from the student (Canvas → Account → Settings → New Access Token) and is never stored or logged.
 import { CanvasError, fetchDeadlines } from "@/lib/canvas";
 import { mstDate } from "@/lib/planner";
+import { isCalendarDate } from "@/lib/sanitize";
 
 export async function POST(request: Request) {
-  let body: { token?: unknown; date?: unknown };
+  let body: { token?: unknown; date?: unknown } | null;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Send JSON: { token, date? }." }, { status: 400 });
   }
 
-  const token = typeof body.token === "string" ? body.token.trim() : "";
+  const token = typeof body?.token === "string" ? body.token.trim() : "";
   if (!token || token.length > 300) return Response.json({ error: "A Canvas access token is required." }, { status: 400 });
-
-  const date = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : mstDate(new Date());
+  if (body?.date !== undefined && !isCalendarDate(body.date)) return Response.json({ error: "`date` must be a real YYYY-MM-DD day." }, { status: 400 });
+  const date = isCalendarDate(body?.date) ? body.date : mstDate(new Date());
 
   try {
     const deadlines = await fetchDeadlines(token, date);

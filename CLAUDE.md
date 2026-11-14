@@ -73,7 +73,8 @@ Board: Notion page "Agent Coordination" (under "SunHacks 9.0 — Team Hub"), rea
   - **C = Agent-3, Kerem (backend 2 + data):** `web/src/app/api/{events,weather,calendar}/**`, `web/src/lib/feeds/**`, `data/**`.
   - Shared, by agreement: README.md (demo section), `docs/**`.
 - Need a new dependency? Only A edits `package.json`: ask, or note it in your PR description.
-- Before every push: `cd web && npm run lint && npm run build` must pass.
+- Before every push: `cd web && npm run lint && npm run typecheck && npm test && npm run build` must pass. GitHub Actions (`.github/workflows/ci.yml`) runs the same four steps on every PR into `dev`; merge only when CI is green.
+- Tests: Vitest, next to the code as `*.test.ts`. Add tests with every API route or `lib/` change. Tests never call Gemini or Canvas for real (mock `@/lib/gemini` and `fetch`).
 - Commit small and often with clear messages. Never force-push. Update TASKS.md when you start or finish a task.
 
 ## Definition of done

@@ -18,28 +18,34 @@ import {
   opportunityToItem,
   placeStudyBlocks,
   rankByOverlap,
+  reserveTime,
   sortByStart,
   templateBriefing,
+  walkMinutes,
 } from "@/lib/planner";
+import { sanitizePlanRequest } from "@/lib/sanitize";
 import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
 
 const MAX_SUGGESTIONS = 3;
+const MAX_PICKS = 6; // Gemini ranks a few extra, because study blocks may take the time of some
 const MAX_CANDIDATES = 40; // keeps the Gemini prompt small
 
 export async function POST(request: Request) {
-  let body: PlanRequest;
+  let raw: unknown;
   try {
-    body = await request.json();
+    raw = await request.json();
   } catch {
     return Response.json({ error: "Send JSON matching PlanRequest in web/src/lib/types.ts." }, { status: 400 });
   }
-  if (!Array.isArray(body.classes)) return Response.json({ error: "`classes` must be an array (it can be empty)." }, { status: 400 });
+  const parsed = sanitizePlanRequest(raw);
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+  const body = parsed.value;
 
-  const now = body.now && !Number.isNaN(Date.parse(body.now)) ? new Date(body.now) : new Date();
-  const date = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : mstDate(now);
+  const now = body.now ? new Date(body.now) : new Date();
+  const date = body.date ?? mstDate(now);
   const nowMs = now.getTime();
   const buildings = await loadBuildings();
-  const interests = (body.interests ?? []).filter((i) => typeof i === "string" && i.trim()).slice(0, 20);
+  const interests = body.interests ?? [];
 
   // 1. Fixed parts of the day: classes, events the student already accepted, deadlines due today.
   const classes = classItems(body.classes, date, buildings);
@@ -55,27 +61,27 @@ export async function POST(request: Request) {
   const fixedStops = sortByStart([...classes, ...acceptedEvents]);
   addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather);
   const gaps = freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), fixedStops, CLASS_TRAVEL_BUFFER_MIN);
-  const candidates = fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs)
+  const travelMin = walkMinutes(undefined, undefined, body.weather?.isHot ?? false);
+  const candidates = fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin)
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
     .slice(0, MAX_CANDIDATES);
   const openDeadlines = deadlines.filter((d) => !d.done && Date.parse(d.start) > nowMs);
 
-  // 3. Gemini call 1: pick events for this student and estimate homework time.
+  // 3. Gemini call 1: rank events for this student (best first) and estimate homework time.
   const ranked = await rankAndEstimate(candidates, openDeadlines, interests);
   const byId = new Map(candidates.map((c) => [c.id, c]));
-  let suggestions: DayItem[] = (ranked?.picks ?? [])
-    .filter((p) => byId.has(p.id))
-    .slice(0, MAX_SUGGESTIONS)
+  const seen = new Set<string>();
+  let ordered: DayItem[] = (ranked?.picks ?? [])
+    .filter((p) => byId.has(p.id) && !seen.has(p.id) && seen.add(p.id))
     .map((p) => ({ ...byId.get(p.id)!, why: p.why }));
-  if (!suggestions.length) {
-    suggestions = rankByOverlap(candidates, interests)
-      .slice(0, MAX_SUGGESTIONS)
-      .map(({ item, why }) => ({ ...item, why }));
-  }
+  if (!ordered.length) ordered = rankByOverlap(candidates, interests).map(({ item, why }) => ({ ...item, why }));
   const estimates = new Map((ranked?.estimates ?? []).map((e) => [e.id, Math.min(180, Math.max(15, Math.round(e.minutes)))]));
 
-  // 4. Study blocks in the remaining free time (they have no building, so the leave times above stay valid).
+  // 4. Keep the best event's time free, place study blocks in what is left, then keep only the other
+  //    suggestions that still fit. So the timeline never puts a study block on top of a suggestion.
+  if (ordered[0]) reserveTime(gaps, Date.parse(ordered[0].start) - travelMin * 60_000, Date.parse(ordered[0].end ?? ordered[0].start));
   const study = placeStudyBlocks(openDeadlines, gaps, nowMs, (id) => estimates.get(id) ?? defaultStudyMinutes());
+  const suggestions = [...ordered.slice(0, 1), ...fittingEvents(ordered.slice(1), gaps, nowMs, travelMin)].slice(0, MAX_SUGGESTIONS);
   const items = sortByStart([...fixedStops, ...deadlinesToday, ...study]);
 
   // 5. Gemini call 2: the spoken briefing.
@@ -102,7 +108,7 @@ async function rankAndEstimate(candidates: DayItem[], deadlines: DayItem[], inte
   const prompt = [
     "You help an Arizona State University student plan their day.",
     `Their interests: ${interests.length ? interests.join(", ") : "not given; prefer free, social or career events"}.`,
-    `Pick at most ${MAX_SUGGESTIONS} events from EVENTS that best fit them. For each, write "why": one friendly sentence (max 18 words) addressed to the student. Use only ids from EVENTS; pick none if nothing fits.`,
+    `Pick at most ${MAX_PICKS} events from EVENTS that fit them, best first. For each, write "why": one friendly sentence (max 18 words) addressed to the student. Use only ids from EVENTS; pick none if nothing fits.`,
     "For each item in DEADLINES, estimate how many minutes a typical undergraduate needs to finish it (15 to 180).",
     `EVENTS: ${JSON.stringify(candidates.map((c) => ({ id: c.id, title: c.title, tags: c.tags ?? [], time: clock(c.start), place: c.location ?? "" })))}`,
     `DEADLINES: ${JSON.stringify(deadlines.map((d) => ({ id: d.id, title: d.title })))}`,
@@ -115,9 +121,17 @@ async function rankAndEstimate(candidates: DayItem[], deadlines: DayItem[], inte
     },
     required: ["picks", "estimates"],
   };
-  const result = await generateJson<RankResult>(prompt, schema);
-  if (!result || !Array.isArray(result.picks) || !Array.isArray(result.estimates)) return null;
-  return result;
+  return generateJson<RankResult>(prompt, schema, isRankResult);
+}
+
+function isRankResult(v: unknown): v is RankResult {
+  const r = v as RankResult;
+  return (
+    Array.isArray(r?.picks) &&
+    Array.isArray(r?.estimates) &&
+    r.picks.every((p) => typeof p?.id === "string" && typeof p?.why === "string") &&
+    r.estimates.every((e) => typeof e?.id === "string" && Number.isFinite(e?.minutes))
+  );
 }
 
 async function writeBriefing(items: DayItem[], suggestions: DayItem[], body: PlanRequest): Promise<string | null> {
@@ -135,11 +149,11 @@ async function writeBriefing(items: DayItem[], suggestions: DayItem[], body: Pla
     `Schedule:\n${lines.join("\n") || "nothing scheduled"}`,
     `Suggested events: ${suggestions.map((s) => `${s.title} at ${clock(s.start)}`).join("; ") || "none"}`,
   ].join("\n");
-  const result = await generateJson<{ briefing: string }>(prompt, {
-    type: "object",
-    properties: { briefing: { type: "string" } },
-    required: ["briefing"],
-  });
+  const result = await generateJson<{ briefing: string }>(
+    prompt,
+    { type: "object", properties: { briefing: { type: "string" } }, required: ["briefing"] },
+    (v) => typeof (v as { briefing?: unknown })?.briefing === "string" && Boolean((v as { briefing: string }).briefing.trim()),
+  );
   const text = result?.briefing?.trim();
   return text ? text : null;
 }
