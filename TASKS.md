@@ -16,13 +16,14 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [ ] Stretch: MongoDB Atlas for profiles and event cache
 
 ## B: UI (Agent-2, Arda)
-- [ ] Design plan with the `frontend-design` skill: palette, type, mobile-first
-- [ ] Setup screen: Canvas token (with a "how to get it" helper), class times (day, time, building), interests
-- [ ] Today screen: one timeline of classes, deadlines (done or not), study blocks, events, "leave at" chips, heat banner
-- [ ] Events that fit you: cards with "why this fits you" and "add to my day"
-- [ ] Voice: mic button → speech to text → `/api/command`; read the briefing aloud (speechSynthesis)
-- [ ] Map view of today's buildings (Leaflet + OpenStreetMap)
-- [ ] Landing page
+- [x] Design plan with the `frontend-design` skill: "Arizona sky" (time of day is color), Bricolage Grotesque + Atkinson Hyperlegible Next, mascot Sol (moods), mobile-first
+- [x] Setup screen: Canvas token helper, classes from a photo / pasted MyASU text / by hand, interests (saved in the browser)
+- [x] Today screen on the real routes: `/api/demo` → `/api/plan` (sample day), or `/api/canvas` + `/api/events` + `/api/weather` → `/api/plan`; timeline with leave-at chips, due pins, study blocks, events, heat banner, 104°F preview
+- [x] Events that fit you: list with "why" from `/api/plan` suggestions, add to my day, RSVP
+- [x] Voice: Hear my day (speechSynthesis), mic (Web Speech) + typed box → `/api/command`, add/remove re-plans
+- [x] `POST /api/schedule` (new, Agent-2): schedule photo or pasted text → `ClassBlock[]` via Gemini REST, with tests
+- [ ] Map view of today's buildings (Leaflet + OpenStreetMap) — needs `data/buildings.json` from C
+- [x] Landing page
 
 ## C: backend 2 + data (Agent-3, Kerem)
 - [ ] `GET /api/events`: ASU Events JSON + SunDevilCentral iCal → `Opportunity[]`, next 7 days, Tempe, 1 h in-memory cache

@@ -1,26 +1,153 @@
 @import "tailwindcss";
 
+/* Sunny's palette: the Arizona sky over a school day. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --sky: #dcebff;
+  --ink: #14324a;
+  --ink-soft: #4a6378;
+  --sun: #ffb000;
+  --sun-soft: #ffe7b0;
+  --saguaro: #2e6b4f;
+  --dusk: #5b3fa8;
+  --cloud: #ffffff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-sky: var(--sky);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-sun: var(--sun);
+  --color-sun-soft: var(--sun-soft);
+  --color-saguaro: var(--saguaro);
+  --color-dusk: var(--dusk);
+  --color-cloud: var(--cloud);
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-atkinson);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--sky);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--dusk);
+  outline-offset: 2px;
+}
+
+/* Time of day is color: 08:00 at the top of the week grid, 22:00 at the bottom. */
+.sky-day {
+  background: linear-gradient(
+    to bottom,
+    #eef6ff 0%,
+    #d4e8ff 28%,
+    #ffe9bd 57%,
+    #ffcf8f 71%,
+    #9b86d6 82%,
+    #2b2766 100%
+  );
+}
+
+/* Same sky with the midday heat glowing through it (heat alert days). */
+.sky-day-hot {
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255, 110, 50, 0) 18%,
+      rgba(255, 110, 50, 0.38) 38%,
+      rgba(255, 110, 50, 0.38) 62%,
+      rgba(255, 110, 50, 0) 76%
+    ),
+    linear-gradient(
+      to bottom,
+      #eef6ff 0%,
+      #d4e8ff 28%,
+      #ffe9bd 57%,
+      #ffcf8f 71%,
+      #9b86d6 82%,
+      #2b2766 100%
+    );
+}
+
+.sky-overcast {
+  background: linear-gradient(to bottom, #d3dce6 0%, #aebccb 100%);
+}
+
+.sky-golden {
+  background: linear-gradient(to bottom, #fff1cf 0%, #ffd27a 55%, #ffb000 100%);
+}
+
+/* Mascot motion: a slow float, an occasional blink, and a pulse while listening. */
+@keyframes mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+.mascot-float {
+  animation: mascot-float 3.4s ease-in-out infinite;
+}
+
+@keyframes mascot-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+.mascot-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mascot-blink 5s infinite;
+}
+
+@keyframes mascot-listen {
+  from {
+    box-shadow: 0 0 0 0 rgba(91, 63, 168, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 20px rgba(91, 63, 168, 0);
+  }
+}
+
+.mascot-listening {
+  border-radius: 9999px;
+  animation: mascot-listen 1.2s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-float,
+  .mascot-blink,
+  .mascot-listening {
+    animation: none;
+  }
+}
+
+@keyframes sunrise {
+  from {
+    transform: translateY(60%);
+    opacity: 0.3;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.sunrise {
+  animation: sunrise 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sunrise {
+    animation: none;
+  }
 }

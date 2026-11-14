@@ -1,69 +1,121 @@
-import Image from "next/image";
+import Link from "next/link";
+import Mascot from "@/components/Mascot";
+import { MASCOT, PRODUCT } from "@/components/brand";
+
+const DAY = [
+  {
+    time: "10:15 am",
+    text: "Leave for BYENG 210",
+    note: "It counts the walk from your dorm, so you sit down in CSE 230 on time.",
+    style: "bg-ink text-cloud",
+  },
+  {
+    time: "11:30 am",
+    text: "Work on Lab 7",
+    note: "Due tonight on Canvas, so it saves time for it between your classes.",
+    style: "border-2 border-dashed border-sun bg-sun-soft",
+  },
+  {
+    time: "1:15 pm",
+    text: "Leave for COOR 170",
+    note: "On a 104°F day it adds minutes for the heat and tells you to take water.",
+    style: "bg-[#ff8a3d]",
+  },
+  {
+    time: "4:15 pm",
+    text: "Robotics club build night",
+    note: "From Sun Devil Central, because you picked robotics.",
+    style: "border-2 border-dusk bg-cloud text-dusk",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="flex flex-1 flex-col">
+      <section className="sky-day flex min-h-svh flex-col px-4 py-6">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-2">
+          <Mascot size={44} label="" />
+          <span className="font-display text-2xl font-bold tracking-tight">{PRODUCT}</span>
+        </div>
+
+        <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 py-10 lg:grid-cols-[1.1fr_1fr]">
+          <div>
+            <h1 className="font-display text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
+              ASU Mobile shows you information. {PRODUCT} plans your day.
+            </h1>
+            <p className="mt-6 max-w-xl text-xl leading-relaxed">
+              Your classes, Canvas due dates, the Tempe heat and the club events you would actually go to, in one
+              plan you can talk to.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/setup"
+                className="rounded-full bg-ink px-6 py-4 text-lg font-bold text-cloud hover:bg-ink/90"
+              >
+                Plan my day
+              </Link>
+              <Link
+                href="/today"
+                className="rounded-full border-2 border-ink bg-cloud/40 px-6 py-4 text-lg font-bold hover:bg-cloud/70"
+              >
+                See a sample day
+              </Link>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center">
+            <p className="relative max-w-sm rounded-3xl bg-cloud px-6 py-5 text-lg font-bold leading-snug shadow-[0_24px_60px_-28px_rgba(20,50,74,0.55)]">
+              “Lab 7 is due tonight, so I saved you time after CSE 230. Leave for COOR by 1:15.”
+              <span aria-hidden className="absolute -bottom-2.5 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 bg-cloud" />
+            </p>
+            <Mascot size={300} animated className="mt-6 max-w-full" />
+            <p className="mt-1 font-display text-xl font-bold">{MASCOT}, your day pilot</p>
+          </div>
+        </div>
+
+        <p className="mx-auto w-full max-w-6xl text-sm text-cloud/80">Built at sunhacks 2026, Tempe</p>
+      </section>
+
+      <section className="bg-sky px-4 py-20">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="max-w-2xl font-display text-4xl font-bold tracking-tight sm:text-5xl">
+            From your first walk to your last event
+          </h2>
+          <p className="mt-3 max-w-xl text-lg text-ink-soft">
+            {PRODUCT} reads Canvas, your classes, the weather and campus events, then does the math for you.
+          </p>
+          <ol className="mt-10 max-w-3xl border-l-4 border-ink/15 pl-6">
+            {DAY.map((step) => (
+              <li key={step.time} className="relative pb-10 last:pb-0">
+                <span aria-hidden className="absolute -left-[35px] top-1.5 h-4 w-4 rounded-full border-4 border-sky bg-ink" />
+                <p className="font-bold text-ink-soft">{step.time}</p>
+                <p className={`mt-1 inline-block rounded-full px-4 py-2 font-bold ${step.style}`}>{step.text}</p>
+                <p className="mt-2 max-w-prose text-lg">{step.note}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-10 font-display text-2xl font-bold">
+            Ask out loud: “How’s my day?” or “Add the robotics meeting.”
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      <section className="bg-ink px-4 py-16 text-cloud">
+        <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-3xl font-bold">Set up in two minutes</h2>
+            <p className="mt-2 max-w-xl text-lg text-cloud/85">
+              Snap a photo of your class schedule, paste your Canvas token and pick what you enjoy.
+            </p>
+            <p className="mt-2 text-cloud/70">
+              Works with Canvas, ASU Events, Sun Devil Central and Open-Meteo. Never asks for your ASU password.
+            </p>
+          </div>
+          <Link href="/setup" className="shrink-0 rounded-full bg-sun px-6 py-4 text-lg font-bold text-ink hover:bg-sun/90">
+            Plan my day
+          </Link>
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
