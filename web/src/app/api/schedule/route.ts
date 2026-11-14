@@ -3,7 +3,7 @@
 // Written by B (UI) so setup is easy; calls the Gemini REST API directly, so it adds no dependency.
 import type { ClassBlock, Weekday } from "@/lib/types";
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest"; // same default as lib/gemini.ts
 const DAYS: Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 

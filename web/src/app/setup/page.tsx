@@ -7,7 +7,19 @@ import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
 import { WEEKDAYS } from "@/components/time";
 import type { ClassBlock, StudentSetup, Weekday } from "@/lib/types";
-import { demoBuildings } from "@/mocks/day";
+import { SETUP_KEY, TOKEN_KEY } from "@/lib/api-client";
+
+// Building choices for the class form; the planner matches these codes to data/buildings.json.
+const BUILDINGS = [
+  { code: "BYENG", name: "Brickyard Engineering" },
+  { code: "COOR", name: "Coor Hall" },
+  { code: "ECG", name: "Engineering Center G Wing" },
+  { code: "ISTB4", name: "Interdisciplinary Science and Technology Building 4" },
+  { code: "LL", name: "Language and Literature" },
+  { code: "MU", name: "Memorial Union" },
+  { code: "PSH", name: "Physical Sciences H Wing" },
+  { code: "WXLR", name: "Wexler Hall" },
+];
 
 const INTERESTS = [
   "Robotics",
@@ -93,9 +105,11 @@ export default function SetupPage() {
       interests,
     };
     try {
-      localStorage.setItem("daypilot.setup", JSON.stringify(setup));
+      localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
       // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
-      if (token.trim()) sessionStorage.setItem("daypilot.canvasToken", token.trim());
+      if (token.trim()) sessionStorage.setItem(TOKEN_KEY, token.trim());
+      else sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem("daypilot.accepted"); // events picked for the sample day do not carry over
     } catch {
       // storage blocked (private mode): the sample day still works
     }
@@ -219,7 +233,7 @@ export default function SetupPage() {
           {classes.length > 0 && (
             <div className="mt-4 space-y-4">
               {classes.map((c, index) => {
-                const knownBuilding = demoBuildings.some((b) => b.code === c.building);
+                const knownBuilding = BUILDINGS.some((b) => b.code === c.building);
                 return (
                   <div key={index} className="rounded-3xl border-2 border-ink/15 bg-cloud p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -241,7 +255,7 @@ export default function SetupPage() {
                         >
                           <option value="">Choose a building</option>
                           {!knownBuilding && c.building && <option value={c.building}>{c.building}</option>}
-                          {demoBuildings.map((b) => (
+                          {BUILDINGS.map((b) => (
                             <option key={b.code} value={b.code}>
                               {b.name} ({b.code})
                             </option>
@@ -337,9 +351,22 @@ export default function SetupPage() {
           <button type="submit" className="rounded-full bg-ink px-6 py-4 text-lg font-bold text-cloud hover:bg-ink/90">
             Plan my day
           </button>
-          <Link href="/today" className="rounded-full border-2 border-ink px-6 py-4 text-lg font-bold hover:bg-ink/10">
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.removeItem(SETUP_KEY);
+                sessionStorage.removeItem(TOKEN_KEY);
+                sessionStorage.removeItem("daypilot.accepted");
+              } catch {
+                // nothing saved
+              }
+              router.push("/today");
+            }}
+            className="rounded-full border-2 border-ink px-6 py-4 text-lg font-bold hover:bg-ink/10"
+          >
             Use the sample student
-          </Link>
+          </button>
         </div>
       </form>
     </main>

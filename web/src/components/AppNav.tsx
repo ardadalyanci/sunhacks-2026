@@ -11,7 +11,7 @@ const LINKS = [
   { href: "/setup", label: "Setup" },
 ];
 
-export default function AppNav({ studentName }: { studentName: string }) {
+export default function AppNav() {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-20 border-b border-ink/10 bg-sky/90 backdrop-blur">
@@ -37,7 +37,6 @@ export default function AppNav({ studentName }: { studentName: string }) {
             );
           })}
         </nav>
-        <p className="ml-auto hidden text-ink-soft md:block">{studentName}’s plan</p>
       </div>
     </header>
   );
