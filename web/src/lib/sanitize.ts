@@ -1,6 +1,7 @@
 // Cleans untrusted JSON from the browser before the planner touches it. Broken entries are dropped
 // instead of crashing the route; only a missing `classes` array is an error.
-import type { ClassBlock, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
+import type { ClassBlock, DayItem, Opportunity, PlanRequest, Weather, Weekday } from "./engine-types";
+import type * as UI from "./types";
 
 const WEEKDAYS: Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const LIMITS = { classes: 30, deadlines: 200, events: 1000, interests: 20, accepted: 50, items: 200 };
@@ -102,19 +103,60 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
   };
 }
 
-/** The parts of a client-sent DayPlan that /api/command reads: ids and titles only. */
-export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "suggestions"> {
-  const plan = isObj(raw) ? raw : {};
-  const pick = (v: unknown): DayItem | null => {
-    if (!isObj(v)) return null;
-    const id = str(v.id, 130);
-    const title = str(v.title, 200);
-    const type = v.type;
-    if (!id || !title || typeof type !== "string") return null;
-    return { id, title, type: type as DayItem["type"], start: isoDate(v.start) ?? "", source: "planner" };
-  };
-  return {
-    items: list(plan.items, LIMITS.items).map(pick).filter((i): i is DayItem => i !== null),
-    suggestions: list(plan.suggestions, LIMITS.items).map(pick).filter((i): i is DayItem => i !== null),
-  };
+// ---------- public UI shapes (types.ts) ----------
+
+/** A StudentSetup from the browser's localStorage, or null when it has no usable name/classes/interests. */
+export function sanitizeSetup(raw: unknown): UI.StudentSetup | null {
+  if (!isObj(raw)) return null;
+  const classes = list(raw.classes, LIMITS.classes)
+    .map((v): UI.ClassBlock | null => {
+      if (!isObj(v)) return null;
+      const engine = cleanClass(v);
+      const building = str(v.building, 20)?.toUpperCase() ?? "";
+      if (!engine) return null;
+      return { course: engine.course, days: engine.days, start: engine.start, end: engine.end, building, room: str(v.room, 20) };
+    })
+    .filter((c): c is UI.ClassBlock => c !== null);
+  const interests = list(raw.interests, LIMITS.interests).map((i) => str(i, 60)).filter((i): i is string => Boolean(i));
+  const name = str(raw.name, 60) ?? "";
+  if (!classes.length && !interests.length && !name) return null;
+  return { name, classes, interests };
+}
+
+export interface CommandRequest {
+  transcript: string;
+  items: UI.DayItem[];
+  picks: UI.CampusEvent[];
+  briefing?: string;
+  now?: string;
+}
+
+/** Body of POST /api/command; `text` is accepted as an alias of `transcript`. Null when there is nothing to do. */
+export function sanitizeCommandRequest(raw: unknown): CommandRequest | null {
+  if (!isObj(raw)) return null;
+  const transcript = str(raw.transcript ?? raw.text, 300);
+  if (!transcript) return null;
+  const KINDS = ["class", "assignment", "study", "event", "leave"];
+  const items = list(raw.items, LIMITS.items)
+    .map((v): UI.DayItem | null => {
+      if (!isObj(v) || !KINDS.includes(v.kind as string)) return null;
+      const id = str(v.id, 130);
+      const title = str(v.title, 200);
+      if (!id || !title) return null;
+      return { id, kind: v.kind as UI.DayItemKind, title, startsAt: isoDate(v.startsAt), endsAt: isoDate(v.endsAt), dueAt: isoDate(v.dueAt), forItemId: str(v.forItemId, 130) };
+    })
+    .filter((i): i is UI.DayItem => i !== null);
+  const picks = list(raw.picks, LIMITS.items)
+    .map((v): UI.CampusEvent | null => {
+      // Accept either CampusEvent or EventPick ({ event }) entries.
+      const e = isObj(v) && isObj(v.event) ? v.event : v;
+      if (!isObj(e)) return null;
+      const id = str(e.id, 130);
+      const title = str(e.title, 200);
+      const startsAt = isoDate(e.startsAt);
+      if (!id || !title || !startsAt) return null;
+      return { id, title, startsAt, url: httpUrl(e.url) ?? "", source: e.source === "sun_devil_central" ? "sun_devil_central" : "asu_events", interests: [] };
+    })
+    .filter((e): e is UI.CampusEvent => e !== null);
+  return { transcript, items, picks, briefing: str(raw.briefing, 2000), now: isoDate(raw.now) };
 }

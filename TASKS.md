@@ -4,6 +4,8 @@ Update this file when you start or finish something. `[ ]` todo, `[~]` in progre
 The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md. The repo scaffold (Next.js 16, shared types, skills) from the first commit stays.
 
 ## A: backend 1 + integration (Agent-1, Barış)
+- [x] Barış: backend speaks the UI contract (`types.ts` from B; engine types in `engine-types.ts`, `lib/ui-adapter.ts`, `POST /api/day`, `/api/command` → `CommandResult`, `lib/api-client.ts` for the screens)
+- [ ] Call Kerem's `getEvents()` / `getWeather()` from `/api/day` once `lib/feeds` lands (today a real day has no events or weather)
 - [x] Barış: DayPilot pivot: CLAUDE.md, TASKS.md, README, `DayItem` types
 - [x] `web/src/lib/gemini.ts` (Gemini client, server-only, 1 h answer cache, null on failure) — each teammate still needs `GEMINI_API_KEY` in `web/.env.local`
 - [x] `POST /api/canvas`: token in body → Canvas planner items → deadline `DayItem[]` with submitted status (never stored or logged)
@@ -15,20 +17,24 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [ ] Deploy (Vercel or AWS Amplify) + custom domain
 - [ ] Stretch: MongoDB Atlas for profiles and event cache
 
-## B: UI (Agent-2, Arda)
-- [ ] Design plan with the `frontend-design` skill: palette, type, mobile-first
-- [ ] Setup screen: Canvas token (with a "how to get it" helper), class times (day, time, building), interests
-- [ ] Today screen: one timeline of classes, deadlines (done or not), study blocks, events, "leave at" chips, heat banner
-- [ ] Events that fit you: cards with "why this fits you" and "add to my day"
-- [ ] Voice: mic button → speech to text → `/api/command`; read the briefing aloud (speechSynthesis)
-- [ ] Map view of today's buildings (Leaflet + OpenStreetMap)
-- [ ] Landing page
+## B: UI (Agent-2, Arda; repo owner)
+Screens run on mock data from `web/src/mocks/` until A's routes are live.
+- [x] Design system: "Arizona sky" (time of day is color), Bricolage Grotesque + Atkinson Hyperlegible Next
+- [x] Rebrand to DayPilot (name lives in `web/src/components/brand.ts`; "DayPilot" is also a JS calendar library, team may rename)
+- [x] Mascot Sol: sun with pilot goggles and scarf; moods happy / listening / hot / proud; float + blink
+- [x] Home page: big Sol with speech bubble, "from your first walk to your last event" timeline, setup CTA
+- [x] Today screen: sky timeline of classes, study blocks, leave-at markers, due pins, events; heat alert + 106°F preview toggle
+- [x] Events screen: picks by interest with "why", RSVP link
+- [x] Voice: Hear my day (speechSynthesis), Ask (Web Speech) + typed fallback → `/api/command`, local fallback until it exists
+- [x] Setup: Canvas token how-to; classes from a photo, pasted text or by hand (`POST /api/schedule`); interests
+- [ ] Arda: wire Today, Events, layout and setup to `POST /api/day` with `fetchDay()` from `lib/api-client.ts` (replaces `mocks/day.ts`); send `briefing` and `now` in `components/commands.ts` so voice reads the real briefing
+- [ ] PWA manifest + icons; phone pass at 375px
 
 ## C: backend 2 + data (Agent-3, Kerem)
-- [ ] `GET /api/events`: ASU Events JSON + SunDevilCentral iCal → `Opportunity[]`, next 7 days, Tempe, 1 h in-memory cache
-- [ ] `GET /api/weather`: Open-Meteo for Tempe → `Weather`
+- [ ] `GET /api/events` + `lib/feeds/events.ts` exporting `getEvents(): Promise<CampusEvent[]>` (public type): ASU Events JSON + SunDevilCentral iCal, next 7 days, Tempe, 1 h in-memory cache. `/api/day` calls `getEvents()` directly
+- [ ] `GET /api/weather` + `lib/feeds/weather.ts` exporting `getWeather(): Promise<Weather>` (public type: hourly feels-like + high) from Open-Meteo for Tempe
 - [ ] `GET /api/calendar`: ICS of the planned day
-- [ ] `data/buildings.json`: ~20 Tempe buildings (id, name, lat, lng) from Overpass, checked on the map
+- [ ] `data/buildings.json`: ~20 Tempe buildings as public `Building` (`code`, `name`, `lat`, `lng`) from Overpass, checked on the map. Leave times use it
 - [ ] Interest taxonomy that maps to ASU Events `interests` and SunDevilCentral tags
 - [ ] 2 demo personas with class schedules; record one real `DayPlan` for demo mode (no grades or tokens on screen)
 - [ ] Domain via the MLH GoDaddy Registry code; Devpost draft with all 3 teammates; prize checklist

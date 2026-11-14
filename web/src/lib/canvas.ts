@@ -1,6 +1,6 @@
 // Canvas planner items → DayItem deadlines. Server-side only.
 // The student's token is passed in per request and never stored or logged.
-import type { DayItem } from "./types";
+import type { DayItem } from "./engine-types";
 import { addDays, toMstIso } from "./planner";
 
 const CANVAS_BASE = process.env.CANVAS_BASE_URL || "https://canvas.asu.edu";
