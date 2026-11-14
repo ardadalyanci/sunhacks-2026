@@ -46,10 +46,10 @@ Cut unless everything above is done: friend matching / social graph, native mobi
 `web/src/lib/types.ts` is the single source of truth for data shapes (Student, Opportunity, Recommendation, PlanItem, Futures). Build against it. Only teammate A changes it, after asking in the team chat.
 
 ## Team workflow (3 people, 3 Claude sessions)
-- Integration branch: **`dev`** (the default branch). Work on your own branch named `<name>/<feature>`, open small PRs into `dev`, and teammate A merges. Pull often: `git pull --rebase origin dev`.
+- Integration branch: **`dev`** (the default branch). Work on your own branch named `<name>/<feature>`, open small PRs into `dev`, and the repo owner (B) merges. Pull often: `git pull --rebase origin dev`.
 - Folder ownership. Do not edit someone else's folders without asking:
-  - **A, repo owner (data + backend + integration):** `web/src/app/api/**`, `web/src/lib/**`, `scripts/**`, `web/package.json` and the lockfile.
-  - **B (UI):** `web/src/app/**` pages and layouts outside `api/`, `web/src/components/**`.
+  - **A (data + backend):** `web/src/app/api/**`, `web/src/lib/**`, `scripts/**`, `web/package.json` and the lockfile.
+  - **B (UI; the repo owner, who also merges PRs):** `web/src/app/**` pages and layouts outside `api/`, `web/src/components/**`, `web/src/mocks/**` (mock data the screens use until A's APIs are live).
   - **C (content, mascot, demo):** `web/public/**`, `data/**`, `docs/**`, the demo section of README.md.
 - Need a new dependency? Only A edits `package.json`: ask, or note it in your PR description.
 - Before every push: `cd web && npm run lint && npm run build` must pass.
