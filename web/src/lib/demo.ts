@@ -3,7 +3,7 @@
 // no Canvas token, no event feeds and no Wi-Fi (Gemini falls back to plain code when offline).
 // Every event here is invented for the demo; nothing claims to be a real ASU listing.
 import { addDays, toMstIso, atTime, weekdayOf } from "./planner";
-import type { ClassBlock, DayItem, Opportunity, PlanRequest } from "./types";
+import type { ClassBlock, DayItem, Opportunity, PlanRequest } from "./engine-types";
 
 export const DEMO_TOKEN = "demo";
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sanitizePlanRequest } from "@/lib/sanitize";
-import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
+import type { DayItem, DayPlan, PlanRequest } from "@/lib/engine-types";
 
 vi.mock("@/lib/buildings", () => ({
   loadBuildings: async () => [

@@ -1,6 +1,6 @@
 // Pure planning math for POST /api/plan: no network, no Gemini. Everything here is deterministic,
 // so the Today screen still works when Gemini is unavailable.
-import type { ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./types";
+import type { ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./engine-types";
 
 export const MST = "-07:00"; // Arizona: no daylight saving
 const MST_MS = 7 * 60 * 60 * 1000;

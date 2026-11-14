@@ -1,6 +1,6 @@
 // Cleans untrusted JSON from the browser before the planner touches it. Broken entries are dropped
 // instead of crashing the route; only a missing `classes` array is an error.
-import type { ClassBlock, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
+import type { ClassBlock, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./engine-types";
 
 const WEEKDAYS: Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const LIMITS = { classes: 30, deadlines: 200, events: 1000, interests: 20, accepted: 50, items: 200 };

@@ -24,7 +24,7 @@ import {
   walkMinutes,
 } from "@/lib/planner";
 import { sanitizePlanRequest } from "@/lib/sanitize";
-import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
+import type { DayItem, DayPlan, PlanRequest } from "@/lib/engine-types";
 
 const MAX_SUGGESTIONS = 3;
 const MAX_PICKS = 6; // Gemini ranks a few extra, because study blocks may take the time of some
