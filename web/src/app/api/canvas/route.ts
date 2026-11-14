@@ -1,7 +1,9 @@
 // POST /api/canvas  { token: string, date?: "YYYY-MM-DD" }  →  { date, deadlines: DayItem[] }
 // Deadlines run from `date` (default: today in Arizona) to the end of the next day.
 // The token comes from the student (Canvas → Account → Settings → New Access Token) and is never stored or logged.
+// The token "demo" returns sample deadlines without calling Canvas.
 import { CanvasError, fetchDeadlines } from "@/lib/canvas";
+import { DEMO_TOKEN, demoDeadlines } from "@/lib/demo";
 import { mstDate } from "@/lib/planner";
 import { isCalendarDate } from "@/lib/sanitize";
 
@@ -17,6 +19,9 @@ export async function POST(request: Request) {
   if (!token || token.length > 300) return Response.json({ error: "A Canvas access token is required." }, { status: 400 });
   if (body?.date !== undefined && !isCalendarDate(body.date)) return Response.json({ error: "`date` must be a real YYYY-MM-DD day." }, { status: 400 });
   const date = isCalendarDate(body?.date) ? body.date : mstDate(new Date());
+
+  // Demo mode: sample deadlines, no network call (see lib/demo.ts).
+  if (token === DEMO_TOKEN) return Response.json({ date, deadlines: demoDeadlines(date) });
 
   try {
     const deadlines = await fetchDeadlines(token, date);
