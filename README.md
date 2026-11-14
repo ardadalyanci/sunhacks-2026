@@ -1,6 +1,6 @@
-# DayPilot: your day at ASU, planned
+# DayPilot: the AI day planner for ASU students
 
-ASU Mobile shows you information. DayPilot plans your day: your classes, your Canvas due dates, the Tempe heat and the club events you would actually go to, in one plan you can talk to. It tells you when to leave for class, saves time for the assignment due tonight, warns you before a hot walk, and adds events by voice.
+ASU Mobile shows you information. DayPilot plans your day. It pulls today's Canvas deadlines, your classes, the Tempe heat and the club events that match your interests into one timeline, tells you when to leave for each class, and talks back when you ask "how's my day?".
 
 DayPilot never asks for your ASU password. It uses official sources only: the Canvas API with a token you create yourself, the public ASU Events feed, the public SunDevilCentral calendar feed and Open-Meteo.
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import type { CommandResult } from "@/lib/types";
 import { PRODUCT } from "./brand";
 
 // Minimal typing for the Web Speech API (not in TypeScript's DOM lib).
@@ -33,28 +32,39 @@ export function speak(text: string) {
 
 type Props = {
   briefing: string;
-  onCommand: (transcript: string) => Promise<CommandResult>;
+  onCommand: (text: string) => Promise<string>; // returns what to say back
   onListeningChange?: (listening: boolean) => void;
 };
 
-/** "Hear my day" reads the briefing; the mic or the text box sends a command. */
+/** "Hear my day" reads the briefing; the mic or the text box sends a command to /api/command. */
 export default function VoiceBar({ briefing, onCommand, onListeningChange }: Props) {
   const [listening, setListeningState] = useState(false);
-
-  function setListening(value: boolean) {
-    setListeningState(value);
-    onListeningChange?.(value);
-  }
+  const [working, setWorking] = useState(false);
   const [heard, setHeard] = useState("");
   const [reply, setReply] = useState("");
   const [typed, setTyped] = useState("");
   const recognition = useRef<Recognition | null>(null);
 
-  async function handle(transcript: string) {
-    setHeard(transcript);
-    const result = await onCommand(transcript);
-    setReply(result.say);
-    speak(result.say);
+  function setListening(value: boolean) {
+    setListeningState(value);
+    onListeningChange?.(value);
+  }
+
+  function say(text: string) {
+    setReply(text);
+    speak(text);
+  }
+
+  async function handle(text: string) {
+    setHeard(text);
+    setWorking(true);
+    try {
+      say(await onCommand(text));
+    } catch {
+      say("I could not do that right now. Try again in a moment.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   function listen() {
@@ -92,10 +102,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange }: Pro
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => {
-            setReply(briefing);
-            speak(briefing);
-          }}
+          onClick={() => say(briefing)}
           className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
         >
           Hear my day
@@ -123,8 +130,12 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange }: Pro
           placeholder="Or type: add the robotics meeting"
           className="min-w-0 flex-1 rounded-full border-2 border-ink/20 bg-cloud px-4 py-2 focus:border-ink"
         />
-        <button type="submit" className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10">
-          Send
+        <button
+          type="submit"
+          disabled={working}
+          className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10 disabled:opacity-50"
+        >
+          {working ? "…" : "Send"}
         </button>
       </form>
 
