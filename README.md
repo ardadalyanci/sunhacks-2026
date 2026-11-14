@@ -1,6 +1,8 @@
-# Sunny: the AI copilot for ASU students
+# DayPilot: the AI day planner for ASU students
 
-Sunny knows your goals, your classes and what you like. It finds the club events, career fairs, hackathons and internships worth your time, fits them into your week and puts them on your calendar. Then it shows you two futures: you next May if nothing changes, and you with the plan.
+ASU Mobile shows you information. DayPilot plans your day. It pulls today's Canvas deadlines, your classes, the Tempe heat and the club events that match your interests into one timeline, tells you when to leave for each class, and talks back when you ask "how's my day?".
+
+DayPilot never asks for your ASU password. It uses official sources only: the Canvas API with a token you create yourself, the public ASU Events feed, the public SunDevilCentral calendar feed and Open-Meteo.
 
 Built at sunhacks 9.0 (November 14-15, 2026, ASU Tempe). Work in progress during the hackathon.
 
@@ -19,4 +21,9 @@ npm run dev                  # http://localhost:3000
 - The team used Claude Code (Anthropic) as an AI coding assistant; generated code was reviewed by the team.
 - Claude skills vendored in `.claude/skills/`: `frontend-design` and `webapp-testing` from [anthropics/skills](https://github.com/anthropics/skills), Apache-2.0. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - App scaffolded with `create-next-app` (Next.js 16).
-- Data sources and APIs are listed here as we add them, with links and licenses.
+- Data sources and APIs are listed here as we add them, with links and licenses:
+  - [Canvas LMS REST API](https://canvas.asu.edu/doc/api/), with each student's own access token
+  - [ASU Events feed](https://asuevents.asu.edu/) (`/feed-json/students`)
+  - [SunDevilCentral public calendar feed](https://sundevilcentral.eoss.asu.edu/ical/arizonau/ical_arizonau.ics)
+  - [Open-Meteo](https://open-meteo.com/) weather API (CC BY 4.0)
+  - [OpenStreetMap](https://www.openstreetmap.org/copyright) building data via Overpass (ODbL)

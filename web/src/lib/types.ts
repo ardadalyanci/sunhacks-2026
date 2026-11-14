@@ -1,6 +1,46 @@
-// Shared data contract for Sunny. Every API route and page builds against these shapes.
+// Shared data contract for DayPilot. Every API route and page builds against these shapes.
 // Only teammate A edits this file, after asking in the team chat (see CLAUDE.md).
 // Times are ISO 8601 strings with the Arizona offset, e.g. "2026-11-18T18:00:00-07:00".
+
+// One row on the Today timeline. Every source (Canvas, classes, events, planner) is turned into this.
+export type DayItemType = "class" | "deadline" | "event" | "study_block" | "travel";
+export type DayItemSource = "canvas" | "manual" | "asu_events" | "sundevilcentral" | "planner";
+
+export interface DayItem {
+  id: string;
+  type: DayItemType;
+  title: string;
+  start: string; // ISO with -07:00; for a deadline, the due time
+  end?: string;
+  buildingId?: string; // key in data/buildings.json
+  location?: string; // free text when there is no buildingId
+  source: DayItemSource;
+  done?: boolean; // Canvas: already submitted
+  url?: string; // Canvas assignment or RSVP link
+  tags?: string[]; // for interest matching
+  leaveAt?: string; // set by /api/plan for classes and events: when to start walking
+  why?: string; // set by /api/plan for events: one sentence on why it fits the student
+}
+
+export interface Weather {
+  tempF: number;
+  highF: number;
+  isHot: boolean; // true at 95 °F or above
+}
+
+export interface DayPlan {
+  date: string; // "2026-11-14"
+  items: DayItem[]; // sorted by start
+  weather?: Weather;
+  briefing: string; // spoken summary written by Gemini (or a template when Gemini is unavailable)
+}
+
+// Result of POST /api/command: what the voice command asked for.
+export type CommandAction =
+  | { action: "add_event"; itemId: string }
+  | { action: "remove_item"; itemId: string }
+  | { action: "briefing" }
+  | { action: "unknown"; reply: string };
 
 export type OpportunityKind =
   | "club_event"
@@ -12,6 +52,7 @@ export type OpportunityKind =
   | "social";
 
 export type OpportunitySource =
+  | "asu_events"
   | "sundevilcentral"
   | "career_services"
   | "mlh"
