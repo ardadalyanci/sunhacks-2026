@@ -6,15 +6,22 @@ export type CommandContext = {
   items: DayItem[];
   picks: EventPick[];
   nowHours: number; // local time of day, e.g. 13.5
+  now?: string; // ISO, so "what's next" uses the real time
 };
 
-/** Asks A's /api/command route; falls back to simple matching in the browser until it exists. */
+/** Asks A's /api/command route; falls back to simple matching in the browser if the route is unreachable. */
 export async function runCommand(transcript: string, ctx: CommandContext): Promise<CommandResult> {
   try {
     const res = await fetch("/api/command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript, items: ctx.items, picks: ctx.picks.map((p) => p.event) }),
+      body: JSON.stringify({
+        transcript,
+        items: ctx.items,
+        picks: ctx.picks.map((p) => p.event),
+        briefing: ctx.briefing,
+        now: ctx.now,
+      }),
     });
     if (res.ok) return (await res.json()) as CommandResult;
   } catch {

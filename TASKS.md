@@ -18,7 +18,7 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [ ] Stretch: MongoDB Atlas for profiles and event cache
 
 ## B: UI (Agent-2, Arda; repo owner)
-Screens run on mock data from `web/src/mocks/` until A's routes are live.
+Screens read the day from `POST /api/day` through `components/useDay.ts` (`fetchDay()`); `web/src/mocks/` is gone.
 - [x] Design system: "Arizona sky" (time of day is color), Bricolage Grotesque + Atkinson Hyperlegible Next
 - [x] Rebrand to DayPilot (name lives in `web/src/components/brand.ts`; "DayPilot" is also a JS calendar library, team may rename)
 - [x] Mascot Sol: sun with pilot goggles and scarf; moods happy / listening / hot / proud; float + blink
@@ -27,7 +27,7 @@ Screens run on mock data from `web/src/mocks/` until A's routes are live.
 - [x] Events screen: picks by interest with "why", RSVP link
 - [x] Voice: Hear my day (speechSynthesis), Ask (Web Speech) + typed fallback → `/api/command`, local fallback until it exists
 - [x] Setup: Canvas token how-to; classes from a photo, pasted text or by hand (`POST /api/schedule`); interests
-- [ ] Arda: wire Today, Events, layout and setup to `POST /api/day` with `fetchDay()` from `lib/api-client.ts` (replaces `mocks/day.ts`); send `briefing` and `now` in `components/commands.ts` so voice reads the real briefing
+- [x] Arda: wire Today, Events, layout and setup to `POST /api/day` with `fetchDay()` from `lib/api-client.ts` (replaces `mocks/day.ts`); send `briefing` and `now` in `components/commands.ts` so voice reads the real briefing (branch `arda/wire-day`; added events persist in the tab, study blocks can be removed, `/api/schedule` tests)
 - [ ] PWA manifest + icons; phone pass at 375px
 
 ## C: backend 2 + data (Agent-3, Kerem)

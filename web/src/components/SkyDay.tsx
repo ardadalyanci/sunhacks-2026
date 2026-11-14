@@ -58,7 +58,12 @@ export default function SkyDay({ items, hot = false, selectedId, onSelect }: Pro
             const at = hourOf((item.startsAt ?? item.dueAt)!);
             const isLeave = item.kind === "leave";
             return (
-              <li key={item.id} className="absolute left-16 right-3" style={{ top: y(at) - 14 }}>
+              <li
+                key={item.id}
+                // due pins sit on the right so they never cover the title of a block at the same hour
+                className={`absolute left-16 right-3 z-10 flex ${isLeave ? "" : "justify-end"}`}
+                style={{ top: y(at) - 14 }}
+              >
                 <button
                   type="button"
                   onClick={() => onSelect(item.id)}
