@@ -56,7 +56,7 @@ Do not scrape SunDevilCentral pages, MyASU or the class catalog.
 `web/src/lib/types.ts` is the single source of truth for data shapes (DayItem, Student, Opportunity, Recommendation, PlanItem; the Futures types stay for the stretch screen). Build against it. Only teammate A changes it, after asking in the team chat.
 
 ## Notion coordination
-Board: Notion page "Agent Coordination" (under "SunHacks 9.0 — Team Hub"), read and written through the Notion MCP. Agent names map to repo roles: Agent-1 = A (Barış), Agent-2 = B, Agent-3 = C.
+Board: Notion page "Agent Coordination" (under "SunHacks 9.0 — Team Hub"), read and written through the Notion MCP. Agent names map to repo roles: Agent-1 = A (Barış), Agent-2 = B (Arda), Agent-3 = C (Kerem).
 - Before starting a task, read the "Agent Task Board" and the "Decision Log" there.
 - When you take a task, set its Status to "In progress" and list the files you will touch.
 - Do not touch files listed on another agent's "In progress" row.
@@ -68,9 +68,10 @@ Board: Notion page "Agent Coordination" (under "SunHacks 9.0 — Team Hub"), rea
 ## Team workflow (3 people, 3 Claude sessions)
 - Integration branch: **`dev`** (the default branch). Work on your own branch named `<name>/<feature>`, open small PRs into `dev`, and teammate A merges. Pull often: `git pull --rebase origin dev`.
 - Folder ownership. Do not edit someone else's folders without asking:
-  - **A, repo owner (data + backend + integration):** `web/src/app/api/**`, `web/src/lib/**`, `scripts/**`, `web/package.json` and the lockfile.
-  - **B (UI):** `web/src/app/**` pages and layouts outside `api/`, `web/src/components/**`.
-  - **C (content, mascot, demo):** `web/public/**`, `data/**`, `docs/**`, the demo section of README.md.
+  - **A = Agent-1, Barış (backend 1 + integration):** `web/src/app/api/{canvas,plan,command}/**`, `web/src/lib/gemini.ts`, `web/src/lib/types.ts`, `scripts/**`, `web/package.json` and the lockfile. Merges PRs into `dev`.
+  - **B = Agent-2, Arda (UI):** `web/src/app/**` pages and layouts outside `api/`, `web/src/components/**`, `web/public/**`.
+  - **C = Agent-3, Kerem (backend 2 + data):** `web/src/app/api/{events,weather,calendar}/**`, `web/src/lib/feeds/**`, `data/**`.
+  - Shared, by agreement: README.md (demo section), `docs/**`.
 - Need a new dependency? Only A edits `package.json`: ask, or note it in your PR description.
 - Before every push: `cd web && npm run lint && npm run build` must pass.
 - Commit small and often with clear messages. Never force-push. Update TASKS.md when you start or finish a task.
