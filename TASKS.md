@@ -28,7 +28,8 @@ Screens read the day from `POST /api/day` through `components/useDay.ts` (`fetch
 - [x] Voice: Hear my day (speechSynthesis), Ask (Web Speech) + typed fallback → `/api/command`, local fallback until it exists
 - [x] Setup: Canvas token how-to; classes from a photo, pasted text or by hand (`POST /api/schedule`); interests
 - [x] Arda: wire Today, Events, layout and setup to `POST /api/day` with `fetchDay()` from `lib/api-client.ts` (replaces `mocks/day.ts`); send `briefing` and `now` in `components/commands.ts` so voice reads the real briefing (branch `arda/wire-day`; added events persist in the tab, study blocks can be removed, `/api/schedule` tests)
-- [ ] PWA manifest + icons; phone pass at 375px
+- [x] PWA: `app/manifest.ts` (installs to the home screen, opens on /today), `app/icon.tsx` + `app/apple-icon.tsx` drawn from Sol; default favicon and starter images removed (branch `arda/pwa`)
+- [ ] Phone pass at 375px on the live Vercel URL
 
 ## C: backend 2 + data (Agent-3, Kerem)
 - [ ] `GET /api/events` + `lib/feeds/events.ts` exporting `getEvents(): Promise<CampusEvent[]>` (public type): ASU Events JSON + SunDevilCentral iCal, next 7 days, Tempe, 1 h in-memory cache. `/api/day` calls `getEvents()` directly
