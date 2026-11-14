@@ -21,6 +21,7 @@ npm run dev                  # http://localhost:3000
 - The team used Claude Code (Anthropic) as an AI coding assistant; generated code was reviewed by the team.
 - Claude skills vendored in `.claude/skills/`: `frontend-design` and `webapp-testing` from [anthropics/skills](https://github.com/anthropics/skills), Apache-2.0. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - App scaffolded with `create-next-app` (Next.js 16).
+- Google's [`@google/genai`](https://www.npmjs.com/package/@google/genai) SDK (Apache-2.0) for the Gemini API.
 - Data sources and APIs are listed here as we add them, with links and licenses:
   - [Canvas LMS REST API](https://canvas.asu.edu/doc/api/), with each student's own access token
   - [ASU Events feed](https://asuevents.asu.edu/) (`/feed-json/students`)

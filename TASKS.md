@@ -5,10 +5,12 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 
 ## A: backend 1 + integration (Agent-1, Barış)
 - [x] Barış: DayPilot pivot: CLAUDE.md, TASKS.md, README, `DayItem` types
-- [ ] `web/src/lib/gemini.ts` (Gemini client, server-only) + `GEMINI_API_KEY` in `web/.env.local`
-- [ ] `POST /api/canvas`: token in body → Canvas planner/todo/courses → `DayItem[]` (never store or log the token)
-- [ ] `POST /api/plan`: classes + deadlines + events → free gaps, study blocks, leave times, heat warning (code), event ranking + briefing (Gemini) → `DayPlan`
-- [ ] `POST /api/command`: voice text → `CommandAction` (Gemini)
+- [x] `web/src/lib/gemini.ts` (Gemini client, server-only, 1 h answer cache, null on failure) — each teammate still needs `GEMINI_API_KEY` in `web/.env.local`
+- [x] `POST /api/canvas`: token in body → Canvas planner items → deadline `DayItem[]` with submitted status (never stored or logged)
+- [x] `POST /api/plan`: classes + deadlines + events → free gaps, study blocks, leave times, heat (code), event ranking + briefing (Gemini, with code fallbacks) → `DayPlan`
+- [x] `POST /api/command`: voice text → `CommandAction` (Gemini, with keyword-rule fallback)
+- [ ] Test `/api/plan` and `/api/command` with a real Gemini key (only the fallbacks were tested so far)
+- [ ] Switch `lib/buildings.ts` to a static import once `data/buildings.json` exists (needed for deploys)
 - [ ] Demo mode: a saved `DayPlan` JSON so the expo demo works without Wi-Fi
 - [ ] Deploy (Vercel or AWS Amplify) + custom domain
 - [ ] Stretch: MongoDB Atlas for profiles and event cache
