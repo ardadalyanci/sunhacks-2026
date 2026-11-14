@@ -21,6 +21,8 @@ export interface DayItem {
   tags?: string[]; // for interest matching
   leaveAt?: string; // set by /api/plan for classes and events: when to start walking
   why?: string; // set by /api/plan for events: one sentence on why it fits the student
+  forItemId?: string; // study block → the deadline it is for
+  estimatedMinutes?: number; // deadlines: Gemini's (or the default) estimate of the work left
 }
 
 export interface Weather {

@@ -4,7 +4,8 @@ Update this file when you start or finish something. `[ ]` todo, `[~]` in progre
 The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md. The repo scaffold (Next.js 16, shared types, skills) from the first commit stays.
 
 ## A: backend 1 + integration (Agent-1, Barış)
-- [~] Barış: backend speaks the UI contract (`types.ts` from B; engine types moved to `engine-types.ts`, `lib/ui-adapter.ts`, `POST /api/day`, `/api/command` → `CommandResult`)
+- [x] Barış: backend speaks the UI contract (`types.ts` from B; engine types in `engine-types.ts`, `lib/ui-adapter.ts`, `POST /api/day`, `/api/command` → `CommandResult`, `lib/api-client.ts` for the screens)
+- [ ] Call Kerem's `getEvents()` / `getWeather()` from `/api/day` once `lib/feeds` lands (today a real day has no events or weather)
 - [x] Barış: DayPilot pivot: CLAUDE.md, TASKS.md, README, `DayItem` types
 - [x] `web/src/lib/gemini.ts` (Gemini client, server-only, 1 h answer cache, null on failure) — each teammate still needs `GEMINI_API_KEY` in `web/.env.local`
 - [x] `POST /api/canvas`: token in body → Canvas planner items → deadline `DayItem[]` with submitted status (never stored or logged)
@@ -26,7 +27,7 @@ Screens run on mock data from `web/src/mocks/` until A's routes are live.
 - [x] Events screen: picks by interest with "why", RSVP link
 - [x] Voice: Hear my day (speechSynthesis), Ask (Web Speech) + typed fallback → `/api/command`, local fallback until it exists
 - [x] Setup: Canvas token how-to; classes from a photo, pasted text or by hand (`POST /api/schedule`); interests
-- [~] Barış: wire Today and Events to `POST /api/day` (one call; replaces the mocks)
+- [ ] Arda: wire Today, Events, layout and setup to `POST /api/day` with `fetchDay()` from `lib/api-client.ts` (replaces `mocks/day.ts`); send `briefing` and `now` in `components/commands.ts` so voice reads the real briefing
 - [ ] PWA manifest + icons; phone pass at 375px
 
 ## C: backend 2 + data (Agent-3, Kerem)

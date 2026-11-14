@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCalendarDate, sanitizePlanForCommand, sanitizePlanRequest } from "./sanitize";
+import { isCalendarDate, sanitizeCommandRequest, sanitizePlanRequest, sanitizeSetup } from "./sanitize";
 
 describe("isCalendarDate", () => {
   it.each([
@@ -60,14 +60,47 @@ describe("sanitizePlanRequest", () => {
   });
 });
 
-describe("sanitizePlanForCommand", () => {
-  it("keeps only items with an id, a title and a type", () => {
-    const plan = sanitizePlanForCommand({
-      items: [{ id: "s1", title: "Work on: Lab", type: "study_block" }, null, { id: "x" }],
-      suggestions: "nope",
+describe("sanitizeSetup", () => {
+  it("keeps valid classes with building and room, uppercases building codes", () => {
+    expect(
+      sanitizeSetup({
+        name: "Maya",
+        interests: ["Robotics", 5, ""],
+        classes: [
+          { course: "CSE 230", days: ["Mon"], start: "09:00", end: "09:50", building: "byeng", room: "210" },
+          { course: "Bad", days: ["Mon"], start: "9am", end: "10am", building: "COOR" },
+        ],
+      }),
+    ).toEqual({ name: "Maya", interests: ["Robotics"], classes: [{ course: "CSE 230", days: ["Mon"], start: "09:00", end: "09:50", building: "BYENG", room: "210" }] });
+  });
+
+  it("returns null when nothing usable is there", () => {
+    expect(sanitizeSetup(null)).toBeNull();
+    expect(sanitizeSetup({ classes: "x" })).toBeNull();
+  });
+});
+
+describe("sanitizeCommandRequest", () => {
+  it("accepts transcript or text, keeps valid items and picks (CampusEvent or EventPick)", () => {
+    const req = sanitizeCommandRequest({
+      text: "add robotics",
+      items: [{ id: "s1", kind: "study", title: "Work on Lab 7", startsAt: "2026-11-16T09:00:00-07:00" }, { id: "x", kind: "weird", title: "?" }, null],
+      picks: [
+        { id: "e1", title: "Robotics", startsAt: "2026-11-16T16:00:00-07:00", source: "sun_devil_central" },
+        { event: { id: "e2", title: "Mixer", startsAt: "2026-11-16T17:00:00-07:00" }, score: 1, why: "" },
+        { id: "e3", title: "No time" },
+      ],
     });
-    expect(plan.items.map((i) => i.id)).toEqual(["s1"]);
-    expect(plan.suggestions).toEqual([]);
-    expect(sanitizePlanForCommand(null)).toEqual({ items: [], suggestions: [] });
+    expect(req?.transcript).toBe("add robotics");
+    expect(req?.items.map((i) => i.id)).toEqual(["s1"]);
+    expect(req?.picks.map((p) => [p.id, p.source])).toEqual([
+      ["e1", "sun_devil_central"],
+      ["e2", "asu_events"],
+    ]);
+  });
+
+  it("returns null without a transcript", () => {
+    expect(sanitizeCommandRequest({ items: [] })).toBeNull();
+    expect(sanitizeCommandRequest("hi")).toBeNull();
   });
 });

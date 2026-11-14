@@ -218,6 +218,7 @@ export function placeStudyBlocks(
         end: toMstIso(new Date(from + len)),
         source: "planner",
         url: d.url,
+        forItemId: d.id,
       });
       g.start = from + len; // the rest of the gap stays free
       need -= len;
