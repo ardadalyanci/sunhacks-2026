@@ -1,19 +1,30 @@
-# Sunny: sunhacks 2026 team repo
+# DayPilot: sunhacks 2026 team repo
 
-Working name: **Sunny**, the AI copilot for ASU students. Built at sunhacks 9.0 (ASU Tempe) by a team of 3. Each teammate drives their own Claude Code session in their own clone of this repo; this file is how those sessions stay in sync.
+Working name: **DayPilot**, the AI day planner for ASU students. (We dropped the earlier name "Sunny": ASU's official chatbot is already called Sunny, heysunny.asu.edu.) Built at sunhacks 9.0 (ASU Tempe) by a team of 3. Each teammate drives their own Claude Code session in their own clone of this repo; this file is how those sessions stay in sync.
 
 ## The product in one sentence
-Sunny knows your goals, classes and interests, finds the club events, career fairs, hackathons and internships worth your time, fits them into your week, puts them on your calendar, and shows you **two futures**: you next May if nothing changes, and you with the plan.
+DayPilot plans an ASU student's day: it pulls today's Canvas deadlines, your classes, the Tempe heat and the club events that match your interests into one timeline, tells you when to leave for each class, and talks back when you ask "how's my day?".
+
+Positioning for judges: "ASU Mobile shows you information. DayPilot plans your day." Last year's SunHacks winners Edwin (Canvas AI TA) and Plz_use_it (Canvas + Calendar study scheduler) already did "Canvas + AI", so the demo leads with leave-times, heat and real club picks, not with the Canvas list.
 
 ## MVP flows, in build order
-1. **Onboarding**: resume PDF, career goals, social interests, class schedule (Canvas calendar ICS link, or a screenshot that Gemini reads).
-2. **Opportunity feed**: real, current opportunities (ASU club events from SunDevilCentral, career fairs and employer sessions, MLH hackathons, internships from public Greenhouse/Lever job boards). Stored in MongoDB Atlas, ranked per student with Gemini embeddings + Atlas Vector Search, each with a one-line "why this fits you" written by Gemini.
-3. **Weekly plan**: top picks placed into free slots around classes, plus one ICS subscription link that works in both Google Calendar and Apple Calendar.
-4. **Two futures** (the demo's wow moment): side by side, the projected profile in May 2027 as-is vs. with Sunny's plan (skills, resume lines, people met), grounded in the student's real resume and the chosen opportunities.
-5. **Agent actions**: draft a short intro message to a club officer or recruiter; a one-screen career-fair brief per company.
-6. **Sunny the mascot**: a weekly "forecast" briefing and one consistent personality across the UI.
+1. **Setup**: the student pastes their own Canvas access token (Canvas → Account → Settings → New Access Token; ASU allows it), enters class times once (day, time, building), and picks interests. No ASU password, ever.
+2. **Today screen**: one timeline of classes, Canvas deadlines (with submitted/not submitted), study blocks placed in free gaps, and "leave at 13:12" for every class, plus a heat warning on hot days.
+3. **Events that fit you**: real ASU Events + SunDevilCentral events in the next 7 days, ranked by Gemini against the student's interests, each with a one-line "why this fits you" (borrowed from the Sunny plan).
+4. **Voice**: "How's my day?" reads a spoken briefing; "Add the robotics meeting" adds an event to the timeline (Web Speech API + Gemini turns the command into an action).
+5. **Calendar export**: an ICS feed of the planned day that Google or Apple Calendar can subscribe to (borrowed from the Sunny plan).
 
-Cut unless everything above is done: friend matching / social graph, native mobile app, real auth (use a demo-profile switcher), Google Calendar OAuth (the ICS link covers both calendars).
+Stretch, only after the full demo runs end to end: indoor shortcuts through air-conditioned buildings (3-5 hand-entered), "open in Cool Routes" link, MongoDB Atlas for profiles and cache, the mascot's daily "forecast" voice, Sunny-style "two futures" screen.
+
+Cut: Canvas OAuth (needs an ASU-issued developer key), any ASU SSO login or password collection, MyASU scraping (no API), real shade routing (Cool Routes has no API), registering for club events from the app (no API), native mobile app, push notifications.
+
+## Data sources (verified on Nov 14)
+- **Canvas REST API** with the student's own token, called server-side only (CORS): `GET /api/v1/planner/items?start_date=&end_date=`, `GET /api/v1/users/self/todo`, `GET /api/v1/courses?enrollment_state=active` on `https://canvas.asu.edu`. Never store or log the token.
+- **ASU Events JSON** (public, no key): `https://asuevents.asu.edu/feed-json/students`. Fields include `title`, `start_date`, `end_date`, `locations`, `campus`, `event_price_level`, `interests` (pipe-separated).
+- **SunDevilCentral iCal** (public, no key): `https://sundevilcentral.eoss.asu.edu/ical/arizonau/ical_arizonau.ics` (redirects to a static file, about 5,500 events). `CATEGORIES` carry club acronym, event type and tags. Locations are hidden in the public feed; a student's personal feed link shows them.
+- **Open-Meteo** (no key) for Tempe weather: latitude 33.42, longitude -111.93.
+- **Building coordinates**: `data/buildings.json`, made once from OpenStreetMap via Overpass.
+Do not scrape SunDevilCentral pages, MyASU or the class catalog.
 
 ## Hackathon rules that bind us
 - Deadline **Sun 2026-11-15 11:00 MST** on Devpost; team target **10:30**. Expo + judging Sun 12:00-14:00 in person: the demo must work live on a laptop, and we keep a backup video.
@@ -24,26 +35,35 @@ Cut unless everything above is done: friend matching / social graph, native mobi
 
 ## Prize targets (each needs real, visible use we can point to in the demo)
 - Best Overall
-- JFFVentures Best Hack for the Future of Work
-- MLH Best Use of Gemini API
-- MLH Best Use of MongoDB Atlas
-- Best Use of TinyFish
+- MLH Best Use of Gemini API (event ranking, briefing, voice commands)
+- MLH Best Use of MongoDB Atlas (if we store profiles and the event cache there)
 - Best Use of AWS (if we deploy there), otherwise MLH Best Use of Vultr
-- Best Mascot (Sunny)
+- Best Mascot (if time allows)
 - MLH Best Domain Name from GoDaddy Registry
-- Best Diversity/Equality (first-gen and international students who miss opportunities)
+- Best Diversity/Equality (heat-sensitive students, international students new to campus)
 - Audience Vote
 
 ## Stack
 - `web/`: Next.js 16 (App Router, TypeScript, Tailwind 4). UI and API routes both live here. **Next 16 has breaking changes: read `web/AGENTS.md` and the matching guide in `web/node_modules/next/dist/docs/` before writing Next.js code.**
-- Database: MongoDB Atlas (free tier) with the official `mongodb` driver; Atlas Vector Search for matching.
-- AI: Gemini API through the official `@google/genai` SDK, called server-side only.
-- Opportunity collection: TinyFish web agents (access comes from the TinyFish workshop, Sat 16:30) and public JSON job boards; until then, the hand-made seed file in `data/`.
-- Calendar: we generate an `.ics` feed at `/api/calendar/[studentId]` that Google or Apple Calendar subscribes to.
+- Database (optional, stretch): MongoDB Atlas (free tier) with the official `mongodb` driver. The MVP keeps the student profile in the browser and caches feeds in server memory.
+- AI: Gemini API through the official `@google/genai` SDK, called server-side only. Code does the math (free gaps, leave times, heat warning); Gemini only ranks events, estimates homework time, writes the briefing and turns a voice command into an action. Cache Gemini answers; the free tier is small.
+- Voice: the browser's Web Speech API (best in Chrome).
+- Calendar: we generate an `.ics` feed of the planned day that Google or Apple Calendar can subscribe to.
+- API routes (all under `web/src/app/api/`): `POST /api/canvas` (token in, `DayItem[]` out), `GET /api/events` (ASU Events + SunDevilCentral, 1 h cache, next 7 days, Tempe), `GET /api/weather`, `POST /api/plan` (timeline + briefing), `POST /api/command` (voice text to action), `GET /api/calendar` (ICS).
 - Secrets live in `web/.env.local` (gitignored). `web/.env.example` lists every variable. Never commit keys; share them privately.
 
 ## Shared contract
-`web/src/lib/types.ts` is the single source of truth for data shapes (Student, Opportunity, Recommendation, PlanItem, Futures). Build against it. Only teammate A changes it, after asking in the team chat.
+`web/src/lib/types.ts` is the single source of truth for data shapes (DayItem, Student, Opportunity, Recommendation, PlanItem; the Futures types stay for the stretch screen). Build against it. Only teammate A changes it, after asking in the team chat.
+
+## Notion coordination
+Board: Notion page "Agent Coordination" (under "SunHacks 9.0 — Team Hub"), read and written through the Notion MCP. Agent names map to repo roles: Agent-1 = A (Barış), Agent-2 = B, Agent-3 = C.
+- Before starting a task, read the "Agent Task Board" and the "Decision Log" there.
+- When you take a task, set its Status to "In progress" and list the files you will touch.
+- Do not touch files listed on another agent's "In progress" row.
+- When an API, data shape or environment variable changes, add one line to the Decision Log.
+- When a task is done, set Status to "Done" and add the branch or commit name and a one-sentence summary. Also tick it in TASKS.md.
+- If blocked, set Status to "Blocked" and write why and who you are waiting for.
+- If the user says "team status", summarize the board.
 
 ## Team workflow (3 people, 3 Claude sessions)
 - Integration branch: **`dev`** (the default branch). Work on your own branch named `<name>/<feature>`, open small PRs into `dev`, and teammate A merges. Pull often: `git pull --rebase origin dev`.
@@ -63,8 +83,8 @@ Works end to end in the browser with real data, looks right on a laptop and a ph
 - `webapp-testing`: Playwright smoke checks before the demo.
 
 ## Timeline (MST)
-- Sat 18:00: onboarding + feed working with real data.
-- Sat 21:00: weekly plan + ICS + two futures; first full demo run.
+- Sat 18:00: real Canvas token → Today screen with deadlines and leave times.
+- Sat 23:00: events that fit you + spoken briefing + voice command; first full demo run.
 - Sun 06:00: feature freeze; only fixes and polish after this.
 - Sun 07:00-10:00: Devpost write-up, video of 2 minutes or less, pitch rehearsal.
 - Sun 10:30: submit on Devpost with all three of us listed on the project.
