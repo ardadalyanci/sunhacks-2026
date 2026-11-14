@@ -1,106 +1,147 @@
-// Shared data contract for DayPilot. API routes return these shapes; screens render them.
-// Change only after telling the team (see CLAUDE.md).
-// Times are ISO 8601 strings with the Arizona offset, e.g. "2026-11-16T13:30:00-07:00".
+// Shared data contract for DayPilot. Every API route and page builds against these shapes.
+// Only teammate A edits this file, after asking in the team chat (see CLAUDE.md).
+// Times are ISO 8601 strings with the Arizona offset, e.g. "2026-11-18T18:00:00-07:00".
 
-export type Weekday = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
-
-/** A class the student enters once during setup (MyASU has no API). */
-export interface ClassBlock {
-  course: string; // "CSE 240"
-  days: Weekday[];
-  start: string; // local "10:30"
-  end: string; // local "11:45"
-  building: string; // building code from buildings.json, e.g. "COOR"
-  room?: string;
-}
-
-export interface Building {
-  code: string; // "COOR"
-  name: string; // "Lattie F. Coor Hall"
-  lat: number;
-  lng: number;
-  airConditionedShortcut?: boolean;
-}
-
-export type DayItemKind =
-  | "class"
-  | "assignment" // due today or soon, from Canvas
-  | "study" // block placed into a free gap for an assignment
-  | "event" // a campus event the student added
-  | "leave"; // "leave at 1:12 pm" marker before something with a location
+// One row on the Today timeline. Every source (Canvas, classes, events, planner) is turned into this.
+export type DayItemType = "class" | "deadline" | "event" | "study_block" | "travel";
+export type DayItemSource = "canvas" | "manual" | "asu_events" | "sundevilcentral" | "planner";
 
 export interface DayItem {
   id: string;
-  kind: DayItemKind;
+  type: DayItemType;
   title: string;
-  startsAt?: string; // classes, study blocks, events, leave markers
-  endsAt?: string;
-  dueAt?: string; // assignments
-  course?: string; // "CSE 240"
-  building?: string; // building code
-  location?: string; // free text when there is no building code
-  submitted?: boolean; // assignments
-  estimatedMinutes?: number; // assignments and study blocks (Gemini estimate)
-  forItemId?: string; // study block → assignment id; leave marker → destination item id
-  walkMinutes?: number; // leave markers
-  url?: string; // Canvas assignment or event page
-}
-
-export type EventSource = "asu_events" | "sun_devil_central";
-
-export interface CampusEvent {
-  id: string;
-  title: string;
-  startsAt: string;
-  endsAt?: string;
-  location?: string; // Sun Devil Central hides most locations
-  url: string; // event page or RSVP link
-  source: EventSource;
-  interests: string[]; // ASU Events "interests" field, or tags we derive
-  description?: string;
-}
-
-export interface EventPick {
-  event: CampusEvent;
-  score: number; // 0..1 from Gemini ranking
-  why: string; // one sentence written for the student
-}
-
-export interface HourlyWeather {
-  time: string;
-  tempF: number;
-  feelsLikeF: number;
+  start: string; // ISO with -07:00; for a deadline, the due time
+  end?: string;
+  buildingId?: string; // key in data/buildings.json
+  location?: string; // free text when there is no buildingId
+  source: DayItemSource;
+  done?: boolean; // Canvas: already submitted
+  url?: string; // Canvas assignment or RSVP link
+  tags?: string[]; // for interest matching
+  leaveAt?: string; // set by /api/plan for classes and events: when to start walking
+  why?: string; // set by /api/plan for events: one sentence on why it fits the student
 }
 
 export interface Weather {
-  hourly: HourlyWeather[]; // today, local hours
+  tempF: number;
   highF: number;
-}
-
-export interface HeatAlert {
-  at: string; // when it peaks during the student's walks
-  feelsLikeF: number;
-  message: string; // "Feels like 104°F when you walk to COOR at 1:15. Take water."
+  isHot: boolean; // true at 95 °F or above
 }
 
 export interface DayPlan {
-  date: string; // "2026-11-16"
-  items: DayItem[]; // sorted by time
-  heatAlert?: HeatAlert;
-  briefing: string; // what the voice briefing reads out loud
+  date: string; // "2026-11-14"
+  items: DayItem[]; // sorted by start
+  suggestions: DayItem[]; // events that fit the student, best first, each with `why`; not on the timeline until accepted
+  weather?: Weather;
+  briefing: string; // spoken summary written by Gemini (or a template when Gemini is unavailable)
+  aiUsed: boolean; // false when every Gemini step fell back to plain code
 }
 
-export type CommandAction = "add_event" | "remove_item" | "briefing" | "next_item" | "none";
-
-export interface CommandResult {
-  action: CommandAction;
-  id?: string; // CampusEvent id or DayItem id the action applies to
-  say: string; // short spoken confirmation
+// Body of POST /api/plan. Only `classes` is required.
+export interface PlanRequest {
+  date?: string; // "2026-11-14"; default: today in Arizona
+  now?: string; // ISO; default: the server clock. Lets the demo replay a fixed moment.
+  classes: ClassBlock[]; // ClassBlock.location like "BYENG 210" is matched to data/buildings.json
+  deadlines?: DayItem[]; // from POST /api/canvas
+  events?: Opportunity[]; // from GET /api/events
+  acceptedEventIds?: string[]; // Opportunity ids the student added ("add to my day" or voice)
+  interests?: string[];
+  weather?: Weather; // from GET /api/weather
+  startBuildingId?: string; // where the day starts, e.g. the dorm; used for the first leave time
 }
 
-/** Kept in the browser (localStorage). The Canvas token is sent per request and never stored server-side. */
-export interface StudentSetup {
+// Result of POST /api/command: what the voice command asked for.
+export type CommandAction =
+  | { action: "add_event"; itemId: string }
+  | { action: "remove_item"; itemId: string }
+  | { action: "briefing" }
+  | { action: "unknown"; reply: string };
+
+export type OpportunityKind =
+  | "club_event"
+  | "career_fair"
+  | "employer_session"
+  | "hackathon"
+  | "internship"
+  | "workshop"
+  | "social";
+
+export type OpportunitySource =
+  | "asu_events"
+  | "sundevilcentral"
+  | "career_services"
+  | "mlh"
+  | "greenhouse"
+  | "lever"
+  | "tinyfish"
+  | "seed";
+
+export interface Opportunity {
+  id: string;
+  kind: OpportunityKind;
+  title: string;
+  organizer: string; // club, company or office name
+  description: string;
+  url: string; // real source link
+  startsAt?: string; // events
+  endsAt?: string;
+  deadline?: string; // internships: application deadline
+  location?: string; // room name or "Online"
+  tags: string[]; // e.g. ["software", "networking", "soccer"]
+  source: OpportunitySource;
+  fetchedAt: string;
+}
+
+export type Weekday = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+
+export interface ClassBlock {
+  course: string; // e.g. "CSE 360"
+  days: Weekday[];
+  start: string; // local time "13:30"
+  end: string; // local time "14:45"
+  location?: string;
+}
+
+export interface Student {
+  id: string;
   name: string;
+  major: string;
+  year: "freshman" | "sophomore" | "junior" | "senior" | "masters" | "phd";
+  careerGoals: string[]; // e.g. "SWE internship for summer 2027"
+  interests: string[]; // social interests, e.g. "soccer", "anime"
+  resumeText?: string; // extracted from the uploaded PDF
   classes: ClassBlock[];
-  interests: string[];
+  isInternational?: boolean; // optional, used only to surface relevant resources
+  isFirstGen?: boolean; // optional, used only to surface relevant resources
+}
+
+export type Layer = "career" | "social";
+
+export interface Recommendation {
+  opportunityId: string;
+  score: number; // 0..1
+  layer: Layer;
+  why: string; // one sentence written for the student
+}
+
+export interface PlanItem {
+  opportunityId: string;
+  startsAt: string;
+  endsAt: string;
+  layer: Layer;
+}
+
+export interface FutureSnapshot {
+  label: string; // "May 2027, as is" or "May 2027, with Sunny's plan"
+  headline: string;
+  skills: string[];
+  resumeLines: string[];
+  peopleMet: number;
+  opportunitiesUnlocked: string[];
+}
+
+export interface Futures {
+  asIs: FutureSnapshot;
+  withPlan: FutureSnapshot;
+  basedOn: string[]; // ids of the opportunities the projection used
 }
