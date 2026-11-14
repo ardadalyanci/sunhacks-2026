@@ -17,7 +17,7 @@ export default function AppNav({ studentName }: { studentName: string }) {
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:gap-6">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <SunnyMark size={34} />
-          <span className="font-display text-2xl font-bold tracking-tight">Sunny</span>
+          <span className="hidden font-display text-2xl font-bold tracking-tight sm:inline">Sunny</span>
         </Link>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto">
           {LINKS.map((link) => {

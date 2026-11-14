@@ -92,7 +92,7 @@ export default function SkyWeek({ dates, classes, plan, opportunities, recommend
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <div>
+      <div className="min-w-0">
         <div className="overflow-x-auto rounded-3xl border border-ink/15 bg-cloud">
           <div className="min-w-[720px]">
             <div className="grid grid-cols-[56px_repeat(7,1fr)] border-b border-ink/10">
@@ -170,7 +170,11 @@ export default function SkyWeek({ dates, classes, plan, opportunities, recommend
                           }`}
                           style={{ top, height }}
                         >
-                          <span className={`block font-bold leading-tight ${layer.text}`}>{c.opp.title}</span>
+                          <span
+                            className={`font-bold leading-tight ${height < 60 ? "line-clamp-2" : "line-clamp-3"} ${layer.text}`}
+                          >
+                            {c.opp.title}
+                          </span>
                           {height >= 60 && (
                             <span className="block text-ink-soft">{formatTime(c.start)}</span>
                           )}
