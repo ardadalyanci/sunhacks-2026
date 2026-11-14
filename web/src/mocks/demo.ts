@@ -1,7 +1,7 @@
 // MOCK DATA so the UI can be built before the backend is ready.
 // Swap each export for the matching API response (TASKS.md, list A). These are not real ASU events:
 // never show them in the demo as real. Real opportunities come from data/seed-events.json and the agents.
-import type { Futures, Opportunity, PlanItem, Recommendation, Student } from "@/lib/types";
+import type { Futures, Opportunity, PlanItem, Recommendation, Student } from "./legacy-types";
 
 export const demoWeekStart = "2026-11-16"; // Monday
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Layer, Opportunity, Recommendation } from "@/lib/types";
+import type { Layer, Opportunity, Recommendation } from "@/mocks/legacy-types";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { demoOpportunities, demoPlan, demoRecommendations, demoStudent } from "@/mocks/demo";
 

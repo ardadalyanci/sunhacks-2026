@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ClassBlock, Layer, Opportunity, PlanItem, Recommendation } from "@/lib/types";
+import type { ClassBlock, Layer, Opportunity, PlanItem, Recommendation } from "@/mocks/legacy-types";
 import SunnyMark from "./SunnyMark";
 import { WEEKDAYS, formatDay, formatRange, formatTime, hhmmToHours, parseLocal } from "./time";
 

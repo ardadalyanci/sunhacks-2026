@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { FutureSnapshot } from "@/lib/types";
+import type { FutureSnapshot } from "@/mocks/legacy-types";
 import SunnyMark from "@/components/SunnyMark";
 import { demoFutures, demoOpportunities } from "@/mocks/demo";
 
