@@ -36,14 +36,17 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return json;
 }
 
-async function getJson<T>(url: string): Promise<T | null> {
+/** GET `url` as JSON; null when it fails, answers an error, or takes longer than `timeoutMs`. */
+async function getJson<T>(url: string, timeoutMs?: number): Promise<T | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : undefined);
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
   }
 }
+
+const LIVE_EVENTS_WAIT_MS = 2500; // the sample day waits this long for the live feeds, then goes without them
 
 function asEvents(value: unknown): Opportunity[] {
   if (Array.isArray(value)) return value as Opportunity[];
@@ -73,12 +76,20 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
   const setup = loadSetup();
   if (!setup) {
     // Today's sample day replays 8 am; a later day comes back with the real clock as its `now`.
-    const demo = await getJson<{ persona: { name: string }; request: PlanRequest }>(
-      later ? `/api/demo?date=${date}` : "/api/demo",
-    );
+    // The sample student's own events are joined by the live ASU feeds when they answer in time, so the
+    // sample shows real campus events too, and still works offline.
+    const [demo, live] = await Promise.all([
+      getJson<{ persona: { name: string }; request: PlanRequest }>(later ? `/api/demo?date=${date}` : "/api/demo"),
+      getJson<unknown>("/api/events", LIVE_EVENTS_WAIT_MS).then(asEvents),
+    ]);
     if (!demo) throw new Error("The sample day did not load. Check that the app server is running.");
     return {
-      request: { ...demo.request, acceptedEventIds: loadAccepted(date), calendarId: loadCalendarId() },
+      request: {
+        ...demo.request,
+        events: [...(demo.request.events ?? []), ...live],
+        acceptedEventIds: loadAccepted(date),
+        calendarId: loadCalendarId(),
+      },
       weather: demo.request.weather,
       name: demo.persona.name,
       isDemo: true,

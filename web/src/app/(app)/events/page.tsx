@@ -10,6 +10,7 @@ import type { Opportunity } from "@/lib/types";
 const SOURCE: Partial<Record<Opportunity["source"], string>> = {
   asu_events: "ASU Events",
   sundevilcentral: "Sun Devil Central",
+  seed: "the sample day",
 };
 
 const FOR_YOU = "For you"; // events that match the student's interests, plus Gemini's picks for today
