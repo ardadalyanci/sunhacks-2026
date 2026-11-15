@@ -1,5 +1,6 @@
 // Pure planning math for POST /api/plan: no network, no Gemini. Everything here is deterministic,
 // so the Today screen still works when Gemini is unavailable.
+import { spokenAssignment } from "./places";
 import type { ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./types";
 
 export const MST = "-07:00"; // Arizona: no daylight saving
@@ -14,6 +15,9 @@ const DEFAULT_STUDY_MIN = 60;
 const DEFAULT_WALK_MIN = 10; // when a building is unknown
 const WALK_M_PER_MIN = 80; // about 3 mph
 const ROUTE_FACTOR = 1.3; // campus paths are not straight lines
+const SLOWER_PACE_FACTOR = 1.35; // "Give me more time to walk" in Setup
+const HEAT_EXTRA_MIN = 2;
+const HEAT_EXTRA_SLOWER_MIN = 5;
 
 export interface Building {
   id: string; // e.g. "BYENG"
@@ -93,11 +97,18 @@ function metersBetween(a: Building, b: Building): number {
   return 2 * 6371000 * Math.asin(Math.sqrt(h));
 }
 
-/** Minutes to walk between two buildings, plus a small buffer; a little more on hot days (slower pace, shade detours). */
-export function walkMinutes(from: Building | undefined, to: Building | undefined, hot: boolean): number {
-  if (!from || !to) return DEFAULT_WALK_MIN + (hot ? 2 : 0);
-  const walk = (metersBetween(from, to) * ROUTE_FACTOR) / WALK_M_PER_MIN;
-  return Math.max(3, Math.ceil(walk + 2 + (hot ? 2 : 0)));
+/**
+ * Minutes to walk between two buildings, plus a small buffer; a little more on hot days (slower pace, shade detours).
+ * `slower` is the student's own pace setting (a slower walk, a mobility aid, heat sensitivity): the walk itself
+ * takes 35% longer, and a hot day adds 5 minutes instead of 2, because they are in the sun longer and may need a
+ * shade stop on the way.
+ */
+export function walkMinutes(from: Building | undefined, to: Building | undefined, hot: boolean, slower = false): number {
+  const pace = slower ? SLOWER_PACE_FACTOR : 1;
+  const heat = hot ? (slower ? HEAT_EXTRA_SLOWER_MIN : HEAT_EXTRA_MIN) : 0;
+  if (!from || !to) return Math.ceil(DEFAULT_WALK_MIN * pace) + heat;
+  const walk = ((metersBetween(from, to) * ROUTE_FACTOR) / WALK_M_PER_MIN) * pace;
+  return Math.max(3, Math.ceil(walk + 2 + heat));
 }
 
 // ---------- building the timeline ----------
@@ -226,8 +237,17 @@ export function placeStudyBlocks(
   return blocks;
 }
 
-/** Sets `leaveAt` on classes and events, walking from the previous located stop (or the start building). */
-export function addLeaveTimes(items: DayItem[], buildings: Building[], startBuildingId: string | undefined, weather?: Weather) {
+/**
+ * Sets `leaveAt` on classes and events, walking from the previous located stop (or the start building).
+ * `slower` gives every walk the student's slower pace (see walkMinutes).
+ */
+export function addLeaveTimes(
+  items: DayItem[],
+  buildings: Building[],
+  startBuildingId: string | undefined,
+  weather?: Weather,
+  slower = false,
+) {
   const hot = weather?.isHot ?? false;
   let here = findBuilding(buildings, startBuildingId);
   for (const item of items) {
@@ -237,7 +257,7 @@ export function addLeaveTimes(items: DayItem[], buildings: Building[], startBuil
       continue;
     }
     const there = findBuilding(buildings, item.buildingId ?? item.location);
-    const minutes = walkMinutes(here, there, hot);
+    const minutes = walkMinutes(here, there, hot, slower);
     item.leaveAt = toMstIso(new Date(new Date(item.start).getTime() - minutes * MIN));
     if (there) here = there;
   }
@@ -291,12 +311,16 @@ export function templateBriefing(items: DayItem[], suggestions: DayItem[], weath
   const classes = items.filter((i) => i.type === "class");
   if (classes.length) {
     const first = classes[0];
-    parts.push(`You have ${classes.length} class${classes.length > 1 ? "es" : ""}. First up is ${first.title} at ${clock(first.start)}${first.leaveAt ? `; leave by ${clock(first.leaveAt)}` : ""}.`);
+    // A shift or a study group is not a class, so a day with one is counted as things planned.
+    const count = classes.every((c) => /^[A-Z]{2,4} \d{3}/.test(c.title))
+      ? `${classes.length} class${classes.length > 1 ? "es" : ""}`
+      : `${classes.length} thing${classes.length > 1 ? "s" : ""} planned`;
+    parts.push(`You have ${count}. First up is ${first.title} at ${clock(first.start)}${first.leaveAt ? `; leave by ${clock(first.leaveAt)}` : ""}.`);
   } else {
     parts.push(ahead ? "You have no classes." : "You have no classes today.");
   }
   const due = items.filter((i) => i.type === "deadline" && !i.done);
-  if (due.length) parts.push(`${due.length} assignment${due.length > 1 ? "s are" : " is"} still open, starting with ${due[0].title}, due ${clock(due[0].start)}.`);
+  if (due.length) parts.push(`${due.length} assignment${due.length > 1 ? "s are" : " is"} still open, starting with ${spokenAssignment(due[0].title)}, due ${clock(due[0].start)}.`);
   if (suggestions.length) parts.push(`One event that fits you: ${suggestions[0].title} at ${clock(suggestions[0].start)}.`);
   return parts.join(" ");
 }

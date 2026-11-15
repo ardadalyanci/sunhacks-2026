@@ -54,6 +54,18 @@ describe("sanitizePlanRequest", () => {
     expect(v.weather).toBeUndefined();
   });
 
+  it("keeps the walking pace only when it is exactly \"slower\"", () => {
+    const pace = (v: unknown) => {
+      const res = sanitizePlanRequest({ classes: [], pace: v });
+      return res.ok ? res.value.pace : "rejected";
+    };
+    expect(pace("slower")).toBe("slower");
+    expect(pace("faster")).toBeUndefined();
+    expect(pace("Slower")).toBeUndefined();
+    expect(pace(true)).toBeUndefined();
+    expect(pace(undefined)).toBeUndefined();
+  });
+
   it("derives isHot when it is missing", () => {
     const res = sanitizePlanRequest({ classes: [], weather: { tempF: 90, highF: 101 } });
     expect(res.ok && res.value.weather).toEqual({ tempF: 90, highF: 101, isHot: true });

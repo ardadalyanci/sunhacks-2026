@@ -57,6 +57,28 @@ export function walkLink(location: string | undefined): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=walking`;
 }
 
+// A Canvas title as lib/canvas.ts writes it: "CSE 230: Lab 7 (pipelining)".
+const COURSE_TITLE = /^([A-Z]{2,4} \d{3}[A-Z]?):\s*(.+)$/;
+
+/**
+ * An assignment the way a student says it out loud: "Lab 7 for CSE 230", "the Reading response for ENG 102".
+ * A numbered name reads like a proper name; anything else gets "the". Titles without a course code stay as
+ * they are. The same idea as assignmentName in components/sky-layout.ts, which server code must not import.
+ */
+export function spokenAssignment(title: string): string {
+  const m = COURSE_TITLE.exec(title.trim());
+  if (!m) return title.trim();
+  const name = m[2].replace(/\s*\([^)]*\)/g, "").trim() || m[2].trim();
+  const article = /\d/.test(name) || /^the\b/i.test(name) ? "" : "the ";
+  return `${article}${name} for ${m[1]}`;
+}
+
+/** "Study group: MAT 343" → "MAT 343 study group", the way a student says it; other titles stay as they are. */
+export function spokenStop(title: string): string {
+  const m = /^([A-Za-z][A-Za-z ]*?):\s*([A-Z]{2,4} \d{3}[A-Z]?)$/.exec(title.trim());
+  return m ? `${m[2]} ${m[1].toLowerCase()}` : title.trim();
+}
+
 // Building codes as whole words ("BYENG 210"), for swapping them for spoken names in Sol's lines.
 const CODE = new RegExp(`\\b(${BUILDINGS.map((b) => b.id).join("|")})\\b`, "g");
 
