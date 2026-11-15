@@ -1,69 +1,75 @@
 "use client";
 
 import type { DayItem } from "@/lib/types";
+import { dayBounds, hourOn, isDarkHour, skyBackground, stackPins } from "./sky-layout";
 import { formatTime, parseLocal } from "./time";
 
-const START = 8; // 8 am (planner DAY_START)
-const END = 22; // 10 pm (planner DAY_END)
 const ROW = 56; // px per hour
-const PAD = 12; // px above 8 am so its label is not clipped
+const PAD = 14; // px above the first hour and below the last, so their labels are not clipped
 
-const hourOf = (iso: string) => parseLocal(iso).hours;
-const inDay = (h: number) => h >= START && h <= END;
-const y = (hours: number) => PAD + (Math.min(Math.max(hours, START), END) - START) * ROW;
-
-type Pin = { key: string; itemId: string; at: number; text: string; tone: string; right?: boolean };
+type Pin = { key: string; itemId: string; at: number; text: string; tone: string; deadline?: boolean };
 
 type Props = {
+  date: string; // the plan's day ("2026-11-14"); items on other days are left out
   items: DayItem[];
   hot?: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
 
-/** One day as a column of sky: time of day is color, and every item sits at its hour. */
-export default function SkyDay({ items, hot = false, selectedId, onSelect }: Props) {
-  const hours = Array.from({ length: END - START + 1 }, (_, i) => START + i);
-  const blocks = items.filter((i) => i.type !== "deadline" && inDay(hourOf(i.start)));
+/**
+ * One day as a column of sky: time of day is color, and every item sits at its hour. The sky covers 8 am to
+ * 10 pm and stretches for anything earlier or later. Leave-time pins sit on the left, deadline pins on the
+ * right, and pins that would touch are stacked so none overlap.
+ */
+export default function SkyDay({ date, items, hot = false, selectedId, onSelect }: Props) {
+  const today = items.filter((i) => parseLocal(i.start).date === date);
+  const { first, last } = dayBounds(today, date);
+  const y = (hour: number) => PAD + (hour - first) * ROW;
+  const height = PAD * 2 + (last - first) * ROW;
+  const hours = Array.from({ length: last - first + 1 }, (_, i) => first + i);
+  const blocks = today.filter((i) => i.type !== "deadline");
 
   const pins: Pin[] = [];
-  for (const item of items) {
+  for (const item of today) {
     if (item.type === "deadline") {
-      const at = hourOf(item.start);
-      if (inDay(at)) {
-        pins.push({
-          key: item.id,
-          itemId: item.id,
-          at,
-          text: `${item.done ? "Turned in" : "Due"} ${formatTime(at)}: ${item.title}`,
-          tone: item.done ? "bg-saguaro text-cloud" : "bg-[#c2410c] text-cloud",
-          right: true, // keeps deadline pins off the titles of blocks at the same hour
-        });
-      }
+      const due = hourOn(item.start, date);
+      pins.push({
+        key: item.id,
+        itemId: item.id,
+        at: Math.max(due, first), // a deadline before the first hour sits at the top edge
+        text: `${item.done ? "Turned in" : "Due"} ${formatTime(due)}: ${item.title}`,
+        tone: item.done ? "bg-saguaro text-cloud" : "bg-[#c2410c] text-cloud",
+        deadline: true,
+      });
     }
     if (item.leaveAt && (item.type === "class" || item.type === "event")) {
-      const at = hourOf(item.leaveAt);
+      const leave = hourOn(item.leaveAt, date);
       const minutes = Math.max(1, Math.round((Date.parse(item.start) - Date.parse(item.leaveAt)) / 60_000));
-      if (inDay(at)) {
-        pins.push({
-          key: `${item.id}-leave`,
-          itemId: item.id,
-          at,
-          text: `Leave ${formatTime(at)} for ${item.location ?? item.title}, ${minutes} min`,
-          tone: "bg-ink text-cloud",
-        });
-      }
+      pins.push({
+        key: `${item.id}-leave`,
+        itemId: item.id,
+        at: leave,
+        text: `Leave ${formatTime(leave)} for ${item.location ?? item.title}, ${minutes} min`,
+        tone: "bg-ink text-cloud",
+      });
     }
   }
+  const tops = stackPins(
+    pins.map((pin) => y(pin.at)),
+    height,
+  );
 
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border border-ink/15 ${hot ? "sky-day-hot" : "sky-day"}`}
-      style={{ height: PAD * 2 + (END - START) * ROW }}
+      className="relative overflow-hidden rounded-3xl border border-ink/15"
+      style={{ height, background: skyBackground(y, hot) }}
     >
       {hours.map((h) => (
         <div key={h} className="absolute inset-x-0" style={{ top: y(h) }} aria-hidden>
-          <span className={`absolute left-3 -translate-y-1/2 text-xs ${h >= 19 ? "text-cloud/80" : "text-ink-soft"}`}>
+          <span
+            className={`absolute left-3 -translate-y-1/2 text-xs ${isDarkHour(h) ? "text-cloud/80" : "text-ink-soft"}`}
+          >
             {formatTime(h)}
           </span>
           <div className="ml-16 border-t border-ink/10" />
@@ -72,9 +78,9 @@ export default function SkyDay({ items, hot = false, selectedId, onSelect }: Pro
 
       <ol className="absolute inset-0">
         {blocks.map((item) => {
-          const start = hourOf(item.start);
-          const end = item.end ? hourOf(item.end) : start + 0.5;
-          const height = Math.max(32, (Math.min(end, END) - start) * ROW - 4);
+          const start = hourOn(item.start, date);
+          const end = item.end ? hourOn(item.end, date) : start + 0.5;
+          const blockHeight = Math.max(32, (Math.min(end, last) - start) * ROW - 4);
           const selected = item.id === selectedId;
           const style =
             item.type === "class"
@@ -85,7 +91,7 @@ export default function SkyDay({ items, hot = false, selectedId, onSelect }: Pro
                   ? "border-2 border-dusk bg-cloud shadow-[0_0_0_4px_rgba(255,176,0,0.35)]"
                   : "border border-ink/20 bg-ink/10";
           return (
-            <li key={item.id} className="absolute left-16 right-3" style={{ top: y(start) + 2, height }}>
+            <li key={item.id} className="absolute left-16 right-3" style={{ top: y(start) + 2, height: blockHeight }}>
               <button
                 type="button"
                 onClick={() => onSelect(item.id)}
@@ -95,7 +101,7 @@ export default function SkyDay({ items, hot = false, selectedId, onSelect }: Pro
                 <span className={`block font-bold leading-tight ${item.type === "event" ? "text-dusk" : ""}`}>
                   {item.title}
                 </span>
-                {height >= 56 && (
+                {blockHeight >= 56 && (
                   <span className="block text-sm text-ink-soft">
                     {formatTime(start)} to {formatTime(end)}
                     {item.location ? `, ${item.location}` : ""}
@@ -106,19 +112,19 @@ export default function SkyDay({ items, hot = false, selectedId, onSelect }: Pro
           );
         })}
 
-        {pins.map((pin) => (
+        {pins.map((pin, k) => (
           <li
             key={pin.key}
-            className={`absolute left-16 right-3 z-10 flex ${pin.right ? "justify-end" : ""}`}
-            style={{ top: y(pin.at) - 14 }}
+            className={`absolute left-16 right-3 z-10 flex ${pin.deadline ? "justify-end" : ""}`}
+            style={{ top: tops[k] }}
           >
             <button
               type="button"
               onClick={() => onSelect(pin.itemId)}
               aria-pressed={pin.itemId === selectedId}
-              className={`inline-flex h-7 max-w-full items-center rounded-full px-3 text-xs font-bold sm:text-sm ${pin.tone} ${
-                pin.itemId === selectedId ? "ring-4 ring-sun" : ""
-              }`}
+              className={`inline-flex h-7 items-center rounded-full px-3 text-xs font-bold sm:text-sm ${
+                pin.deadline ? "max-w-[85%]" : "max-w-full"
+              } ${pin.tone} ${pin.itemId === selectedId ? "ring-4 ring-sun" : ""}`}
             >
               <span className="truncate">{pin.text}</span>
             </button>
