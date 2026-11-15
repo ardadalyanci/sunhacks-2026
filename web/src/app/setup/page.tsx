@@ -6,26 +6,25 @@ import { useState, type FormEvent } from "react";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
 import { classProblem, isBlankClass } from "@/components/classes";
-import { clearSetup, saveSetup } from "@/components/setup-store";
+import { INTEREST_CHIPS } from "@/components/interests";
+import { clearSetup, forgetToken, saveSetup } from "@/components/setup-store";
 import { WEEKDAYS } from "@/components/time";
 import type { ClassBlock, Weekday } from "@/lib/types";
 
-// Lowercase, so they match event tags from ASU Events and Sun Devil Central.
-const INTERESTS = [
-  "robotics",
-  "software",
-  "hackathons",
-  "career",
-  "soccer",
-  "sports",
-  "music",
-  "arts",
-  "volunteering",
-  "startups",
-];
-
 // Hints for the location field; the planner matches "BYENG 210" to data/buildings.json.
 const BUILDING_HINTS = ["BYENG", "COOR", "ECG", "ISTB4", "LL", "MU", "PSH", "SDFC", "WXLR", "Hayden Library"];
+
+// Where the first walk of the day starts (building ids in data/buildings.json), named the way students say them.
+const STARTS: { id: string; label: string }[] = [
+  { id: "", label: "Not sure yet" },
+  { id: "TOOKR", label: "Tooker House" },
+  { id: "MANZ", label: "Manzanita (Manzy)" },
+  { id: "SNPBL", label: "San Pablo" },
+  { id: "BARRETT", label: "Barrett" },
+  { id: "MU", label: "Off campus: I start at the MU" },
+];
+
+const CANVAS_SETTINGS = "https://canvas.asu.edu/profile/settings";
 
 type Method = "photo" | "paste" | "type";
 
@@ -75,6 +74,8 @@ export default function SetupPage() {
   const [interests, setInterests] = useState<string[]>([]);
   const [checked, setChecked] = useState(false); // mark rows that need a fix only after a save attempt
   const [saveError, setSaveError] = useState("");
+  const [start, setStart] = useState(""); // where the first walk of the day starts (building id)
+  const [tokenNote, setTokenNote] = useState("");
 
   const canRead = (method === "photo" && photo !== null) || (method === "paste" && pasted.trim().length > 0);
 
@@ -129,8 +130,14 @@ export default function SetupPage() {
     }
     const kept = rows.map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
     // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
-    saveSetup({ name: name.trim(), classes: kept, interests }, token.trim());
+    saveSetup({ name: name.trim(), classes: kept, interests, startBuildingId: start || undefined }, token.trim());
     router.push("/today");
+  }
+
+  function forget() {
+    forgetToken();
+    setToken("");
+    setTokenNote(`Done. ${PRODUCT} no longer has a Canvas token in this tab.`);
   }
 
   return (
@@ -151,12 +158,33 @@ export default function SetupPage() {
       </div>
 
       <form onSubmit={submit} className="mt-10 space-y-12">
+        <label className="block">
+          <span className="font-display text-2xl font-bold">What should {MASCOT} call you?</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="given-name"
+            placeholder="Your first name"
+            className={field}
+          />
+        </label>
+
         <fieldset>
           <legend className="font-display text-2xl font-bold">1. Connect Canvas</legend>
-          <label className="mt-4 block">
-            <span className="font-bold">Your first name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" className={field} />
-          </label>
+          <p className="mt-1 text-ink-soft">So {MASCOT} can see what’s due and whether you turned it in.</p>
+          <a
+            href={CANVAS_SETTINGS}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-block rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+          >
+            Open my Canvas settings
+          </a>
+          <ol className="mt-4 list-decimal space-y-1 pl-5 text-ink-soft">
+            <li>Under Approved integrations, select New access token.</li>
+            <li>Name it {PRODUCT} and set Expires to the end of finals.</li>
+            <li>Generate it and paste it here.</li>
+          </ol>
           <label className="mt-4 block">
             <span className="font-bold">Canvas access token</span>
             <input
@@ -168,15 +196,33 @@ export default function SetupPage() {
               className={field}
             />
           </label>
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-ink-soft">
-            <li>In Canvas, open Account, then Settings.</li>
-            <li>Under Approved integrations, select New access token.</li>
-            <li>Name it {PRODUCT}, generate it and paste it above.</li>
-          </ol>
-          <p className="mt-3 text-sm text-ink-soft">
-            {PRODUCT} never asks for your ASU password. The token stays in this browser tab and is never stored on
-            our server.
-          </p>
+          <div className="mt-4 space-y-2 rounded-3xl bg-cloud p-4 text-sm">
+            <p>
+              <span className="font-bold">What {PRODUCT} reads:</span> your Canvas to-do list, planner and course
+              names.
+            </p>
+            <p>
+              <span className="font-bold">What it never does:</span> submit, post or message anyone. It never asks
+              for your ASU password.
+            </p>
+            <p>
+              <span className="font-bold">Where the token lives:</span> only in this browser tab. Each plan sends it
+              to Canvas through our server, which never stores or logs it. Your calendar feed holds planned times
+              only.
+            </p>
+            <p>
+              <span className="font-bold">Remove it any time:</span> in Canvas, open Settings, then Approved
+              integrations, and delete {PRODUCT}.{" "}
+              <button type="button" onClick={forget} className="font-bold underline underline-offset-4">
+                Forget my token here
+              </button>
+            </p>
+            {tokenNote && (
+              <p role="status" className="font-bold text-saguaro">
+                {tokenNote}
+              </p>
+            )}
+          </div>
         </fieldset>
 
         <fieldset>
@@ -257,11 +303,11 @@ export default function SetupPage() {
                   >
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="font-bold">Course</span>
+                        <span className="font-bold">Class or shift</span>
                         <input
                           value={c.course}
                           onChange={(e) => updateClass(index, { course: e.target.value })}
-                          placeholder="CSE 240"
+                          placeholder="CSE 240 or MU shift"
                           className={field}
                         />
                       </label>
@@ -333,28 +379,40 @@ export default function SetupPage() {
               onClick={() => setClasses((prev) => [...prev, emptyClass()])}
               className="mt-4 rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
             >
-              Add a class
+              Add a class or a shift
             </button>
           )}
+
+          <label className="mt-8 block">
+            <span className="font-bold">Where does your day start?</span>
+            <span className="block text-sm text-ink-soft">{MASCOT} times your first walk from here.</span>
+            <select value={start} onChange={(e) => setStart(e.target.value)} className={field}>
+              {STARTS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </fieldset>
 
         <fieldset>
           <legend className="font-display text-2xl font-bold">3. Pick what you enjoy</legend>
-          <p className="mt-1 text-ink-soft">{MASCOT} uses these to choose club events for you.</p>
+          <p className="mt-1 text-ink-soft">{MASCOT} uses these to pick club events for you. Yes, free food counts.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {INTERESTS.map((value) => {
-              const on = interests.includes(value);
+            {INTEREST_CHIPS.map(({ key, label }) => {
+              const on = interests.includes(key);
               return (
                 <button
-                  key={value}
+                  key={key}
                   type="button"
                   aria-pressed={on}
-                  onClick={() => toggleInterest(value)}
-                  className={`rounded-full border-2 px-4 py-2 font-bold capitalize ${
+                  onClick={() => toggleInterest(key)}
+                  className={`rounded-full border-2 px-4 py-2 font-bold ${
                     on ? "border-dusk bg-dusk text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
                   }`}
                 >
-                  {value}
+                  {label}
                 </button>
               );
             })}

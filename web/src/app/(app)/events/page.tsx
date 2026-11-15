@@ -4,6 +4,7 @@ import { useState } from "react";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
 import { cleanDescription, fitOnDay } from "@/components/event-fit";
+import { interestLabel } from "@/components/interests";
 import { rangeLabel } from "@/components/sky-layout";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useDay } from "@/components/useDay";
@@ -69,7 +70,7 @@ export default function EventsPage() {
       ? `${events.length} match what you picked.`
       : filter === ALL
         ? `${events.length} events this week.`
-        : `${events.length} tagged ${filter}.`;
+        : `${events.length} tagged ${interestLabel(filter)}.`;
 
   const byDay = new Map<string, Opportunity[]>();
   for (const e of events) {
@@ -145,11 +146,11 @@ export default function EventsPage() {
                 type="button"
                 aria-pressed={tag === value}
                 onClick={() => setTag(value)}
-                className={`rounded-full border-2 px-4 py-1.5 font-bold ${value === FOR_YOU || value === ALL ? "" : "capitalize"} ${
+                className={`rounded-full border-2 px-4 py-1.5 font-bold ${
                   tag === value ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
                 }`}
               >
-                {value}
+                {value === FOR_YOU || value === ALL ? value : interestLabel(value)}
               </button>
             ))}
           </div>
@@ -164,7 +165,7 @@ export default function EventsPage() {
                 ? "No events in the next 7 days. ASU Events and Sun Devil Central may be unreachable right now."
                 : filter === FOR_YOU
                   ? "Nothing matches what you picked this week. Try All."
-                  : `Nothing tagged ${filter} this week. Try All.`}
+                  : `Nothing tagged ${interestLabel(filter)} this week. Try All.`}
             </p>
           )}
           {[...byDay.entries()].map(([date, list]) => (

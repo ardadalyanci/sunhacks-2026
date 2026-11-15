@@ -133,6 +133,15 @@ export function saveHidden(date: string, keys: string[]) {
   }
 }
 
+/** Removes the Canvas token from this tab (the "Forget my token" button). */
+export function forgetToken() {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // storage blocked: nothing was saved
+  }
+}
+
 export function loadToken(): string | null {
   try {
     return sessionStorage.getItem(TOKEN_KEY);

@@ -15,6 +15,10 @@ export const INTEREST_KEYWORDS: Record<string, string[]> = {
   arts: ["art", "arts", "design", "exhibition", "gallery", "painting", "drawing", "film", "photography", "creative", "museum", "theat(er|re)", "dance", "performance"],
   volunteering: ["volunteer(s|ing)?", "community service", "service project", "civic engagement", "food drive", "donation drive", "community action"],
   startups: ["startups?", "entrepreneur(s|ship)?", "venture", "pitch", "founders?", "venture devils", "business plan"],
+  // Added by Agent-2 with the new setup chips (Free food, Cultural nights, Gaming).
+  "free food": ["free food", "free pizza", "pizza", "free lunch", "free dinner", "lunch provided", "dinner provided", "food provided", "food will be provided", "snacks", "refreshments", "boba", "tacos"],
+  cultural: ["cultural", "culture", "heritage", "international students?", "diwali", "rajyotsava", "lunar new year", "d[ií]a de (los )?muertos", "latin[aox]", "hispanic", "black student", "african", "asian", "south asian", "indian", "korean", "chinese", "vietnamese", "filipino", "arab", "native american", "indigenous", "powwow", "festival"],
+  gaming: ["gaming", "video games?", "esports?", "board games?", "game night", "tabletop", "dungeons", "d&d", "smash", "valorant", "league of legends", "minecraft", "nintendo"],
 };
 
 const compiled: [string, RegExp][] = Object.entries(INTEREST_KEYWORDS).map(([name, words]) => [
