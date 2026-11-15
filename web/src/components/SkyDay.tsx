@@ -1,13 +1,25 @@
 "use client";
 
 import type { DayItem } from "@/lib/types";
-import { PIN_HEIGHT, coversOtherBlock, dayBounds, hourOn, isDarkHour, skyBackground, stackPins } from "./sky-layout";
+import { placeLabel } from "@/lib/places";
+import {
+  PIN_HEIGHT,
+  assignmentName,
+  blockTitle,
+  coversOtherBlock,
+  dayBounds,
+  hourOn,
+  isDarkHour,
+  rangeLabel,
+  skyBackground,
+  stackPins,
+} from "./sky-layout";
 import { formatTime, parseLocal } from "./time";
 
 const ROW = 56; // px per hour
 const PAD = 14; // px above the first hour and below the last, so their labels are not clipped
 
-type Pin = { key: string; itemId: string; at: number; text: string; tone: string; right?: boolean; lane?: boolean };
+type Pin = { key: string; itemId: string; at: number; text: string; tone: string; right?: boolean; lane?: boolean; check?: boolean };
 
 type Props = {
   date: string; // the plan's day ("2026-11-14"); items on other days are left out
@@ -47,23 +59,31 @@ export default function SkyDay({ date, items, hot = false, selectedId, onSelect 
       const due = hourOn(item.start, date);
       const at = Math.max(due, first); // a deadline before the first hour sits at the top edge
       const inBlock = coversOtherBlock(y(at), boxes, ""); // inside a class or event: short label in the lane
+      const name = assignmentName(item.title);
       pins.push({
         key: item.id,
         itemId: item.id,
         at,
+        // "Lab 7 due 11:59 pm" / "HW 9 turned in"; in the narrow lane beside a block, just "Lab 7 due" / ✓ HW 9.
         text: inBlock
-          ? `${item.done ? "Done" : "Due"} ${formatTime(due)}`
-          : `${item.done ? "Turned in" : "Due"} ${formatTime(due)}: ${item.title}`,
-        tone: item.done ? "bg-saguaro text-cloud" : "bg-[#c2410c] text-cloud",
+          ? item.done
+            ? name
+            : `${name} due`
+          : item.done
+            ? `${name} turned in`
+            : `${name} due ${formatTime(due)}`,
+        // Maroon with a gold edge for work still due (orange means heat and nothing else); green once turned in.
+        tone: item.done ? "bg-saguaro text-cloud" : "border-2 border-[#FFC627] bg-[#8C1D40] text-cloud",
         right: true,
         lane: inBlock,
+        check: item.done,
       });
     }
     if (item.leaveAt && (item.type === "class" || item.type === "event")) {
       const leave = hourOn(item.leaveAt, date);
       const minutes = Math.max(1, Math.round((Date.parse(item.start) - Date.parse(item.leaveAt)) / 60_000));
       const crowded = coversOtherBlock(y(leave), boxes, item.id);
-      const place = item.location ?? item.title;
+      const place = placeLabel(item.location) || item.title;
       pins.push({
         key: `${item.id}-leave`,
         itemId: item.id,
@@ -124,15 +144,27 @@ export default function SkyDay({ date, items, hot = false, selectedId, onSelect 
                 type="button"
                 onClick={() => onSelect(item.id)}
                 aria-pressed={selected}
-                className={`h-full w-full overflow-hidden rounded-2xl px-3 py-2 text-left ${style} ${selected ? "ring-4 ring-ink" : ""}`}
+                className={`h-full w-full overflow-hidden rounded-2xl px-3 text-left ${blockHeight >= 56 ? "py-2" : "py-1.5"} ${style} ${selected ? "ring-4 ring-ink" : ""}`}
               >
-                <span className={`block font-bold leading-tight ${item.type === "event" ? "text-dusk" : ""}`}>
-                  {item.title}
-                </span>
-                {blockHeight >= 56 && (
-                  <span className="block text-sm text-ink-soft">
-                    {formatTime(start)} to {formatTime(end)}
-                    {item.location ? `, ${item.location}` : ""}
+                {/* Every block says when and where; short ones on a single line. */}
+                {blockHeight >= 56 ? (
+                  <>
+                    <span className={`block font-bold leading-tight ${item.type === "event" ? "text-dusk" : ""}`}>
+                      {blockTitle(item.title)}
+                    </span>
+                    <span className="block text-sm text-ink-soft">
+                      {rangeLabel(start, end)}
+                      {item.location ? ` · ${placeLabel(item.location)}` : ""}
+                    </span>
+                  </>
+                ) : (
+                  <span className="block truncate leading-snug">
+                    <span className={`font-bold ${item.type === "event" ? "text-dusk" : ""}`}>{blockTitle(item.title)}</span>
+                    <span className="text-sm text-ink-soft">
+                      {" "}
+                      · {rangeLabel(start, end)}
+                      {item.location ? ` · ${placeLabel(item.location)}` : ""}
+                    </span>
                   </span>
                 )}
               </button>
@@ -150,10 +182,15 @@ export default function SkyDay({ date, items, hot = false, selectedId, onSelect 
               type="button"
               onClick={() => onSelect(pin.itemId)}
               aria-pressed={pin.itemId === selectedId}
-              className={`inline-flex h-7 items-center rounded-full px-3 text-xs font-bold sm:text-sm ${
+              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-[13px] font-bold sm:text-sm ${
                 pin.lane ? "max-w-[7rem]" : pin.right ? "max-w-[85%]" : "max-w-full"
               } ${pin.tone} ${pin.itemId === selectedId ? "ring-4 ring-sun" : ""}`}
             >
+              {pin.check && (
+                <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M3 8.5 6.5 12 13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
               <span className="truncate">{pin.text}</span>
             </button>
           </li>

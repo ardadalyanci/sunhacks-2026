@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DayItem } from "@/lib/types";
-import { PIN_HEIGHT, coversOtherBlock, dayBounds, hourOn, skyBackground, stackPins } from "./sky-layout";
+import { PIN_HEIGHT, assignmentName, blockTitle, coversOtherBlock, dayBounds, hourOn, rangeLabel, skyBackground, stackPins } from "./sky-layout";
 
 const DATE = "2026-11-14";
 const at = (hhmm: string, date = DATE) => `${date}T${hhmm}:00-07:00`;
@@ -57,6 +57,22 @@ describe("stackPins", () => {
   it("returns tops in the input order", () => {
     const tops = stackPins([500, 100], 800);
     expect(tops[0]).toBeGreaterThan(tops[1]);
+  });
+});
+
+describe("labels", () => {
+  it("shortens Canvas titles for pins and blocks", () => {
+    expect(assignmentName("CSE 230: Lab 7 (pipelining)")).toBe("Lab 7");
+    expect(assignmentName("MAT 343: Homework 9")).toBe("HW 9");
+    expect(assignmentName("Reading response")).toBe("Reading response");
+    expect(blockTitle("Work on: CSE 230: Lab 7 (pipelining)")).toBe("Work on Lab 7 · CSE 230");
+    expect(blockTitle("Work shift")).toBe("Work shift");
+  });
+
+  it("writes a block's time with am/pm once when it can", () => {
+    expect(rangeLabel(10.5, 11 + 20 / 60)).toBe("10:30–11:20 am");
+    expect(rangeLabel(11.5, 12 + 20 / 60)).toBe("11:30 am–12:20 pm");
+    expect(rangeLabel(13.5, 14.75)).toBe("1:30–2:45 pm");
   });
 });
 

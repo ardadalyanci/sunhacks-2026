@@ -1,7 +1,7 @@
 // Layout math for SkyDay: which hours the sky shows, where the pins go, and the color of each hour.
 // No React here, so the rules are easy to test.
 import type { DayItem } from "@/lib/types";
-import { parseLocal } from "./time";
+import { formatTime, parseLocal } from "./time";
 
 export const DAY_START = 8; // the planner's working day (DAY_START and DAY_END in lib/planner.ts)
 export const DAY_END = 22;
@@ -54,6 +54,28 @@ export function stackPins(centers: number[], height: number): number[] {
   const tops: number[] = [];
   for (const pin of order) tops[pin.index] = pin.top;
   return tops;
+}
+
+/** "Lab 7" from "CSE 230: Lab 7 (pipelining)", "HW 9" from "MAT 343: Homework 9": short enough for a pin. */
+export function assignmentName(title: string): string {
+  const name = title
+    .replace(/^[A-Z]{2,4} \d{3}[A-Z]?:\s*/, "")
+    .replace(/\s*\([^)]*\)/g, "")
+    .trim();
+  return (name || title).replace(/^Homework\b/i, "HW");
+}
+
+/** "Work on Lab 7 · CSE 230" from the planner's "Work on: CSE 230: Lab 7 (pipelining)"; other titles stay. */
+export function blockTitle(title: string): string {
+  const m = /^Work on: ([A-Z]{2,4} \d{3}[A-Z]?): (.+)$/.exec(title);
+  return m ? `Work on ${assignmentName(m[2])} · ${m[1]}` : title;
+}
+
+/** "10:30–11:20 am", "11:30 am–12:20 pm": a block's time, with am/pm written once when it can be. */
+export function rangeLabel(start: number, end: number): string {
+  const a = formatTime(start);
+  const b = formatTime(end);
+  return a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
 }
 
 export type Box = { id: string; top: number; bottom: number }; // a block's px range in the sky

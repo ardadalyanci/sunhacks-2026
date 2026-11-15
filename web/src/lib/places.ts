@@ -17,8 +17,24 @@ export function findPlace(location: string | undefined): { building?: Building; 
   return { building: byName, room: location.trim().slice(name.length).trim() };
 }
 
-// What students call a building when the official name is long: Brickyard, Coor Hall, the MU, Hayden.
-const SPOKEN: Record<string, string> = { MU: "the MU", LIB: "Hayden", MANZ: "Manzanita", TOOKR: "Tooker" };
+// What students call a building when the official name is long: Brickyard, Coor Hall, the MU, Hayden, and the
+// codes they actually say (PSF, ERC, LL, SDFC).
+const SPOKEN: Record<string, string> = {
+  MU: "the MU",
+  LIB: "Hayden",
+  MANZ: "Manzanita",
+  TOOKR: "Tooker",
+  PSB: "PSB",
+  PSF: "PSF",
+  PSH: "PSH",
+  ECA: "ECA",
+  ECG: "ECG",
+  ERC: "ERC",
+  LL: "LL",
+  LSA: "LSA",
+  LSE: "LSE",
+  SDFC: "SDFC",
+};
 
 /** The word students use for a building: its short alias, or a nickname from SPOKEN. */
 export function buildingWord(building: Building): string {
