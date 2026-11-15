@@ -28,8 +28,20 @@ describe("UI → engine", () => {
         { time: "2026-11-16T14:00:00-07:00", tempF: 92, feelsLikeF: 97 },
       ],
     };
-    expect(engineWeather(w)).toEqual({ tempF: 97, highF: 90, isHot: true });
+    expect(engineWeather(w)).toEqual({ tempF: 97, highF: 97, isHot: true });
     expect(engineWeather(undefined)).toBeUndefined();
+  });
+
+  it("reads the current temperature at `now` and never reports a high below it", () => {
+    const w: Weather = {
+      highF: 79, // air high; feels-like peaks at 81
+      hourly: [
+        { time: "2026-11-16T08:00:00-07:00", tempF: 66, feelsLikeF: 68 },
+        { time: "2026-11-16T14:00:00-07:00", tempF: 79, feelsLikeF: 81 },
+      ],
+    };
+    expect(engineWeather(w, "2026-11-16T08:10:00-07:00")).toEqual({ tempF: 68, highF: 81, isHot: false });
+    expect(engineWeather(w, "2026-11-16T13:40:00-07:00")).toEqual({ tempF: 81, highF: 81, isHot: false });
   });
 });
 

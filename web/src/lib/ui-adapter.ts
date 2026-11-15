@@ -36,15 +36,27 @@ export function engineOpportunity(e: UI.CampusEvent): E.Opportunity {
   };
 }
 
-/** Hourly feels-like weather → the engine's simple { tempF, highF, isHot } (hottest daytime hour). */
-export function engineWeather(w: UI.Weather | undefined): E.Weather | undefined {
+/**
+ * Hourly feels-like weather → the engine's simple { tempF, highF, isHot }.
+ * tempF is the feels-like at the hour closest to `now` (the briefing says "It's X degrees"); highF and isHot
+ * use the hottest daytime hour, so the high is never below the current temperature.
+ */
+export function engineWeather(w: UI.Weather | undefined, now?: string): E.Weather | undefined {
   if (!w) return undefined;
   const daytime = w.hourly.filter((h) => {
     const hour = Number(h.time.slice(11, 13));
     return hour >= 8 && hour <= 20;
   });
   const peak = Math.max(...(daytime.length ? daytime : w.hourly).map((h) => h.feelsLikeF), w.highF);
-  return { tempF: peak, highF: w.highF, isHot: peak >= HOT_FEELS_LIKE_F };
+  const nowMs = now ? Date.parse(now) : NaN;
+  const current = Number.isNaN(nowMs)
+    ? undefined
+    : w.hourly.reduce<UI.Weather["hourly"][number] | undefined>(
+        (best, h) => (!best || Math.abs(Date.parse(h.time) - nowMs) < Math.abs(Date.parse(best.time) - nowMs) ? h : best),
+        undefined,
+      );
+  const tempF = current?.feelsLikeF ?? peak;
+  return { tempF, highF: Math.max(peak, tempF), isHot: peak >= HOT_FEELS_LIKE_F };
 }
 
 // ---------- engine → UI ----------

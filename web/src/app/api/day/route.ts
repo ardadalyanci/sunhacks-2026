@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       .filter((id): id is string => typeof id === "string")
       .map((id) => id.replace(/^event-/, "")),
     interests: setup.interests,
-    weather: engineWeather(weather),
+    weather: engineWeather(weather, now),
     startBuildingId: demo && !studentSetup ? DEMO_PERSONA.startBuildingId : undefined,
   });
   if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });

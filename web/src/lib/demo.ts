@@ -106,7 +106,7 @@ export function demoScenario(date: string, options: DemoOptions = {}): { persona
       events: demoEvents(date),
       acceptedEventIds: [],
       interests: setup.interests,
-      weather: engineWeather(demoWeather(date, options.hot)),
+      weather: engineWeather(demoWeather(date, options.hot), at(date, "08:00")),
       startBuildingId: DEMO_PERSONA.startBuildingId,
     },
   };
