@@ -1,4 +1,4 @@
-// Shared data contract for DayPilot. Every API route and page builds against these shapes.
+// Shared data contract for Sundial. Every API route and page builds against these shapes.
 // Only teammate A edits this file, after asking in the team chat (see CLAUDE.md).
 // Times are ISO 8601 strings with the Arizona offset, e.g. "2026-11-18T18:00:00-07:00".
 

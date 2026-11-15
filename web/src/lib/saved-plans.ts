@@ -63,7 +63,7 @@ export async function loadPlans(calendarId: string, now = new Date()): Promise<S
 /** One .ics with the events of every saved day (each day built by lib/feeds/calendar.ts). */
 export function calendarIcs(days: Saved[], now = new Date()): string {
   const lines = (d: Saved) =>
-    buildDayIcs({ ...d, suggestions: [], briefing: "", aiUsed: false }, { calendarName: "DayPilot", now }).split("\r\n").filter(Boolean);
+    buildDayIcs({ ...d, suggestions: [], briefing: "", aiUsed: false }, { calendarName: "Sundial", now }).split("\r\n").filter(Boolean);
   // Calendar header from one day (everything before its first event), then every day's VEVENT blocks.
   // Event UIDs already include the date, so days never clash.
   const first = lines(days[0] ?? { date: mstDate(now), items: [] });

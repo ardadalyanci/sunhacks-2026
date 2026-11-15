@@ -54,7 +54,7 @@ export function demoEvents(date: string): Opportunity[] {
     kind: tags.includes("career") ? "employer_session" : "club_event",
     title,
     organizer: "Demo data",
-    description: "Sample event for the DayPilot demo.",
+    description: "Sample event for the Sundial demo.",
     url: source === "sundevilcentral" ? "https://sundevilcentral.eoss.asu.edu/events" : "https://asuevents.asu.edu/",
     startsAt: at(date, start),
     endsAt: at(date, end),

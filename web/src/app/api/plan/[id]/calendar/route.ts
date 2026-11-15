@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return new Response(calendarIcs(days), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": 'inline; filename="daypilot.ics"',
+      "Content-Disposition": 'inline; filename="sundial.ics"',
       "Cache-Control": "no-store",
     },
   });

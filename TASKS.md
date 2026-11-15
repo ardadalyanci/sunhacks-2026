@@ -1,7 +1,7 @@
 # Tasks
 
 Update this file when you start or finish something. `[ ]` todo, `[~]` in progress (put your name), `[x]` done.
-The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md. The repo scaffold (Next.js 16, shared types, skills) from the first commit stays.
+The product changed from "Sunny" to **DayPilot** on Sat afternoon and to **Sundial** (sundial.club) on Sat evening; see CLAUDE.md. The repo scaffold (Next.js 16, shared types, skills) from the first commit stays.
 
 ## A: backend 1 + integration (Agent-1, Barış)
 - [x] Barış: DayPilot pivot: CLAUDE.md, TASKS.md, README, `DayItem` types

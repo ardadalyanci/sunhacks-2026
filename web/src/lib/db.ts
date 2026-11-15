@@ -22,6 +22,7 @@ export async function getDb(): Promise<Db | null> {
       socketTimeoutMS: 3 * TIMEOUT_MS,
       maxPoolSize: 5,
     }).connect();
+    // The database keeps the working name (DayPilot), so saved plans and cached Gemini answers survive the rename.
     const db = (await client).db(process.env.MONGODB_DB?.trim() || "daypilot");
     // TTL indexes: Atlas deletes saved plans and cached Gemini answers by themselves once `expiresAt` passes.
     indexes ??= Promise.all([
