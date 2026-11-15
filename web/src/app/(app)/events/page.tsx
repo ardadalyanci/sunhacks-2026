@@ -11,10 +11,12 @@ import { useDay } from "@/components/useDay";
 import { placeLabel } from "@/lib/places";
 import type { Opportunity } from "@/lib/types";
 
+// Where a listing came from. The sample student's own events are made up, and they sit among real ASU
+// events, so they say so plainly.
 const SOURCE: Partial<Record<Opportunity["source"], string>> = {
-  asu_events: "ASU Events",
-  sundevilcentral: "Sun Devil Central",
-  seed: "the sample day",
+  asu_events: "from ASU Events",
+  sundevilcentral: "from Sun Devil Central",
+  seed: "made up for the sample day",
 };
 
 const FOR_YOU = "For you"; // events that match the student's interests, plus Gemini's picks for today
@@ -78,6 +80,10 @@ export default function EventsPage() {
     byDay.set(date, [...(byDay.get(date) ?? []), e]);
   }
 
+  // Sol's picks share the column evenly: two picks in two columns, three in three on wide screens.
+  const picks = plan.suggestions.length;
+  const pickGrid = picks >= 3 ? "md:grid-cols-2 xl:grid-cols-3" : picks === 2 ? "sm:grid-cols-2" : "";
+
   function addButton(itemId: string) {
     const added = onDay.has(itemId);
     return (
@@ -86,7 +92,7 @@ export default function EventsPage() {
         disabled={day.busy}
         aria-pressed={added}
         onClick={() => void (added ? day.unaccept(itemId) : day.accept(itemId))}
-        className={`rounded-full px-4 py-2 font-bold disabled:opacity-50 ${
+        className={`whitespace-nowrap rounded-full px-4 py-2 font-bold disabled:opacity-50 ${
           added ? "border-2 border-ink hover:bg-ink/10" : "bg-ink text-cloud hover:bg-ink/90"
         }`}
       >
@@ -109,23 +115,23 @@ export default function EventsPage() {
               <h2 className="font-display text-3xl font-bold">{MASCOT}’s picks for {formatDay(plan.date).split(",")[0]}</h2>
               <p className="text-sm text-ink-soft">Ranked by Gemini for your interests and free time</p>
             </div>
-            <ul className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <ul className={`mt-4 grid gap-4 ${pickGrid}`}>
               {plan.suggestions.map((s) => (
-                <li key={s.id} className="flex flex-col rounded-3xl bg-sun-soft p-5">
+                <li key={s.id} className="flex flex-col rounded-3xl bg-sun-soft p-5 xl:px-4">
                   {s.why && <Reason text={s.why} />}
                   <h3 className="mt-3 text-xl font-bold leading-snug">{s.title}</h3>
                   <p className="text-ink-soft">
                     {s.end ? rangeLabel(parseLocal(s.start).hours, parseLocal(s.end).hours) : clock(s.start)}
                     {s.location ? `, ${placeLabel(s.location)}` : ""}
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2 pt-1">
+                  <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     {addButton(s.id)}
                     {s.url && (
                       <a
                         href={s.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                        className="whitespace-nowrap rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
                       >
                         RSVP
                       </a>
@@ -186,12 +192,12 @@ export default function EventsPage() {
                         <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{e.title}</h4>
                         <p className="text-ink-soft">
                           {whereText(e)}
-                          {SOURCE[e.source] ? `, from ${SOURCE[e.source]}` : ""}
+                          {SOURCE[e.source] ? `, ${SOURCE[e.source]}` : ""}
                         </p>
                         {fit && (
                           <p
-                            className={`mt-2 inline-block rounded-full px-3 py-0.5 text-sm font-bold ${
-                              fit.fits ? "bg-saguaro/15 text-saguaro" : "bg-[#8C1D40]/10 text-[#8C1D40]"
+                            className={`mt-2 inline-block rounded-full border px-3 py-0.5 text-sm font-bold ${
+                              fit.fits ? "border-saguaro/40 bg-cloud text-saguaro" : "border-[#8C1D40]/30 bg-cloud text-[#8C1D40]"
                             }`}
                           >
                             {fit.fits ? "Fits your day" : `Clashes with ${fit.clash.title}`}

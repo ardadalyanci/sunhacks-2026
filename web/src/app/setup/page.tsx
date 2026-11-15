@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
 import { classProblem, isBlankClass } from "@/components/classes";
 import { INTEREST_CHIPS } from "@/components/interests";
-import { clearSetup, forgetToken, saveSetup } from "@/components/setup-store";
+import { clearSetup, forgetToken, loadSetup, loadToken, saveSetup, type SavedSetup } from "@/components/setup-store";
 import { WEEKDAYS } from "@/components/time";
 import type { ClassBlock, Weekday } from "@/lib/types";
 
@@ -61,22 +61,50 @@ async function shrinkPhoto(file: File): Promise<Blob> {
   }
 }
 
+// The saved setup, read once the page is in the browser (the server render has no storage). It is returned as
+// JSON text so the snapshot stays equal between reads; nothing outside this page changes it while it is open.
+const noUpdates = () => () => {};
+const readSaved = () => {
+  const saved = loadSetup();
+  return saved ? JSON.stringify(saved) : "";
+};
+const readTokenSaved = () => Boolean(loadToken());
+const onServerText = () => "";
+const onServerFlag = () => false;
+
+const CANT_READ = `${MASCOT} couldn’t read that. Try again, or type your classes in.`;
+const OFFLINE = "No connection. Check the Wi-Fi and try again, or type your classes in.";
+
+/**
+ * Setup opens with what the student saved before, so changing one class does not mean typing every class
+ * again. The form is keyed by the saved setup: the first browser render matches the server's empty form,
+ * then the form starts over once, filled in.
+ */
 export default function SetupPage() {
+  const savedText = useSyncExternalStore(noUpdates, readSaved, onServerText);
+  const tokenSaved = useSyncExternalStore(noUpdates, readTokenSaved, onServerFlag);
+  const saved = savedText ? (JSON.parse(savedText) as SavedSetup) : null;
+  return <SetupForm key={savedText || "new"} saved={saved} tokenSaved={tokenSaved} />;
+}
+
+function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved: boolean }) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [token, setToken] = useState("");
-  const [method, setMethod] = useState<Method>("photo");
+  const [name, setName] = useState(saved?.name ?? "");
+  const [token, setToken] = useState(""); // a saved token is never shown again; leaving this blank keeps it
+  const [method, setMethod] = useState<Method>(saved ? "type" : "photo");
   const [photo, setPhoto] = useState<File | null>(null);
   const [pasted, setPasted] = useState("");
   const [reading, setReading] = useState(false);
   const [message, setMessage] = useState("");
-  const [classes, setClasses] = useState<ClassBlock[]>([]);
-  const [interests, setInterests] = useState<string[]>([]);
+  const [classes, setClasses] = useState<ClassBlock[]>(saved?.classes ?? []);
+  const [interests, setInterests] = useState<string[]>(saved?.interests ?? []);
   const [checked, setChecked] = useState(false); // mark rows that need a fix only after a save attempt
   const [saveError, setSaveError] = useState("");
-  const [start, setStart] = useState(""); // where the first walk of the day starts (building id)
-  const [slower, setSlower] = useState(false); // "Give me more time to walk"
-  const [tokenNote, setTokenNote] = useState("");
+  const [start, setStart] = useState(saved?.startBuildingId ?? ""); // where the first walk starts (building id)
+  const [slower, setSlower] = useState(saved?.pace === "slower"); // "Give me more time to walk"
+  const [tokenNote, setTokenNote] = useState(
+    tokenSaved ? "A Canvas token is saved in this tab. Leave this blank to keep it." : "",
+  );
 
   const canRead = (method === "photo" && photo !== null) || (method === "paste" && pasted.trim().length > 0);
 
@@ -88,12 +116,14 @@ export default function SetupPage() {
       if (method === "photo" && photo) form.append("image", await shrinkPhoto(photo), photo.name);
       if (method === "paste") form.append("text", pasted);
       const res = await fetch("/api/schedule", { method: "POST", body: form });
-      const body = (await res.json()) as { classes?: ClassBlock[]; error?: string };
-      if (!res.ok || !body.classes) throw new Error(body.error ?? "That did not work. Try again.");
+      // A timeout or a platform error answers with a page, not JSON: fall back to Sol's own words.
+      const body = (await res.json().catch(() => ({}))) as { classes?: ClassBlock[]; error?: string };
+      if (!res.ok || !body.classes) throw new Error(body.error ?? CANT_READ);
       setClasses(body.classes);
-      setMessage(`Found ${body.classes.length} classes. Check them below and fix anything that looks off.`);
+      setMessage(`Found ${body.classes.length === 1 ? "1 class" : `${body.classes.length} classes`}. Check them below and fix anything that looks off.`);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "That did not work. Try again.");
+      // fetch throws a TypeError only when the network is down; other messages are the server's or ours
+      setMessage(e instanceof TypeError ? OFFLINE : e instanceof Error ? e.message : CANT_READ);
     } finally {
       setReading(false);
     }
@@ -139,7 +169,7 @@ export default function SetupPage() {
         startBuildingId: start || undefined,
         pace: slower ? "slower" : undefined,
       },
-      token.trim(),
+      token.trim() || loadToken() || "", // blank keeps the token already saved in this tab
     );
     router.push("/today");
   }
@@ -161,9 +191,13 @@ export default function SetupPage() {
         <Mascot size={96} animated className="shrink-0" />
         <div>
           <h1 className="font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Let’s set up your day
+            {saved ? "Your setup" : "Let’s set up your day"}
           </h1>
-          <p className="mt-2 text-lg text-ink-soft">Three steps, about two minutes. You only do this once.</p>
+          <p className="mt-2 text-lg text-ink-soft">
+            {saved
+              ? "Change anything here, then press Plan my day."
+              : "Three steps, about two minutes. You only do this once."}
+          </p>
         </div>
       </div>
 
@@ -223,7 +257,11 @@ export default function SetupPage() {
             <p>
               <span className="font-bold">Remove it any time:</span> in Canvas, open Settings, then Approved
               integrations, and delete {PRODUCT}.{" "}
-              <button type="button" onClick={forget} className="font-bold underline underline-offset-4">
+              <button
+                type="button"
+                onClick={forget}
+                className="-my-2.5 inline-flex min-h-10 items-center font-bold underline underline-offset-4"
+              >
                 Forget my token here
               </button>
             </p>
@@ -360,7 +398,7 @@ export default function SetupPage() {
                             type="button"
                             aria-pressed={on}
                             onClick={() => toggleDay(index, day)}
-                            className={`rounded-full border-2 px-3 py-1.5 font-bold ${
+                            className={`min-h-10 rounded-full border-2 px-3 py-1.5 font-bold ${
                               on ? "border-ink bg-ink text-cloud" : "border-ink/20 hover:border-ink"
                             }`}
                           >
@@ -371,7 +409,7 @@ export default function SetupPage() {
                       <button
                         type="button"
                         onClick={() => setClasses((prev) => prev.filter((_, i) => i !== index))}
-                        className="ml-auto rounded-full px-3 py-1.5 font-bold text-ink-soft hover:bg-ink/10"
+                        className="ml-auto min-h-10 rounded-full px-3 py-1.5 font-bold text-ink-soft hover:bg-ink/10"
                       >
                         Remove
                       </button>
