@@ -248,8 +248,11 @@ export function useDay() {
     const current = shown.current;
     if (!current) return "Your day is still loading.";
     const plan = visible(current.plan, hiddenRef.current);
-    const action = await postJson<CommandAction>("/api/command", { text, plan });
-    if (action.action === "briefing") return plan.briefing;
+    // `now` is set only for the sample day (it replays 8 am); a real day uses the server clock.
+    const now = current.loaded.request.now;
+    const action = await postJson<CommandAction>("/api/command", { text, plan, now });
+    // "What's next?" and "When do I leave?" come back as a briefing with a short reply of their own.
+    if (action.action === "briefing") return action.reply ?? plan.briefing;
     if (action.action === "unknown") return action.reply;
 
     if (action.action === "add_event") {
