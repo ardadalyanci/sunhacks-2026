@@ -180,7 +180,8 @@ export default function EventsPage() {
                   return (
                     <li key={e.id} className="grid gap-3 border-t border-ink/10 py-5 sm:grid-cols-[96px_1fr] sm:items-start">
                       <p className="font-display text-xl font-bold">{clock(e.startsAt!)}</p>
-                      <div className={fit && !fit.fits ? "opacity-70" : ""}>
+                      {/* A clashing event is not dimmed: fading the text broke contrast. The chip below says it clashes. */}
+                      <div>
                         {reason && <Reason text={reason} />}
                         <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{e.title}</h4>
                         <p className="text-ink-soft">
