@@ -28,7 +28,8 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] PWA: `app/manifest.ts` (installs to the home screen, opens on /today), static Sol icons `app/icon.png` + `app/apple-icon.png` (generated icon routes caused a dev reload loop)
 - [x] Arda: review findings 1-7 from Agent-1 (branch `arda/review-fixes`): newest re-plan wins, removed study blocks saved per day, timeline stretches to early classes and 11:59 pm deadlines with stacked pins, "Added" only when it really was, setup marks bad rows and has Sat/Sun, `/api/schedule` 413 on size + 5 reads/min per address, one shared day load across Today and Events; also shrinks large phone photos before upload (Vercel's 4.5 MB body limit)
 - [x] Arda: day picker on Today (Today, Tomorrow, next 5 days; branch `arda/future-days`): the chosen day lives in the URL hash, `useDay(date)` sends it to `/api/demo?date=`, `/api/canvas`, `/api/weather?date=` and `/api/plan` (look-ahead briefing from PR #15); later days show "Preview of …" and hide the 104°F toggle; removed blocks are saved per day
-- [ ] Phone pass on the live Vercel URL
+- [x] Arda: phone pass on the live Vercel URL (https://sunhacks-2026.vercel.app, 375 px and 1440 px: sample day and a real setup with live weather, events and leave times, no console errors)
+- [x] Arda: after the live check (branch `arda/live-polish`): "Add to my calendar" on Today downloads the day from `POST /api/calendar`; Events opens on "For you" (interests + Gemini picks) instead of all ~485 events; a leave pin that would cover another block moves right with shorter text
 
 ## C: backend 2 + data (Agent-3, Kerem)
 - [x] Kerem: `GET /api/events` → `{ events: Opportunity[] }`: ASU Events JSON + SunDevilCentral iCal, Tempe (and online), next 7 days, 1 h in-memory cache per source; tags include the setup interests they match (`lib/feeds/`)
