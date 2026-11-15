@@ -96,8 +96,8 @@ export default function Home() {
             ))}
           </ol>
           <p className="mt-10 font-display text-2xl font-bold">
-            Ask out loud: “When should I leave?” or “Add the robotics meeting.” Then press Play and watch {MASCOT}
-            ride your day across the sky.
+            Ask out loud: “When should I leave?” or “Add the robotics meeting.” Then press Play and watch {MASCOT} ride
+            your day across the sky.
           </p>
         </div>
       </section>
