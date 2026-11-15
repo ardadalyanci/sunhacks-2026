@@ -8,6 +8,7 @@ import { interestLabel } from "@/components/interests";
 import { rangeLabel } from "@/components/sky-layout";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useDay } from "@/components/useDay";
+import { eventTitle } from "@/lib/planner";
 import { placeLabel } from "@/lib/places";
 import type { DayItem, DayPlan, Opportunity } from "@/lib/types";
 
@@ -213,7 +214,7 @@ export default function EventsPage() {
                       {/* A clashing event is not dimmed: fading the text broke contrast. The chip below says it clashes. */}
                       <div>
                         {reason && <Reason text={reason} />}
-                        <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{e.title}</h4>
+                        <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{eventTitle(e)}</h4>
                         <p className="text-ink-soft">
                           {whereText(e)}
                           {SOURCE[e.source] ? `, ${SOURCE[e.source]}` : ""}

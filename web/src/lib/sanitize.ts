@@ -107,7 +107,7 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
   };
 }
 
-/** The parts of a client-sent DayPlan that /api/command reads: ids and titles only. */
+/** The parts of a client-sent DayPlan that /api/command reads: ids, titles, times, and Sol's reason for a pick. */
 export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "suggestions"> {
   const plan = isObj(raw) ? raw : {};
   const pick = (v: unknown): DayItem | null => {
@@ -118,14 +118,18 @@ export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "s
     if (!id || !title || typeof type !== "string") return null;
     const location = str(v.location, 120);
     const leaveAt = isoDate(v.leaveAt);
+    const end = isoDate(v.end);
+    const why = str(v.why, 200); // lets Sol answer "should I go to the lunch talk?" with his own reason
     return {
       id,
       title,
       type: type as DayItem["type"],
       start: isoDate(v.start) ?? "",
       source: "planner",
+      ...(end ? { end } : {}),
       ...(location ? { location } : {}),
       ...(leaveAt ? { leaveAt } : {}),
+      ...(why ? { why } : {}),
     };
   };
   return {
