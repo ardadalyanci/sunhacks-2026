@@ -150,4 +150,14 @@ describe("POST /api/plan with Gemini", () => {
     expect(prompt).not.toContain("ev-e3");
     expect(prompt).not.toContain("ev-e4");
   });
+
+  it("gives the briefing prompt exact due days, labeled temperatures and a facts-only rule", async () => {
+    await plan(baseRequest);
+    const prompt = String(generateJson.mock.calls.at(-1)![0]);
+    expect(prompt).toContain("CSE 230: Lab 7: due today at 11:59 PM");
+    expect(prompt).toContain("ENG 102: Reading quiz: due tomorrow (Tue) at 12:00 PM");
+    expect(prompt).not.toContain("MAT 343: HW 9: due"); // submitted
+    expect(prompt).toContain("Current temperature: 97°F. Today's high: 101°F.");
+    expect(prompt).toMatch(/only the times, places, temperatures and due dates given/i);
+  });
 });
