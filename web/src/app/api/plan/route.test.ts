@@ -82,7 +82,7 @@ describe("POST /api/plan without Gemini", () => {
     ]);
     expect(json.suggestions.map((s) => s.id)).toEqual(["ev-e1"]);
     expect(json.suggestions[0].why).toContain("robotics");
-    expect(json.briefing).toContain("leave by 10:14 am");
+    expect(json.briefing).toMatch(/leave (by|at) 10:14 am/i);
   });
 
   it("never puts a study block on top of a class walk, a class or a suggestion", async () => {
@@ -232,7 +232,7 @@ describe("POST /api/plan with Gemini", () => {
     });
     const { json } = await plan(baseRequest);
     expect(json.briefing).not.toMatch(/good morning|remember/i);
-    expect(json.briefing).toContain("leave by 10:14 am"); // the plain-code briefing
+    expect(json.briefing).toMatch(/leave (by|at) 10:14 am/i); // the plain-code briefing
 
     const isValid = generateJson.mock.calls.at(-1)![2] as (v: unknown) => boolean;
     expect(isValid({ briefing: "Be sure to leave by 10:14 AM." })).toBe(false);
@@ -291,5 +291,82 @@ describe("POST /api/plan with a slower walking pace", () => {
     const unknown = (await plan({ ...monday, pace: "much slower" })).json;
     expect(leaveTimes(unknown)).toEqual(leaveTimes(usual));
     expect(String(generateJson.mock.calls.at(-1)![0])).not.toMatch(/hurry/);
+  });
+});
+
+describe("POST /api/plan: Sol's picks keep their time", () => {
+  // The sample Sunday (study group 10:30, work shift 1:30 to 4 pm) as of 8 am, with Gemini's live ranking:
+  // the lunch & learn first, then robotics night (4:15 pm) and the mixer.
+  const sunday = demoScenario("2026-11-15", { today: "2026-11-15" }).request;
+  const studyMinutes = (json: DayPlan, part: string) =>
+    json.items
+      .filter((i) => i.type === "study_block" && i.title.includes(part))
+      .reduce((sum, b) => sum + (Date.parse(b.end!) - Date.parse(b.start)) / 60_000, 0);
+  const gemini = (picks: string[], minutes: Record<string, number>) =>
+    generateJson.mockImplementation(async (...args: unknown[]) => {
+      const prompt = String(args[0]);
+      if (prompt.includes("ASSIGNMENTS:")) return { estimates: Object.entries(minutes).map(([id, m]) => ({ id, minutes: m })) };
+      if (prompt.includes("EVENTS:")) return { picks: picks.map((id) => ({ id, why: "Free lunch and internship tips, right before your work shift." })) };
+      return null;
+    });
+
+  it("keeps robotics night a suggestion, so 'add the robotics meeting' can find it", async () => {
+    gemini(["ev-demo-lunch-talk", "ev-demo-robotics", "ev-demo-mixer"], {
+      "canvas-assignment-demo-2": 120, // Lab 7 fills the morning
+      "canvas-assignment-demo-3": 45, // the Reading response used to land on 4 pm, on top of robotics night
+    });
+    const { json } = await plan(sunday);
+    expect(json.suggestions.map((s) => s.id)).toEqual(["ev-demo-lunch-talk", "ev-demo-robotics", "ev-demo-mixer"]);
+    const study = json.items.filter((i) => i.type === "study_block");
+    for (const s of study) for (const sug of json.suggestions) expect(overlaps(s, sug)).toBe(false);
+    for (const [n, a] of json.suggestions.entries()) for (const b of json.suggestions.slice(n + 1)) expect(overlaps(a, b)).toBe(false);
+    expect(studyMinutes(json, "Lab 7")).toBe(120);
+    expect(studyMinutes(json, "Reading response")).toBeGreaterThanOrEqual(45); // the last piece is at least 25 minutes
+  });
+
+  it("does not hold a pick's time when that would cut the study time of urgent homework", async () => {
+    // Lab 7 is due at 5 pm and needs 3 hours. Holding the breakfast or the lunch event would leave less than that.
+    const req = {
+      ...baseRequest,
+      deadlines: [{ id: "lab", type: "deadline", title: "CSE 230: Lab 7", start: "2026-11-16T17:00:00-07:00", source: "canvas", done: false }],
+      events: [
+        ev("e1", "Sun Devil Robotics build night", "15:30", "17:00", "Memorial Union 202", ["robotics"]),
+        ev("e5", "Robotics breakfast", "08:45", "10:00", "MU", ["robotics"]),
+        ev("e6", "Robotics lunch", "11:30", "13:00", "MU", ["robotics"]),
+      ],
+    };
+    gemini(["ev-e1", "ev-e5", "ev-e6"], { lab: 180 });
+    const { json } = await plan(req);
+    expect(studyMinutes(json, "Lab 7")).toBe(180);
+    expect(json.suggestions.map((s) => s.id)).toEqual(["ev-e1"]);
+  });
+
+  it("gives Gemini each event's hook and the commitment around it, and asks for varied reasons", async () => {
+    await plan(sunday);
+    const prompt = String(generateJson.mock.calls.find((c) => String(c[0]).includes("EVENTS:"))![0]);
+    expect(prompt).toContain('"about":"Résumés, the online assessment');
+    expect(prompt).toContain("Lunch provided.");
+    expect(prompt).toContain("after your work shift");
+    expect(prompt).toMatch(/Never start with "You like" or "You picked"/);
+    expect(prompt).toMatch(/No two reasons may start with the same three words/);
+    expect(prompt).not.toContain("You picked robotics,");
+  });
+
+  it("asks the briefing for Sol's own voice and short event names, and gives the building without the room", async () => {
+    await plan(sunday);
+    const prompt = String(generateJson.mock.calls.at(-1)![0]);
+    expect(prompt).toMatch(/first person at least once/);
+    expect(prompt).toMatch(/at most 5 words, never a colon/);
+    expect(prompt).toContain('"Tackle"');
+    expect(prompt).toMatch(/Lunch & learn: landing a software internship at 12:00 PM at the MU(;|\n|$)/);
+    expect(prompt).toContain("commitment: MAT 343 study group"); // a study group is not a class
+  });
+
+  it("takes 'now' away from a clock time in Gemini's briefing", async () => {
+    generateJson.mockImplementation(async (...args: unknown[]) =>
+      String(args[0]).includes("Write what Sol says") ? { briefing: "Work on Lab 7 for CSE 230 right now at 8 AM. I saved the lunch hour for you." } : null,
+    );
+    const { json } = await plan(sunday);
+    expect(json.briefing).toBe("Work on Lab 7 for CSE 230 at 8 am. I saved the lunch hour for you.");
   });
 });
