@@ -97,7 +97,13 @@ export default function TodayPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0">
-          <SkyDay items={plan.items} hot={Boolean(heat)} selectedId={selectedId} onSelect={setSelectedId} />
+          <SkyDay
+            date={plan.date}
+            items={plan.items}
+            hot={Boolean(heat)}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
           <label className="mt-3 flex items-center gap-2 text-ink-soft">
             <input
               type="checkbox"

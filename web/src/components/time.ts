@@ -15,9 +15,11 @@ export function hhmmToHours(hhmm: string) {
   return Number(hhmm.slice(0, 2)) + Number(hhmm.slice(3, 5)) / 60;
 }
 
+/** "1:30 pm" for 13.5; 24 is midnight ("12 am"). Rounds to the minute, so 9.9999 is "10 am", not "9:60 am". */
 export function formatTime(hours: number) {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
+  const total = Math.round(hours * 60);
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
   const suffix = h >= 12 ? "pm" : "am";
   const h12 = ((h + 11) % 12) + 1;
   return m === 0 ? `${h12} ${suffix}` : `${h12}:${String(m).padStart(2, "0")} ${suffix}`;
