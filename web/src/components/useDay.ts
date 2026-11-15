@@ -12,6 +12,7 @@
 // Every failure is said in plain words (errors.ts) and leaves the app usable: the day on screen stays.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
+import { briefingWithout } from "./briefing";
 import { HttpError, canvasNotice, errorText, offlineAnswer } from "./errors";
 import { createShared, newestWins } from "./loading";
 import { describeChange, describeRemovedStudy, describeStack, type Cause } from "./plan-diff";
@@ -183,9 +184,16 @@ const bases = new Map<string, Day>();
 const pillsOn = (w: WhatIf) => Number(w.hot) + Number(w.overslept) + Number(w.skipped !== null);
 const isPill = (cause: Cause) => cause.kind === "hot" || cause.kind === "overslept" || cause.kind === "skip";
 
-/** The plan without the timeline items the student removed. */
+/** The plan without the timeline items the student removed, and a briefing that no longer talks about them. */
 function visible(plan: DayPlan, hidden: string[]): DayPlan {
-  return { ...plan, items: plan.items.filter((i) => !hidden.includes(itemKey(i))) };
+  if (!hidden.length) return plan;
+  const gone = plan.items.filter((i) => hidden.includes(itemKey(i)));
+  const study = gone.filter((i) => i.type === "study_block").map((i) => i.title);
+  return {
+    ...plan,
+    items: plan.items.filter((i) => !gone.includes(i)),
+    briefing: briefingWithout(plan.briefing, study),
+  };
 }
 
 /** Sol's note when `now` has an event that `old` did not (or lost one), for example one added on Events. */
@@ -268,6 +276,9 @@ export function useDay(date?: string) {
           setError(errorText(e, { doing: "switch", ...dayWords(wantedDate, today) }));
           setFailed(wantedDate);
           keepError.current = back.plan.date;
+          // Going back reads the day from `shared`, which forgets it after REUSE_MS and would load it from scratch
+          // (pills off, note gone, Gemini asked again). Put the day on screen back first, so it stays as it was.
+          shared.set(inputKey(back.plan.date), back);
           replaceChosenDay(back.plan.date);
           return;
         }
