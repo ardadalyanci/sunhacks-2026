@@ -17,6 +17,7 @@ import {
   freeGaps,
   mstDate,
   opportunityToItem,
+  pickCandidates,
   placeStudyBlocks,
   rankByOverlap,
   reserveTime,
@@ -66,9 +67,7 @@ export async function POST(request: Request) {
   addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather);
   const gaps = freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), fixedStops, CLASS_TRAVEL_BUFFER_MIN);
   const travelMin = walkMinutes(undefined, undefined, body.weather?.isHot ?? false);
-  const candidates = fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin)
-    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
-    .slice(0, MAX_CANDIDATES);
+  const candidates = pickCandidates(fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin), interests, MAX_CANDIDATES);
   const openDeadlines = deadlines.filter((d) => !d.done && Date.parse(d.start) > nowMs);
 
   // 3. Gemini call 1: rank events for this student (best first) and estimate homework time.
