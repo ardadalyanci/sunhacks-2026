@@ -8,6 +8,17 @@ vi.mock("@google/genai", () => ({
   },
 }));
 
+// A fake MongoDB: null unless a test sets it, like a missing MONGODB_URI.
+const store = new Map<string, unknown>();
+let fakeDb: unknown = null;
+vi.mock("./db", () => ({ getDb: async () => fakeDb, dbFailed: vi.fn() }));
+const atlas = {
+  collection: () => ({
+    findOne: async ({ _id }: { _id: string }) => (store.has(_id) ? { _id, value: store.get(_id) } : null),
+    replaceOne: async ({ _id }: { _id: string }, doc: { value: unknown }) => void store.set(_id, doc.value),
+  }),
+};
+
 async function loadGemini(apiKey: string) {
   vi.resetModules(); // fresh module: empty cache, client created with this key
   vi.stubEnv("GEMINI_API_KEY", apiKey);
@@ -57,5 +68,19 @@ describe("generateJson", () => {
     expect(await generateJson("b", {})).toBeNull();
     expect(await generateJson("c", {})).toBeNull();
     warn.mockRestore();
+  });
+
+  it("shares answers through MongoDB with a hashed key, so a fresh server skips Gemini", async () => {
+    fakeDb = atlas;
+    let { generateJson } = await loadGemini("test-key");
+    generateContent.mockResolvedValue({ text: '{"briefing":"Hi CSE 230"}' });
+    expect(await generateJson("CSE 230 prompt", {})).toEqual({ briefing: "Hi CSE 230" });
+    expect([...store.keys()][0]).toMatch(/^[0-9a-f]{64}$/); // no course names in the key
+
+    ({ generateJson } = await loadGemini("test-key")); // a new server instance: empty memory cache
+    expect(await generateJson("CSE 230 prompt", {})).toEqual({ briefing: "Hi CSE 230" });
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    fakeDb = null;
+    store.clear();
   });
 });

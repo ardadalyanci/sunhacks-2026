@@ -11,6 +11,8 @@ vi.mock("@/lib/buildings", () => ({
 }));
 const generateJson = vi.fn();
 vi.mock("@/lib/gemini", () => ({ generateJson: (...args: unknown[]) => generateJson(...args) }));
+const savePlan = vi.fn(async () => false); // no database unless a test says otherwise
+vi.mock("@/lib/saved-plans", () => ({ savePlan: (...args: unknown[]) => savePlan(...(args as [])) }));
 
 const { POST } = await import("./route");
 
@@ -158,6 +160,22 @@ describe("POST /api/plan with Gemini", () => {
     const prompt = String(generateJson.mock.calls[0][0]);
     expect(prompt).toContain("ev-late");
     expect(json.suggestions.map((s) => s.id)).toContain("ev-late"); // code fallback ranks by interest
+  });
+
+  it("saves the day for the calendar feed only with a valid calendarId, and returns its URL", async () => {
+    const id = "3f1c2b4a-8d9e-4f10-9a2b-1c3d4e5f6a7b";
+    expect((await plan(baseRequest)).json.calendarUrl).toBeUndefined();
+    expect(savePlan).not.toHaveBeenCalled();
+
+    expect((await plan({ ...baseRequest, calendarId: id })).json.calendarUrl).toBeUndefined(); // no database: plan still fine
+    savePlan.mockResolvedValueOnce(true);
+    const { status, json } = await plan({ ...baseRequest, calendarId: id });
+    expect(status).toBe(200);
+    expect(json.calendarUrl).toBe(`http://test/api/plan/${id}/calendar`);
+
+    savePlan.mockClear();
+    await plan({ ...baseRequest, calendarId: "../../etc" });
+    expect(savePlan).not.toHaveBeenCalled();
   });
 
   it("plans a future day from its start and briefs it as a look-ahead", async () => {

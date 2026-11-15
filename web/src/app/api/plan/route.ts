@@ -27,6 +27,7 @@ import {
   weekdayOf,
 } from "@/lib/planner";
 import { sanitizePlanRequest } from "@/lib/sanitize";
+import { savePlan } from "@/lib/saved-plans";
 import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
 
 const MAX_SUGGESTIONS = 3;
@@ -98,6 +99,10 @@ export async function POST(request: Request) {
     briefing: aiBriefing ?? templateBriefing(items, suggestions, body.weather, ahead ? ahead[0].toUpperCase() + ahead.slice(1) : undefined),
     aiUsed: ranked !== null || aiBriefing !== null,
   };
+  // MongoDB Atlas (optional): save the day so a calendar app can subscribe to it. Never blocks the plan.
+  if (body.calendarId && (await savePlan(body.calendarId, plan))) {
+    plan.calendarUrl = `${new URL(request.url).origin}/api/plan/${body.calendarId}/calendar`;
+  }
   return Response.json(plan);
 }
 

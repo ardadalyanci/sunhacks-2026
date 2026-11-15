@@ -15,6 +15,9 @@ const httpUrl = (v: unknown): string | undefined => {
   const s = str(v, 2000);
   return s && /^https?:\/\//i.test(s) ? s : undefined;
 };
+/** A browser-made calendar id (crypto.randomUUID): unguessable, so it can name a public calendar feed. */
+export const isCalendarId = (v: unknown): v is string =>
+  typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 const list = (v: unknown, max: number): unknown[] => (Array.isArray(v) ? v.slice(0, max) : []);
 
 /** A real "YYYY-MM-DD" calendar day ("2026-02-30" and "2026-13-01" are rejected). */
@@ -98,6 +101,7 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
       interests: list(raw.interests, LIMITS.interests).map((i) => str(i, 40)).filter((i): i is string => Boolean(i)),
       weather: cleanWeather(raw.weather),
       startBuildingId: str(raw.startBuildingId, 80),
+      calendarId: isCalendarId(raw.calendarId) ? raw.calendarId : undefined,
     },
   };
 }
