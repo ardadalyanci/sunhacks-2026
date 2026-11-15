@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
+import { classProblem, isBlankClass } from "@/components/classes";
 import { clearSetup, saveSetup } from "@/components/setup-store";
 import { WEEKDAYS } from "@/components/time";
 import type { ClassBlock, Weekday } from "@/lib/types";
@@ -38,6 +39,29 @@ const field = "mt-1 w-full rounded-2xl border-2 border-ink/20 bg-cloud px-4 py-3
 
 const emptyClass = (): ClassBlock => ({ course: "", days: [], start: "09:00", end: "09:50", location: "" });
 
+const ERROR = "text-[#b91c1c]";
+
+/**
+ * Phone photos are often 3 to 6 MB, and the server (Vercel) rejects uploads over 4.5 MB. Large photos are
+ * redrawn at 1600 px on the long side as JPEG, which keeps the schedule readable at a few hundred KB.
+ */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  if (file.size < 1_500_000) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    return jpeg ?? file;
+  } catch {
+    return file; // this browser cannot redraw the format (for example HEIC on desktop): send the original
+  }
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -49,16 +73,18 @@ export default function SetupPage() {
   const [message, setMessage] = useState("");
   const [classes, setClasses] = useState<ClassBlock[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
+  const [checked, setChecked] = useState(false); // mark rows that need a fix only after a save attempt
+  const [saveError, setSaveError] = useState("");
 
   const canRead = (method === "photo" && photo !== null) || (method === "paste" && pasted.trim().length > 0);
 
   async function readSchedule() {
-    const form = new FormData();
-    if (method === "photo" && photo) form.append("image", photo);
-    if (method === "paste") form.append("text", pasted);
     setReading(true);
     setMessage(`${MASCOT} is reading your schedule…`);
     try {
+      const form = new FormData();
+      if (method === "photo" && photo) form.append("image", await shrinkPhoto(photo), photo.name);
+      if (method === "paste") form.append("text", pasted);
       const res = await fetch("/api/schedule", { method: "POST", body: form });
       const body = (await res.json()) as { classes?: ClassBlock[]; error?: string };
       if (!res.ok || !body.classes) throw new Error(body.error ?? "That did not work. Try again.");
@@ -91,13 +117,17 @@ export default function SetupPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const kept = classes
-      .filter((c) => c.course.trim() && c.days.length)
-      .map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
-    if (kept.length === 0) {
-      setMessage("Add at least one class with its days, or use the sample student.");
+    const rows = classes.filter((c) => !isBlankClass(c));
+    if (rows.length === 0) {
+      setSaveError("Add at least one class, or use the sample student.");
       return;
     }
+    if (rows.some((c) => classProblem(c))) {
+      setChecked(true);
+      setSaveError("Some classes need a fix. They are marked in step 2.");
+      return;
+    }
+    const kept = rows.map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
     // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
     saveSetup({ name: name.trim(), classes: kept, interests }, token.trim());
     router.push("/today");
@@ -182,7 +212,6 @@ export default function SetupPage() {
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
                 className="sr-only"
               />
@@ -220,8 +249,12 @@ export default function SetupPage() {
           {classes.length > 0 && (
             <div className="mt-4 space-y-4">
               {classes.map((c, index) => {
+                const issue = checked && !isBlankClass(c) ? classProblem(c) : "";
                 return (
-                  <div key={index} className="rounded-3xl border-2 border-ink/15 bg-cloud p-4">
+                  <div
+                    key={index}
+                    className={`rounded-3xl border-2 bg-cloud p-4 ${issue ? "border-[#b91c1c]" : "border-ink/15"}`}
+                  >
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
                         <span className="font-bold">Course</span>
@@ -263,7 +296,7 @@ export default function SetupPage() {
                     </div>
                     <p className="mt-3 font-bold">Days</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      {WEEKDAYS.slice(0, 5).map((day) => {
+                      {WEEKDAYS.map((day) => {
                         const on = c.days.includes(day);
                         return (
                           <button
@@ -287,6 +320,7 @@ export default function SetupPage() {
                         Remove
                       </button>
                     </div>
+                    {issue && <p className={`mt-3 font-bold ${ERROR}`}>{issue}</p>}
                   </div>
                 );
               })}
@@ -341,6 +375,11 @@ export default function SetupPage() {
           >
             Use the sample student
           </button>
+          {saveError && (
+            <p role="alert" className={`w-full font-bold ${ERROR}`}>
+              {saveError}
+            </p>
+          )}
         </div>
       </form>
       <datalist id="building-hints">

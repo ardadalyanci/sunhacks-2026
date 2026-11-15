@@ -24,7 +24,8 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] `POST /api/schedule` (new, Agent-2): schedule photo or pasted text → `ClassBlock[]` via Gemini REST, with tests
 - [ ] Map view of today's buildings (Leaflet + OpenStreetMap) — needs `data/buildings.json` from C
 - [x] Landing page
-- [x] PWA: `app/manifest.ts` (installs to the home screen, opens on /today), `app/icon.tsx` + `app/apple-icon.tsx` drawn from Sol
+- [x] PWA: `app/manifest.ts` (installs to the home screen, opens on /today), static Sol icons `app/icon.png` + `app/apple-icon.png` (generated icon routes caused a dev reload loop)
+- [x] Arda: review findings 1-7 from Agent-1 (branch `arda/review-fixes`): newest re-plan wins, removed study blocks saved per day, timeline stretches to early classes and 11:59 pm deadlines with stacked pins, "Added" only when it really was, setup marks bad rows and has Sat/Sun, `/api/schedule` 413 on size + 5 reads/min per address, one shared day load across Today and Events; also shrinks large phone photos before upload (Vercel's 4.5 MB body limit)
 - [ ] Phone pass on the live Vercel URL
 
 ## C: backend 2 + data (Agent-3, Kerem)
