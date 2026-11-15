@@ -7,7 +7,7 @@ const { POST } = await import("./route");
 
 const plan = {
   items: [
-    { id: "class-0-CSE230", type: "class", title: "CSE 230", start: "2026-11-16T10:30:00-07:00" },
+    { id: "class-0-CSE230", type: "class", title: "CSE 230", start: "2026-11-16T10:30:00-07:00", location: "BYENG 210", leaveAt: "2026-11-16T10:20:00-07:00" },
     { id: "study-canvas-quiz-3-1", type: "study_block", title: "Work on: ENG 102: Reading quiz", start: "2026-11-16T11:20:00-07:00" },
     { id: "ev-e9", type: "event", title: "Career fair prep", start: "2026-11-16T17:00:00-07:00" },
   ],
@@ -27,7 +27,6 @@ beforeEach(() => generateJson.mockReset().mockResolvedValue(null));
 describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
   it.each([
     ["How's my day?", { action: "briefing" }],
-    ["what is next today", { action: "briefing" }],
     ["Add the robotics build night", { action: "add_event", itemId: "ev-e1" }],
     ["join the poetry thing", { action: "add_event", itemId: "ev-e2" }],
     ["drop the study block", { action: "remove_item", itemId: "study-canvas-quiz-3-1" }],
@@ -39,6 +38,20 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
   it("never removes classes and answers unknown with help", async () => {
     expect((await command({ text: "drop CSE 230", plan })).json.action).toBe("unknown");
     expect((await command({ text: "order me a pizza", plan })).json).toEqual({ action: "unknown", reply: expect.stringContaining("How's my day") });
+  });
+
+  it("answers what is next and when to leave from the plan, as of `now`", async () => {
+    const at = (now: string, text = "what's next?") => command({ text, plan, now }).then((r) => r.json);
+    expect(await at("2026-11-16T08:00:00-07:00")).toEqual({
+      action: "briefing",
+      reply: "Next: CSE 230 at 10:30 AM in BYENG 210. Leave by 10:20 AM.",
+    });
+    expect(await at("2026-11-16T10:25:00-07:00", "when should I leave")).toEqual({
+      action: "briefing",
+      reply: "Next: CSE 230 at 10:30 AM in BYENG 210. Leave now.",
+    });
+    expect((await at("2026-11-16T11:00:00-07:00", "where do I go now")).reply).toBe("Next: Work on: ENG 102: Reading quiz at 11:20 AM.");
+    expect((await at("2026-11-16T20:00:00-07:00")).reply).toBe("Nothing else is planned today.");
   });
 
   it("answers 400 for bad bodies and survives a broken plan", async () => {
@@ -68,5 +81,12 @@ describe("POST /api/command with Gemini", () => {
     expect(isValid({ action: "add_event", itemId: "class-0-CSE230" })).toBe(false);
     expect(isValid({ action: "remove_item", itemId: "class-0-CSE230" })).toBe(false);
     expect(isValid({ action: "launch_rockets" })).toBe(false);
+    expect(isValid({ action: "next_item" })).toBe(true);
+  });
+
+  it("turns Gemini's next_item into a briefing with the computed reply", async () => {
+    generateJson.mockResolvedValueOnce({ action: "next_item" });
+    const res = await command({ text: "uh where am I supposed to be", plan, now: "2026-11-16T08:00:00-07:00" });
+    expect(res.json).toEqual({ action: "briefing", reply: "Next: CSE 230 at 10:30 AM in BYENG 210. Leave by 10:20 AM." });
   });
 });

@@ -5,6 +5,7 @@ import { loadBuildings } from "@/lib/buildings";
 import { generateJson } from "@/lib/gemini";
 import {
   CLASS_TRAVEL_BUFFER_MIN,
+  addDays,
   DAY_END,
   DAY_START,
   addLeaveTimes,
@@ -22,6 +23,7 @@ import {
   sortByStart,
   templateBriefing,
   walkMinutes,
+  weekdayOf,
 } from "@/lib/planner";
 import { sanitizePlanRequest } from "@/lib/sanitize";
 import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
   const items = sortByStart([...fixedStops, ...deadlinesToday, ...study]);
 
   // 5. Gemini call 2: the spoken briefing.
-  const aiBriefing = await writeBriefing(items, suggestions, body);
+  const aiBriefing = await writeBriefing(items, suggestions, openDeadlines, body, date);
 
   const plan: DayPlan = {
     date,
@@ -134,7 +136,15 @@ function isRankResult(v: unknown): v is RankResult {
   );
 }
 
-async function writeBriefing(items: DayItem[], suggestions: DayItem[], body: PlanRequest): Promise<string | null> {
+/** "today", "tomorrow (Tue)" or "Thu Nov 19", in Arizona time, relative to the planned date. */
+function dueDay(iso: string, date: string): string {
+  const day = mstDate(new Date(iso));
+  if (day === date) return "today";
+  if (day === addDays(date, 1)) return `tomorrow (${weekdayOf(day)})`;
+  return `${weekdayOf(day)} ${new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Phoenix" })}`;
+}
+
+async function writeBriefing(items: DayItem[], suggestions: DayItem[], openDeadlines: DayItem[], body: PlanRequest, date: string): Promise<string | null> {
   const lines = items.map((i) => {
     const leave = i.leaveAt ? ` (leave by ${clock(i.leaveAt)})` : "";
     const place = i.location ? ` at ${i.location}` : "";
@@ -146,8 +156,12 @@ async function writeBriefing(items: DayItem[], suggestions: DayItem[], body: Pla
     `It is now ${clock(body.now ?? new Date().toISOString())}; greet for that time of day and talk only about what is still ahead.`,
     "3 to 5 short sentences, at most 90 words, plain text, no lists, no emoji. Use times like 1:12 PM.",
     "Mention the heat if it is hot, when to leave for the next class (name the course), unsubmitted deadlines and the planned study time, and at most one suggested event.",
-    body.weather ? `Weather: now ${Math.round(body.weather.tempF)}°F, high ${Math.round(body.weather.highF)}°F, hot: ${body.weather.isHot}.` : "Weather: unknown.",
-    `Schedule:\n${lines.join("\n") || "nothing scheduled"}`,
+    "Use only the times, places, temperatures and due dates given below, exactly as written; never guess or change one. Call a deadline \"tonight\" only if it is due today. Mention things in time order. Write temperatures as digits, like 78°F.",
+    body.weather
+      ? `Current temperature: ${Math.round(body.weather.tempF)}°F. Today's high: ${Math.round(body.weather.highF)}°F. ${body.weather.isHot ? "It is a hot day." : "It is not a hot day."}`
+      : "Weather: unknown, do not mention it.",
+    `Schedule for today, in order:\n${lines.join("\n") || "nothing scheduled"}`,
+    `Open deadlines (not submitted yet):\n${openDeadlines.map((d) => `- ${d.title}: due ${dueDay(d.start, date)} at ${clock(d.start)}`).join("\n") || "none"}`,
     `Suggested events: ${suggestions.map((s) => `${s.title} at ${clock(s.start)}`).join("; ") || "none"}`,
   ].join("\n");
   const result = await generateJson<{ briefing: string }>(

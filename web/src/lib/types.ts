@@ -54,7 +54,7 @@ export interface PlanRequest {
 export type CommandAction =
   | { action: "add_event"; itemId: string }
   | { action: "remove_item"; itemId: string }
-  | { action: "briefing" }
+  | { action: "briefing"; reply?: string } // reply set → speak it ("Next: CSE 230 at 10:30 AM…"); else speak plan.briefing
   | { action: "unknown"; reply: string };
 
 export type OpportunityKind =
