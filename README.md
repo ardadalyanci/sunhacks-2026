@@ -26,6 +26,7 @@ Demo mode needs no keys or network: `GET /api/demo` returns a sample student's d
 - App scaffolded with `create-next-app` (Next.js 16).
 - Google's [`@google/genai`](https://www.npmjs.com/package/@google/genai) SDK (Apache-2.0) for the Gemini API.
 - [Vitest](https://vitest.dev/) (MIT) for tests.
+- The iCalendar reader and writer in `web/src/lib/feeds/ical.ts` were written for this project from [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545); no calendar library is used.
 - Data sources and APIs are listed here as we add them, with links and licenses:
   - [Canvas LMS REST API](https://canvas.asu.edu/doc/api/), with each student's own access token
   - [ASU Events feed](https://asuevents.asu.edu/) (`/feed-json/students`)

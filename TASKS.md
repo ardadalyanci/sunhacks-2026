@@ -30,11 +30,11 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [ ] Phone pass on the live Vercel URL
 
 ## C: backend 2 + data (Agent-3, Kerem)
-- [ ] `GET /api/events`: ASU Events JSON + SunDevilCentral iCal → `Opportunity[]`, next 7 days, Tempe, 1 h in-memory cache
-- [ ] `GET /api/weather`: Open-Meteo for Tempe → `Weather`
-- [ ] `GET /api/calendar`: ICS of the planned day
-- [ ] `data/buildings.json`: ~20 Tempe buildings (id, name, lat, lng) from Overpass, checked on the map
-- [ ] Interest taxonomy that maps to ASU Events `interests` and SunDevilCentral tags
+- [x] Kerem: `GET /api/events` → `{ events: Opportunity[] }`: ASU Events JSON + SunDevilCentral iCal, Tempe (and online), next 7 days, 1 h in-memory cache per source; tags include the setup interests they match (`lib/feeds/`)
+- [x] Kerem: `GET /api/weather` → `Weather { tempF, highF, isHot }` from Open-Meteo for Tempe (tempF = feels-like now, or at noon for `?date=` up to 7 days ahead)
+- [x] Kerem: `POST /api/calendar { plan: DayPlan }` → `.ics` download of the planned day, with a reminder at every leave time
+- [x] Kerem: `data/buildings.json`: 52 Tempe buildings `{ id, name, lat, lng, aliases }`, OSM centroids via Overpass (query in `data/README.md`)
+- [x] Kerem: interest taxonomy (`lib/feeds/interests.ts`) that maps setup interests to ASU Events `interests` and SunDevilCentral tags
 - [ ] 2 demo personas with class schedules; record one real `DayPlan` for demo mode (no grades or tokens on screen)
 - [ ] Domain via the MLH GoDaddy Registry code; Devpost draft with all 3 teammates; prize checklist
 - [ ] Demo video (2 minutes max, YouTube), pitch script, expo table plan, answers for "how is this different from ASU Mobile / Plz_use_it?"
