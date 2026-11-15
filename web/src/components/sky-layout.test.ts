@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { DayItem } from "@/lib/types";
-import { PIN_HEIGHT, coversOtherBlock, dayBounds, hourOn, skyBackground, stackPins } from "./sky-layout";
+import {
+  PIN_HEIGHT,
+  assignmentName,
+  blockTitle,
+  coversOtherBlock,
+  dayBounds,
+  dayStops,
+  hourOn,
+  isDarkHour,
+  rangeLabel,
+  skyBackground,
+  stackPins,
+  stopAt,
+  sunTimes,
+} from "./sky-layout";
 
 const DATE = "2026-11-14";
 const at = (hhmm: string, date = DATE) => `${date}T${hhmm}:00-07:00`;
@@ -60,6 +74,22 @@ describe("stackPins", () => {
   });
 });
 
+describe("labels", () => {
+  it("shortens Canvas titles for pins and blocks", () => {
+    expect(assignmentName("CSE 230: Lab 7 (pipelining)")).toBe("Lab 7");
+    expect(assignmentName("MAT 343: Homework 9")).toBe("HW 9");
+    expect(assignmentName("Reading response")).toBe("Reading response");
+    expect(blockTitle("Work on: CSE 230: Lab 7 (pipelining)")).toBe("Work on Lab 7 · CSE 230");
+    expect(blockTitle("Work shift")).toBe("Work shift");
+  });
+
+  it("writes a block's time with am/pm once when it can", () => {
+    expect(rangeLabel(10.5, 11 + 20 / 60)).toBe("10:30–11:20 am");
+    expect(rangeLabel(11.5, 12 + 20 / 60)).toBe("11:30 am–12:20 pm");
+    expect(rangeLabel(13.5, 14.75)).toBe("1:30–2:45 pm");
+  });
+});
+
 describe("coversOtherBlock", () => {
   const boxes = [
     { id: "study", top: 100, bottom: 140 },
@@ -73,6 +103,44 @@ describe("coversOtherBlock", () => {
   it("ignores the pin's own block and blocks it only touches", () => {
     expect(coversOtherBlock(160, [{ id: "class", top: 150, bottom: 200 }], "class")).toBe(false);
     expect(coversOtherBlock(100 - PIN_HEIGHT / 2 - 1, boxes, "class")).toBe(false);
+  });
+});
+
+describe("sun", () => {
+  const hhmm = (h: number) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+
+  it("puts sunrise and sunset in Tempe within a few minutes of the almanac", () => {
+    const nov = sunTimes("2026-11-14"); // almanac: 6:59 am, 5:24 pm MST
+    expect(Math.abs(nov.sunrise - (6 + 59 / 60))).toBeLessThan(5 / 60);
+    expect(Math.abs(nov.sunset - (17 + 24 / 60))).toBeLessThan(5 / 60);
+    const june = sunTimes("2026-06-21"); // almanac: 5:19 am, 7:42 pm
+    expect(hhmm(june.sunrise)).toMatch(/^5:(1[4-9]|2[0-4])$/);
+    expect(hhmm(june.sunset)).toMatch(/^19:(3[7-9]|4[0-7])$/);
+  });
+
+  it("makes the evening sky dark sooner in November than in June", () => {
+    expect(isDarkHour(19, sunTimes("2026-11-14"))).toBe(true);
+    expect(isDarkHour(19, sunTimes("2026-06-21"))).toBe(false);
+  });
+});
+
+describe("Play my day stops", () => {
+  const sun = { sunrise: 7, sunset: 17.4 };
+  const items: DayItem[] = [
+    item("class", at("10:30"), at("11:20"), at("10:13")),
+    { ...item("deadline", at("17:00")), title: "MAT 343: Homework 9", done: true },
+    { ...item("deadline", at("23:59")), title: "CSE 230: Lab 7 (pipelining)" },
+  ];
+  const stops = dayStops(items, DATE, sun, () => "Brickyard 210");
+
+  it("stops at each walk, deadline and the sunset, in time order", () => {
+    expect(stops.map((s) => s.text)).toEqual(["Leave now for Brickyard 210", "HW 9: turned in", "Sunset, 5:24 pm", "Lab 7 is due"]);
+    expect(stops[1].mood).toBe("proud");
+  });
+
+  it("holds a stop's caption for a while, then lets it go", () => {
+    expect(stopAt(stops, 10.3)?.text).toBe("Leave now for Brickyard 210");
+    expect(stopAt(stops, 12)).toBeUndefined();
   });
 });
 

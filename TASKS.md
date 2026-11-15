@@ -1,7 +1,7 @@
 # Tasks
 
 Update this file when you start or finish something. `[ ]` todo, `[~]` in progress (put your name), `[x]` done.
-The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md. The repo scaffold (Next.js 16, shared types, skills) from the first commit stays.
+The product changed from "Sunny" to **DayPilot** on Sat afternoon and to **Sundial** (sundial.club) on Sat evening; see CLAUDE.md. The repo scaffold (Next.js 16, shared types, skills) from the first commit stays.
 
 ## A: backend 1 + integration (Agent-1, Barış)
 - [x] Barış: DayPilot pivot: CLAUDE.md, TASKS.md, README, `DayItem` types
@@ -23,7 +23,7 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] Events that fit you: list with "why" from `/api/plan` suggestions, add to my day, RSVP
 - [x] Voice: Hear my day (speechSynthesis), mic (Web Speech) + typed box → `/api/command`, add/remove re-plans
 - [x] `POST /api/schedule` (new, Agent-2): schedule photo or pasted text → `ClassBlock[]` via Gemini REST, with tests
-- [ ] Map view of today's buildings (Leaflet + OpenStreetMap) — needs `data/buildings.json` from C
+- [x] Arda: map of the day's walks ("Your walks": OpenStreetMap tiles drawn as plain SVG images, no map library; minutes per leg from the plan; branch `arda/next`)
 - [x] Landing page
 - [x] PWA: `app/manifest.ts` (installs to the home screen, opens on /today), static Sol icons `app/icon.png` + `app/apple-icon.png` (generated icon routes caused a dev reload loop)
 - [x] Arda: review findings 1-7 from Agent-1 (branch `arda/review-fixes`): newest re-plan wins, removed study blocks saved per day, timeline stretches to early classes and 11:59 pm deadlines with stacked pins, "Added" only when it really was, setup marks bad rows and has Sat/Sun, `/api/schedule` 413 on size + 5 reads/min per address, one shared day load across Today and Events; also shrinks large phone photos before upload (Vercel's 4.5 MB body limit)
@@ -32,6 +32,8 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] Arda: after the live check (branch `arda/live-polish`): "Add to my calendar" on Today downloads the day from `POST /api/calendar`; Events opens on "For you" (interests + Gemini picks) instead of all ~485 events; a leave pin that would cover another block moves right with shorter text
 - [x] Arda: renamed the product to **Sundial** (domain sundial.club; Decision Log Sat 18:40): `components/brand.ts`, manifest, calendar file name; storage keys keep the `daypilot.` prefix so saved setups still load
 - [x] Arda: "Subscribe in your calendar" (PR #21 follow-up): the browser keeps one `calendarId` (`crypto.randomUUID()`), sends it with every `/api/plan`, and the calendar panel offers Google Calendar, Apple Calendar (webcal) and Copy link for `plan.calendarUrl`; without MongoDB it falls back to the one-day download
+- [x] Arda: after the reviewer round (branch `arda/wow`, PR #23): the headline is the next walk ("Leave at 9:47 am") with Walk me there; "when should I leave?" answers with the walk; a real sample week (student Diego, MWF/TTh classes, weekend shift); Sol's short briefing and fact-based reasons; Ask Sol chat bubbles; plain timeline labels; Play my day with Tempe's real sunrise and sunset; Sol's picks, fit/clash chips and a "+ Add" block; setup trust panel, start of day and local interests
+- [x] Arda: round 3 (branch `arda/next`, built by parallel agents from written specs, each owning its files): "What if…" pills (104°, oversleep, a cancelled class) with Sol's one-line note on what changed (`what-if.ts`, `plan-diff.ts`); "Your walks" map; "How Sol planned this day" with the real numbers (`plan-facts.ts`); "Give me more time to walk" → `PlanRequest.pace: "slower"` (walks 35% longer, 5 extra minutes in heat instead of 2); the day as a large list ("Show as a list", `day-rows.ts`); Sol names each assignment once
 
 ## C: backend 2 + data (Agent-3, Kerem)
 - [x] Kerem: `GET /api/events` → `{ events: Opportunity[] }`: ASU Events JSON + SunDevilCentral iCal, Tempe (and online), next 7 days, 1 h in-memory cache per source; tags include the setup interests they match (`lib/feeds/`)

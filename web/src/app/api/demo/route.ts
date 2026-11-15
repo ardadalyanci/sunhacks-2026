@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   if (date !== null && !isCalendarDate(date)) return Response.json({ error: "`date` must be a real YYYY-MM-DD day." }, { status: 400 });
   const hot = params.get("hot") === "1" || params.get("hot") === "true";
   const today = mstDate(new Date());
-  const scenario = demoScenario(date ?? today, { hot });
+  const scenario = demoScenario(date ?? today, { hot, today });
   // Today's demo starts at 8 AM so the whole day shows. A later day is a look-ahead from the real clock.
   if (scenario.request.date! > today) scenario.request.now = toMstIso(new Date());
   return Response.json(scenario);

@@ -40,11 +40,11 @@ function vevent(item: DayItem, plan: DayPlan, stamp: string): string[] {
   if (leave && plan.weather?.isHot) notes.push(`Hot day (high ${Math.round(plan.weather.highF)}°F): take water and pick a shaded path.`);
   if (item.why) notes.push(item.why);
   if (item.url) notes.push(item.url);
-  notes.push("Planned by DayPilot.");
+  notes.push("Planned by Sundial.");
 
   const out = [
     "BEGIN:VEVENT",
-    `UID:${item.id.replace(/[^A-Za-z0-9._-]/g, "-")}-${plan.date}@daypilot`,
+    `UID:${item.id.replace(/[^A-Za-z0-9._-]/g, "-")}-${plan.date}@sundial`,
     `DTSTAMP:${stamp}`,
     `DTSTART:${icsUtc(begin)}`,
     `DTEND:${icsUtc(end)}`,
@@ -72,10 +72,10 @@ export function buildDayIcs(plan: DayPlan, options: IcsOptions = {}): string {
     [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//DayPilot//Day plan//EN",
+      "PRODID:-//Sundial//Day plan//EN",
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
-      prop("X-WR-CALNAME", options.calendarName ?? "DayPilot"),
+      prop("X-WR-CALNAME", options.calendarName ?? "Sundial"),
       "X-WR-TIMEZONE:America/Phoenix",
       ...body,
       "END:VCALENDAR",

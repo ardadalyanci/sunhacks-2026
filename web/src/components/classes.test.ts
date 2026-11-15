@@ -18,7 +18,7 @@ describe("classProblem", () => {
   });
 
   it("names the one thing to fix", () => {
-    expect(classProblem(row({ course: "  " }))).toMatch(/course/);
+    expect(classProblem(row({ course: "  " }))).toMatch(/class or shift/);
     expect(classProblem(row({ days: [] }))).toMatch(/days/);
     expect(classProblem(row({ start: "" }))).toMatch(/start and an end time/);
     expect(classProblem(row({ end: "25:00" }))).toMatch(/start and an end time/);

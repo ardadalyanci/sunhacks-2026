@@ -4,6 +4,9 @@ Owned by Agent-3 (Kerem). Static data the server reads at runtime.
 
 ## buildings.json
 ASU Tempe buildings the planner uses for walking times and "leave at" markers (`web/src/lib/buildings.ts` loads it).
+The app imports an exact copy, `web/src/lib/buildings.json`, so the build bundles it without reaching outside `web/`
+(that setting made `next dev` reload in a loop). After changing this file, copy it there too:
+`cp data/buildings.json web/src/lib/buildings.json`. A test in `web/src/lib/buildings.test.ts` fails while they differ.
 One JSON array of `{ id, name, lat, lng, aliases? }` (the `Building` type in `web/src/lib/planner.ts`):
 
 ```json

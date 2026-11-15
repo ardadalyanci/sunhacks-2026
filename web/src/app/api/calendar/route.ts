@@ -56,11 +56,11 @@ export async function POST(request: Request) {
     aiUsed: false,
   };
   const name = typeof (body as { name?: unknown }).name === "string" ? (body as { name: string }).name.trim().slice(0, 40) : "";
-  const ics = buildDayIcs(plan, { calendarName: name ? `DayPilot: ${name}` : "DayPilot" });
+  const ics = buildDayIcs(plan, { calendarName: name ? `Sundial: ${name}` : "Sundial" });
   return new Response(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": `attachment; filename="daypilot-${plan.date}.ics"`,
+      "Content-Disposition": `attachment; filename="sundial-${plan.date}.ics"`,
       "Cache-Control": "no-store",
     },
   });

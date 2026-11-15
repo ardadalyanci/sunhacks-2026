@@ -4,21 +4,21 @@ import { MASCOT, PRODUCT } from "@/components/brand";
 
 const DAY = [
   {
-    time: "10:15 am",
-    text: "Leave for BYENG 210",
-    note: "It counts the walk from your dorm, so you sit down in CSE 230 on time.",
+    time: "10:13 am",
+    text: "Leave for Brickyard 210",
+    note: "A 17-minute walk from Manzanita, timed so you’re in your seat before CSE 230 starts.",
     style: "bg-ink text-cloud",
   },
   {
     time: "11:30 am",
     text: "Work on Lab 7",
-    note: "Due tonight on Canvas, so it saves time for it between your classes.",
+    note: "Due on Canvas at 11:59 tonight, so Sol saves your gap between classes for it.",
     style: "border-2 border-dashed border-sun bg-sun-soft",
   },
   {
-    time: "1:15 pm",
-    text: "Leave for COOR 170",
-    note: "On a 104°F day it adds minutes for the heat and tells you to take water.",
+    time: "1:19 pm",
+    text: "Leave for Coor Hall 170",
+    note: "On a 104° day, Sol has you leave a few minutes early and reminds you to fill your bottle.",
     style: "bg-[#ff8a3d]",
   },
   {
@@ -41,11 +41,11 @@ export default function Home() {
         <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 py-10 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <h1 className="font-display text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
-              ASU Mobile shows you information. {PRODUCT} plans your day.
+              ASU Mobile shows your schedule. {PRODUCT} plans your day.
             </h1>
             <p className="mt-6 max-w-xl text-xl leading-relaxed">
-              Your classes, Canvas due dates, the Tempe heat and the club events you would actually go to, in one
-              plan you can talk to.
+              It reads your Canvas and your class times, checks how hot Tempe is, and finds the club nights you’d
+              actually go to. Then it tells you when to walk out the door.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -65,7 +65,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center">
             <p className="relative max-w-sm rounded-3xl bg-cloud px-6 py-5 text-lg font-bold leading-snug shadow-[0_24px_60px_-28px_rgba(20,50,74,0.55)]">
-              “Lab 7 is due tonight, so I saved you time after CSE 230. Leave for COOR by 1:15.”
+              “Lab 7’s due tonight, so I blocked 11:30 for it. Leave for Coor Hall at 1:19.”
               <span aria-hidden className="absolute -bottom-2.5 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 bg-cloud" />
             </p>
             <Mascot size={300} animated className="mt-6 max-w-full" />
@@ -73,16 +73,17 @@ export default function Home() {
           </div>
         </div>
 
-        <p className="mx-auto w-full max-w-6xl text-sm text-cloud/80">Built at sunhacks 2026, Tempe</p>
+        <p className="mx-auto w-full max-w-6xl text-sm text-cloud/80">sundial.club, made in Tempe at sunhacks 9.0</p>
       </section>
 
       <section className="bg-sky px-4 py-20">
         <div className="mx-auto max-w-6xl">
           <h2 className="max-w-2xl font-display text-4xl font-bold tracking-tight sm:text-5xl">
-            From your first walk to your last event
+            One day, planned by {MASCOT}
           </h2>
           <p className="mt-3 max-w-xl text-lg text-ink-soft">
-            {PRODUCT} reads Canvas, your classes, the weather and campus events, then does the math for you.
+            {MASCOT} works out the walk between buildings, the gaps between classes, and how much the heat will slow
+            you down.
           </p>
           <ol className="mt-10 max-w-3xl border-l-4 border-ink/15 pl-6">
             {DAY.map((step) => (
@@ -95,7 +96,8 @@ export default function Home() {
             ))}
           </ol>
           <p className="mt-10 font-display text-2xl font-bold">
-            Ask out loud: “How’s my day?” or “Add the robotics meeting.”
+            Ask out loud: “When should I leave?” or “Add the robotics meeting.” Then press Play and watch {MASCOT}
+            ride your day across the sky.
           </p>
         </div>
       </section>

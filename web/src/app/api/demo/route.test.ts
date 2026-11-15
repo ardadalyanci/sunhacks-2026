@@ -32,7 +32,7 @@ describe("GET /api/demo", () => {
   it("returns a persona and a clean PlanRequest for the given date", async () => {
     const { status, json } = await demo("?date=2026-11-15");
     expect(status).toBe(200);
-    expect(json.persona.name).toBe("Alex Rivera");
+    expect(json.persona.name).toBe("Diego Ramírez");
     expect(json.request.date).toBe("2026-11-15");
     expect(json.request.classes.every((c: { days: string[] }) => c.days[0] === "Sun")).toBe(true);
     // Nothing in the sample data is dropped by the request sanitizer.
@@ -49,14 +49,19 @@ describe("GET /api/demo", () => {
 });
 
 describe("demo day through /api/plan", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("produces a full, consistent day with no network", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T07:00:00-07:00")); // due dates are fixed to the real day
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { json } = await demo("?date=2026-11-15&hot=1");
     const day = await planFor(json.request);
 
+    // Sunday (judging day): no classes, but a study group and a shift, so there are still walks to plan.
     const classes = day.items.filter((i) => i.type === "class");
-    expect(classes.map((c) => c.title)).toEqual(["CSE 230", "MAT 343", "CSE 240"]);
+    expect(classes.map((c) => c.title)).toEqual(["Study group: MAT 343", "Work shift"]);
     for (const c of classes) expect(Date.parse(c.leaveAt!)).toBeLessThan(Date.parse(c.start));
 
     const study = day.items.filter((i) => i.type === "study_block");
@@ -75,18 +80,35 @@ describe("demo day through /api/plan", () => {
 });
 
 describe("POST /api/canvas with the demo token", () => {
+  afterEach(() => vi.useRealTimers());
+  const deadlinesFor = async (date: string) => {
+    const res = await canvas(new Request("http://test/api/canvas", { method: "POST", body: JSON.stringify({ token: "demo", date }) }));
+    return { status: res.status, list: ((await res.json()).deadlines as DayItem[]).map((d) => [d.title, d.done]) };
+  };
+
   it("returns the demo deadlines without calling Canvas", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T09:00:00-07:00"));
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const res = await canvas(new Request("http://test/api/canvas", { method: "POST", body: JSON.stringify({ token: "demo", date: "2026-11-15" }) }));
-    const json = await res.json();
-    expect(res.status).toBe(200);
-    expect(json.deadlines.map((d: DayItem) => [d.title, d.done])).toEqual([
-      ["MAT 343: Homework 9", true],
-      ["CSE 230: Lab 7 (pipelining)", false],
-      ["ENG 102: Reading response", false],
-    ]);
+    expect(await deadlinesFor("2026-11-15")).toEqual({
+      status: 200,
+      list: [
+        ["MAT 343: Homework 9", true],
+        ["CSE 230: Lab 7 (pipelining)", false],
+        ["ENG 102: Reading response", false],
+      ],
+    });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows tomorrow's work for tomorrow instead of a second copy of tonight's lab", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T09:00:00-07:00"));
+    expect((await deadlinesFor("2026-11-16")).list).toEqual([
+      ["ENG 102: Reading response", false],
+      ["CSE 240: Quiz 5 (pointers)", false],
+    ]);
   });
 });
 
@@ -101,6 +123,6 @@ describe("GET /api/demo for a later day", () => {
     expect(ahead.now).toBe("2026-11-14T17:40:00-07:00");
     const day = await planFor(ahead);
     expect(day.briefing).toMatch(/^Tomorrow, Sun Nov 15\./);
-    expect(day.items.filter((i) => i.type === "class")).toHaveLength(3); // the whole day, not just what is left of today
+    expect(day.items.filter((i) => i.type === "class")).toHaveLength(2); // the whole Sunday, not just what is left of today
   });
 });

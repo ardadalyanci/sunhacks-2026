@@ -3,14 +3,21 @@
 import Link from "next/link";
 import { useState } from "react";
 import CalendarButton from "@/components/CalendarButton";
+import DayList from "@/components/DayList";
 import DayPicker from "@/components/DayPicker";
+import HowSolPlanned from "@/components/HowSolPlanned";
 import Mascot from "@/components/Mascot";
 import SkyDay from "@/components/SkyDay";
 import VoiceBar from "@/components/VoiceBar";
-import { PRODUCT } from "@/components/brand";
+import WalkMap from "@/components/WalkMap";
+import WhatIfBar from "@/components/WhatIfBar";
+import { MASCOT, PRODUCT } from "@/components/brand";
+import { nextWalk, placeLabel, toCelsius, untilText, walkLink } from "@/components/next-walk";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useChosenDay } from "@/components/useChosenDay";
 import { useDay } from "@/components/useDay";
+import { useNow } from "@/components/useNow";
+import { useView } from "@/components/useView";
 import type { DayItem } from "@/lib/types";
 
 const KIND: Record<DayItem["type"], string> = {
@@ -22,12 +29,17 @@ const KIND: Record<DayItem["type"], string> = {
 };
 
 const clock = (iso: string) => formatTime(parseLocal(iso).hours);
+const isCourse = (title: string) => /^[A-Z]{2,4} \d{3}/.test(title); // "CSE 230", not "Shift at the MU"
+const weekdayOf = (date: string) => formatDay(date).split(",")[0];
 
 export default function TodayPage() {
   const chosen = useChosenDay();
   const day = useDay(chosen.date || undefined);
+  const clockNow = useNow();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [view, setView] = useView();
   const { plan, request } = day;
 
   if (!plan) {
@@ -58,11 +70,45 @@ export default function TodayPage() {
     plan.items.find((i) => i.id === selectedId) ?? plan.suggestions.find((s) => s.id === selectedId) ?? null;
   const selectedIsSuggestion = selected !== null && plan.suggestions.some((s) => s.id === selected.id);
 
+  // The headline is the next walk. The sample day and later days keep their own clock (request.now: 8 am for the
+  // sample, the real time for a look-ahead); a real today uses the live clock, so the countdown moves.
+  const nowMs = day.isDemo || later ? Date.parse(request?.now ?? plan.date) : clockNow;
+  const walk = nowMs ? nextWalk(plan.items, nowMs) : null;
+  const hasWalks = plan.items.some((i) => i.leaveAt);
+  const name = firstName ? `, ${firstName}` : "";
+  const headline = walk
+    ? later
+      ? `${plan.date === chosen.days[1] ? "Tomorrow" : weekdayOf(plan.date)}, leave at ${clock(walk.item.leaveAt!)}.`
+      : walk.now
+        ? `Leave now${name}.`
+        : `Leave at ${clock(walk.item.leaveAt!)}${name}.`
+    : hasWalks
+      ? `You're done walking for today${name}.`
+      : later
+        ? `No classes on ${weekdayOf(plan.date)}.`
+        : `No classes today${name}.`;
+  // Where Sol rests on the sky: the sample's own clock (8 am), the live clock on a real today, none ahead.
+  const azNow = new Date(clockNow - 7 * 3_600_000);
+  const nowHour = later
+    ? undefined
+    : day.isDemo
+      ? request?.now
+        ? parseLocal(request.now).hours
+        : undefined
+      : clockNow
+        ? azNow.getUTCHours() + azNow.getUTCMinutes() / 60
+        : undefined;
+  const weatherLine = plan.weather
+    ? later
+      ? ` · high ${Math.round(plan.weather.highF)}°F`
+      : ` · ${Math.round(plan.weather.tempF)}°F, high ${Math.round(plan.weather.highF)}°F`
+    : "";
+
   return (
     <>
       {day.isDemo && (
         <p className="mb-6 rounded-2xl bg-cloud/70 px-4 py-3">
-          You are looking at a sample student’s day.{" "}
+          This is a sample day for {firstName || "a student"}, a CS sophomore.{" "}
           <Link href="/setup" className="font-bold underline underline-offset-4">
             Set up yours
           </Link>{" "}
@@ -74,78 +120,130 @@ export default function TodayPage() {
       <p aria-live="polite" className="text-lg text-ink-soft">
         {day.switching
           ? `Planning ${formatDay(chosen.date)}…`
-          : later
-            ? `Preview of ${formatDay(plan.date)}`
-            : formatDay(plan.date)}
+          : `${later ? "Preview of " : ""}${formatDay(plan.date)}${weatherLine}`}
       </p>
-      <h1 className="font-display text-5xl font-bold tracking-tight">
-        {firstName ? `Your day, ${firstName}` : "Your day"}
-      </h1>
-      <DayPicker days={chosen.days} date={chosen.date} />
-
-      <section
-        aria-busy={day.switching}
-        className={`mt-6 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6 ${dim}`}
-      >
-        <div className={`shrink-0 self-center sm:self-start ${listening ? "mascot-listening" : ""}`}>
-          <Mascot size={128} mood={mood} animated />
+      <h1 className="font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{headline}</h1>
+      {walk && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="text-lg">
+            {walk.item.title} {isCourse(walk.item.title) ? "in" : "at"}{" "}
+            <span className="font-bold">{placeLabel(walk.item.location)}</span> ·{" "}
+            {walk.minutes}-minute walk
+            {!later && !walk.now ? ` · in ${untilText(walk.leaveMs - nowMs)}` : ""}
+          </p>
+          <a
+            href={walkLink(walk.item.location)}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"
+          >
+            Walk me there
+          </a>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="max-w-prose text-lg leading-relaxed">{plan.briefing}</p>
+      )}
+      <DayPicker days={chosen.days} date={chosen.date} />
+      {/* "What if…" pills (heat, oversleeping, a cancelled class) and Sol's one-line note on what changed. */}
+      {!later && <WhatIfBar day={day} />}
+
+      {/* The heat warning comes first, right under the switch that previews it. */}
+      {heat && (
+        <section
+          role="alert"
+          className="mt-4 flex items-center gap-4 rounded-3xl bg-gradient-to-r from-[#FFC627] to-[#F97316] p-5 text-ink sm:p-6"
+        >
+          <Mascot size={64} mood="hot" className="shrink-0" label="" />
+          <div>
+            <p className="font-display text-2xl font-bold">
+              {later
+                ? `Up to ${Math.round(heat.highF)}°F (${toCelsius(heat.highF)}°C) on ${weekdayOf(plan.date)}. Sorry, that’s me.`
+                : `${Math.round(heat.tempF)}°F (${toCelsius(heat.tempF)}°C) now, up to ${Math.round(heat.highF)}°F. Sorry, that’s me.`}
+            </p>
+            <p className="mt-1 max-w-prose text-lg">
+              Every leave time below is a few minutes earlier, so you’re not sprinting to class. Fill your bottle before
+              you go, and cut through air-conditioned buildings when you can.
+            </p>
+          </div>
+        </section>
+      )}
+
+      <section aria-busy={day.switching} className={`mt-4 flex flex-col gap-4 sm:flex-row sm:items-start ${dim}`}>
+        <div
+          className={`shrink-0 self-center sm:mt-2 sm:self-start ${
+            listening ? "mascot-listening" : speaking ? "mascot-talking" : ""
+          }`}
+        >
+          <Mascot size={112} mood={mood} animated />
+        </div>
+        {/* Sol's briefing is his speech bubble; the tail points at him. */}
+        <div className="relative min-w-0 flex-1 rounded-3xl bg-cloud p-5 sm:p-6">
+          <span
+            aria-hidden
+            className="absolute -top-2 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 bg-cloud sm:top-10 sm:-left-2 sm:translate-x-0"
+          />
+          <p className="relative max-w-prose text-lg leading-relaxed">{plan.briefing}</p>
           {!plan.aiUsed && (
-            <p className="mt-2 text-sm text-ink-soft">Gemini is not connected, so this plan was made with plain rules.</p>
+            <p className="mt-2 text-sm text-ink-soft">
+              Gemini is not connected, so {MASCOT} planned this with plain rules.
+            </p>
           )}
-          <div className="mt-4">
-            <VoiceBar briefing={plan.briefing} onCommand={day.command} onListeningChange={setListening} />
+          <div className="relative mt-4">
+            {/* A new day starts with a clean voice bar, not the last day's answer. */}
+            <VoiceBar
+              key={plan.date}
+              briefing={plan.briefing}
+              onCommand={day.command}
+              onListeningChange={setListening}
+              onSpeakingChange={setSpeaking}
+            />
           </div>
         </div>
       </section>
-
-      {heat && (
-        <section role="alert" className="mt-4 rounded-3xl bg-[#ff8a3d] p-5 sm:p-6">
-          <p className="font-display text-2xl font-bold">
-            {later
-              ? `Up to ${Math.round(heat.highF)}°F on ${formatDay(plan.date).split(",")[0]}`
-              : `It is ${Math.round(heat.tempF)}°F now and up to ${Math.round(heat.highF)}°F today`}
-          </p>
-          <p className="mt-1 max-w-prose text-lg">
-            Your leave times include extra minutes for the heat. Take water and stay in the shade between classes.
-          </p>
-        </section>
-      )}
 
       {day.error && <p className="mt-4 font-bold text-[#b91c1c]">{day.error}</p>}
 
       <div aria-busy={day.switching} className={`mt-6 grid gap-6 lg:grid-cols-[1fr_340px] ${dim}`}>
         <div className="min-w-0">
-          <SkyDay
-            date={plan.date}
-            items={plan.items}
-            hot={Boolean(heat)}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
-          <div className="mt-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          {/* The same day two ways: the sky, or a plain large list (easier with zoom or a screen reader). */}
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              aria-pressed={view === "list"}
+              onClick={() => setView(view === "list" ? "sky" : "list")}
+              className="rounded-full px-3 py-1.5 font-bold underline underline-offset-4 hover:bg-ink/10"
+            >
+              {view === "list" ? "Show the sky" : "Show as a list"}
+            </button>
+          </div>
+          {view === "list" ? (
+            <DayList date={plan.date} items={plan.items} nowMs={nowMs} selectedId={selectedId} onSelect={setSelectedId} />
+          ) : (
+            <SkyDay
+              date={plan.date}
+              items={plan.items}
+              hot={Boolean(heat)}
+              nowHour={nowHour}
+              suggestion={plan.suggestions[0]}
+              onAdd={(id) => void day.accept(id)}
+              busy={day.busy}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          )}
+          <div className="mt-4">
             <CalendarButton plan={plan} name={firstName} />
-            {!later && (
-              <label className="flex items-center gap-2 py-2 text-ink-soft">
-                <input
-                  type="checkbox"
-                  checked={day.hot}
-                  disabled={day.busy}
-                  onChange={(e) => void day.setHotPreview(e.target.checked)}
-                  className="h-4 w-4 accent-[#ff8a3d]"
-                />
-                Preview a 104°F day
-              </label>
-            )}
           </div>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-live="polite">
           {selected ? (
             <section className="rounded-3xl bg-cloud p-5">
-              <p className="font-bold text-ink-soft">{selectedIsSuggestion ? "Suggested event" : KIND[selected.type]}</p>
+              <p className="font-bold text-ink-soft">
+                {selectedIsSuggestion
+                  ? "Suggested event"
+                  : selected.type === "class" && !isCourse(selected.title)
+                    ? "On your schedule"
+                    : KIND[selected.type]}
+              </p>
               <h2 className="mt-1 font-display text-2xl font-bold leading-tight">{selected.title}</h2>
               <p className="mt-2">
                 {selected.type === "deadline"
@@ -153,8 +251,23 @@ export default function TodayPage() {
                   : `${clock(selected.start)}${selected.end ? ` to ${clock(selected.end)}` : ""}`}
                 {selected.location ? `, ${selected.location}` : ""}
               </p>
-              {selected.leaveAt && <p className="mt-2 font-bold">Leave at {clock(selected.leaveAt)}.</p>}
+              {selected.leaveAt && (
+                <p className="mt-2 font-bold">
+                  Leave at {clock(selected.leaveAt)} for {placeLabel(selected.location) || selected.title}.
+                </p>
+              )}
               {selected.why && <p className="mt-2">{selected.why}</p>}
+              {selected.type === "study_block" &&
+                (() => {
+                  // Explain the block: which assignment it is for and when that is due.
+                  const due = deadlines.find((d) => selected.title.endsWith(d.title));
+                  return due ? (
+                    <p className="mt-2">
+                      {MASCOT} saved this free time for {due.title}, due {dueDay(parseLocal(due.start).date)} at{" "}
+                      {clock(due.start)}.
+                    </p>
+                  ) : null;
+                })()}
               {selected.type === "deadline" && (
                 <p className={`mt-2 font-bold ${selected.done ? "text-saguaro" : ""}`}>
                   {selected.done ? "Turned in" : "Not turned in yet"}
@@ -231,7 +344,7 @@ export default function TodayPage() {
                         <p className="text-ink-soft">
                           Due {dueDay(date)} at {clock(d.start)}
                         </p>
-                        <p className={`text-sm font-bold ${d.done ? "text-saguaro" : ""}`}>
+                        <p className={`text-sm font-bold ${d.done ? "text-saguaro" : "text-[#8C1D40]"}`}>
                           {d.done ? "Turned in" : "Not turned in yet"}
                         </p>
                       </li>
@@ -267,8 +380,21 @@ export default function TodayPage() {
               )}
             </>
           )}
+          {/* The day's walks on a map, with the minutes for each leg. */}
+          <WalkMap
+            date={plan.date}
+            items={plan.items}
+            startBuildingId={request?.startBuildingId}
+            hot={Boolean(heat)}
+            nextItemId={walk?.item.id ?? null}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
         </aside>
       </div>
+
+      {/* How this exact day was put together, with the real numbers. */}
+      <HowSolPlanned plan={plan} request={request} isDemo={day.isDemo} later={later} />
     </>
   );
 }

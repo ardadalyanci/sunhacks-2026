@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: PRODUCT,
     short_name: PRODUCT,
-    description: `ASU Mobile shows you information. ${PRODUCT} plans your day.`,
+    description: `ASU Mobile shows your schedule. ${PRODUCT} plans your day.`,
     start_url: "/today",
     display: "standalone",
     background_color: "#dcebff",

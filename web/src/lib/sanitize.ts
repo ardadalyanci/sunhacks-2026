@@ -102,6 +102,7 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
       weather: cleanWeather(raw.weather),
       startBuildingId: str(raw.startBuildingId, 80),
       calendarId: isCalendarId(raw.calendarId) ? raw.calendarId : undefined,
+      pace: raw.pace === "slower" ? "slower" : undefined,
     },
   };
 }

@@ -1,4 +1,4 @@
-// Shared data contract for DayPilot. Every API route and page builds against these shapes.
+// Shared data contract for Sundial. Every API route and page builds against these shapes.
 // Only teammate A edits this file, after asking in the team chat (see CLAUDE.md).
 // Times are ISO 8601 strings with the Arizona offset, e.g. "2026-11-18T18:00:00-07:00".
 
@@ -50,6 +50,7 @@ export interface PlanRequest {
   weather?: Weather; // from GET /api/weather
   startBuildingId?: string; // where the day starts, e.g. the dorm; used for the first leave time
   calendarId?: string; // a UUID the browser makes once (crypto.randomUUID) and keeps; saves the day for the calendar feed
+  pace?: "slower"; // the student asked for more walking time (slower pace, a mobility aid, heat-sensitive): longer walks, more again in heat
 }
 
 // Result of POST /api/command: what the voice command asked for.

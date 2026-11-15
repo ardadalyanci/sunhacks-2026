@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { demoScenario } from "@/lib/demo";
 import type { DayItem, DayPlan } from "@/lib/types";
 
 vi.mock("@/lib/buildings", () => ({
@@ -81,7 +82,7 @@ describe("POST /api/plan without Gemini", () => {
     ]);
     expect(json.suggestions.map((s) => s.id)).toEqual(["ev-e1"]);
     expect(json.suggestions[0].why).toContain("robotics");
-    expect(json.briefing).toContain("leave by 10:14 AM");
+    expect(json.briefing).toContain("leave by 10:14 am");
   });
 
   it("never puts a study block on top of a class walk, a class or a suggestion", async () => {
@@ -122,25 +123,29 @@ describe("POST /api/plan without Gemini", () => {
 
 describe("POST /api/plan with Gemini", () => {
   it("uses Gemini's ranking and estimates, ignoring duplicate and unknown ids", async () => {
-    generateJson
-      .mockResolvedValueOnce({
-        picks: [
-          { id: "ev-e2", why: "You might enjoy a quiet break." },
-          { id: "ev-e2", why: "duplicate" },
-          { id: "ev-nope", why: "not offered" },
-          { id: "ev-e1", why: "Robots!" },
-        ],
-        estimates: [{ id: "canvas-assignment-1", minutes: 30 }],
-      })
-      .mockResolvedValueOnce({ briefing: "Good morning from Gemini." });
+    // Three calls: ranking, estimates (a call of its own) and the briefing; answer each by its prompt.
+    generateJson.mockImplementation(async (...args: unknown[]) =>
+      String(args[0]).includes("ASSIGNMENTS:")
+        ? { estimates: [{ id: "canvas-assignment-1", minutes: 30 }] }
+        : String(args[0]).includes("EVENTS:")
+          ? {
+              picks: [
+                { id: "ev-e2", why: "You might enjoy a quiet break." },
+                { id: "ev-e2", why: "duplicate" },
+                { id: "ev-nope", why: "not offered" },
+                { id: "ev-e1", why: "Robots!" },
+              ],
+            }
+          : { briefing: "Leave by 10:14 AM for CSE 230 at BYENG 210!" },
+    );
 
     const { json } = await plan(baseRequest);
 
     expect(json.aiUsed).toBe(true);
-    expect(json.briefing).toBe("Good morning from Gemini.");
+    expect(json.briefing).toBe("Leave by 10:14 am for CSE 230 at Brickyard 210."); // in the app's own style
     expect(json.suggestions.map((s) => [s.id, s.why])).toEqual([
       ["ev-e2", "You might enjoy a quiet break."],
-      ["ev-e1", "Robots!"],
+      ["ev-e1", "Robots."],
     ]);
     const labBlocks = json.items.filter((i) => i.type === "study_block" && i.title.includes("Lab 7"));
     const minutes = labBlocks.reduce((sum, b) => sum + (Date.parse(b.end!) - Date.parse(b.start)) / 60_000, 0);
@@ -202,17 +207,89 @@ describe("POST /api/plan with Gemini", () => {
     expect(prompt).toContain("look-ahead at tomorrow, Mon Nov 16");
     expect(prompt).not.toContain("It is now");
     expect(prompt).not.toContain("Current temperature");
-    expect(prompt).toContain("CSE 230: Lab 7: due that day at 11:59 PM");
+    expect(prompt).toContain("Lab 7 for CSE 230: due that day at 11:59 PM");
+    expect(prompt).toMatch(/never say "tonight"/i);
     expect(prompt).not.toContain("Lab 6");
   });
 
   it("gives the briefing prompt exact due days, labeled temperatures and a facts-only rule", async () => {
     await plan(baseRequest);
     const prompt = String(generateJson.mock.calls.at(-1)![0]);
-    expect(prompt).toContain("CSE 230: Lab 7: due today at 11:59 PM");
-    expect(prompt).toContain("ENG 102: Reading quiz: due tomorrow (Tue) at 12:00 PM");
-    expect(prompt).not.toContain("MAT 343: HW 9: due"); // submitted
+    expect(prompt).toContain("Lab 7 for CSE 230: due today at 11:59 PM");
+    expect(prompt).toContain("the Reading quiz for ENG 102: due tomorrow (Tue) at 12:00 PM");
+    expect(prompt).toContain("HW 9 for MAT 343 [submitted]");
+    expect(prompt).not.toMatch(/HW 9 for MAT 343: due/); // submitted, so not an open assignment
     expect(prompt).toContain("Current temperature: 97°F. Today's high: 101°F.");
     expect(prompt).toMatch(/only the times, places, temperatures and due dates given/i);
+  });
+
+  it("does not use a briefing with a stock assistant phrase", async () => {
+    generateJson.mockImplementation(async (...args: unknown[]) => {
+      if (!String(args[0]).includes("Write what Sol says")) return null;
+      const isValid = args[2] as (v: unknown) => boolean;
+      const answer = { briefing: "Good morning. Leave by 10:14 AM for CSE 230, and remember to bring water." };
+      return isValid(answer) ? answer : null; // generateJson returns null when isValid rejects
+    });
+    const { json } = await plan(baseRequest);
+    expect(json.briefing).not.toMatch(/good morning|remember/i);
+    expect(json.briefing).toContain("leave by 10:14 am"); // the plain-code briefing
+
+    const isValid = generateJson.mock.calls.at(-1)![2] as (v: unknown) => boolean;
+    expect(isValid({ briefing: "Be sure to leave by 10:14 AM." })).toBe(false);
+    expect(isValid({ briefing: "Leave by 10:14 AM for CSE 230 at BYENG 210." })).toBe(true);
+  });
+
+  it("names each assignment once in the briefing facts, the way students say it, with its study time", async () => {
+    await plan(baseRequest);
+    const prompt = String(generateJson.mock.calls.at(-1)![0]);
+    expect(prompt).not.toContain("CSE 230: Lab 7"); // the raw Canvas title
+    expect(prompt).not.toContain("Work on:");
+    expect(prompt.match(/Lab 7 for CSE 230/g)).toHaveLength(1);
+    expect(prompt).toMatch(/Lab 7 for CSE 230: due today at 11:59 PM; study time at \d{1,2}:\d{2} [AP]M/);
+    expect(prompt).toMatch(/name each assignment once/i);
+    expect(prompt).toMatch(/never repeat a fact/i);
+    expect(prompt).toMatch(/"tonight" only for an assignment due today/i);
+    expect(prompt).not.toMatch(/hurry/i); // the usual pace gets no pace line
+  });
+});
+
+describe("POST /api/plan with a slower walking pace", () => {
+  // The sample Monday (CSE 230, PHY 121, CSE 240) from the dorm, planned at 8 am, on a 104°F day.
+  const monday = demoScenario("2026-11-16", { hot: true, today: "2026-11-16" }).request;
+  const leaveTimes = (json: DayPlan) => json.items.filter((i) => i.type === "class").map((c) => [c.title, Date.parse(c.leaveAt!)] as const);
+
+  it("leaves earlier for every class and never puts a study block on a walk", async () => {
+    const usual = (await plan(monday)).json;
+    const { status, json: slower } = await plan({ ...monday, pace: "slower" });
+    expect(status).toBe(200);
+
+    const before = leaveTimes(usual);
+    const after = leaveTimes(slower);
+    expect(after.map(([title]) => title)).toEqual(["CSE 230", "PHY 121", "CSE 240"]);
+    after.forEach(([, leave], n) => expect(leave).toBeLessThan(before[n][1]));
+
+    const study = slower.items.filter((i) => i.type === "study_block");
+    expect(study.length).toBeGreaterThan(0);
+    for (const s of study) {
+      for (const c of slower.items.filter((i) => i.type === "class")) expect(overlaps(s, { ...c, start: c.leaveAt! })).toBe(false);
+      for (const sug of slower.suggestions) expect(overlaps(s, sug)).toBe(false);
+    }
+  });
+
+  it("gives the walk to a suggested event more time too", async () => {
+    // Right after CSE 230 ends at 11:20: in the heat the usual walk to an unknown place is 12 minutes, slower it's 19.
+    const req = { ...baseRequest, events: [ev("tight", "Robotics demo", "11:35", "12:15", "Engineering Center", ["robotics"])] };
+    expect((await plan(req)).json.suggestions.map((s) => s.id)).toEqual(["ev-tight"]);
+    expect((await plan({ ...req, pace: "slower" })).json.suggestions).toEqual([]);
+  });
+
+  it("tells Sol the leave times already include the extra time, and ignores an unknown pace", async () => {
+    await plan({ ...monday, pace: "slower" });
+    expect(String(generateJson.mock.calls.at(-1)![0])).toMatch(/already includes it\. Never tell them to hurry/);
+
+    const usual = (await plan(monday)).json;
+    const unknown = (await plan({ ...monday, pace: "much slower" })).json;
+    expect(leaveTimes(unknown)).toEqual(leaveTimes(usual));
+    expect(String(generateJson.mock.calls.at(-1)![0])).not.toMatch(/hurry/);
   });
 });

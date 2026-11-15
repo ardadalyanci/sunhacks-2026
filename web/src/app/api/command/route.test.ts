@@ -44,14 +44,32 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
     const at = (now: string, text = "what's next?") => command({ text, plan, now }).then((r) => r.json);
     expect(await at("2026-11-16T08:00:00-07:00")).toEqual({
       action: "briefing",
-      reply: "Next: CSE 230 at 10:30 AM in BYENG 210. Leave by 10:20 AM.",
+      reply: "Next: CSE 230 at 10:30 am in Brickyard 210. Leave by 10:20 am.",
     });
     expect(await at("2026-11-16T10:25:00-07:00", "when should I leave")).toEqual({
       action: "briefing",
-      reply: "Next: CSE 230 at 10:30 AM in BYENG 210. Leave now.",
+      reply: "Leave now for CSE 230 at 10:30 am in Brickyard 210, a 10-minute walk.",
     });
-    expect((await at("2026-11-16T11:00:00-07:00", "where do I go now")).reply).toBe("Next: Work on: ENG 102: Reading quiz at 11:20 AM.");
+    expect((await at("2026-11-16T11:00:00-07:00", "where do I go now")).reply).toBe("Next: Work on: ENG 102: Reading quiz at 11:20 am.");
     expect((await at("2026-11-16T20:00:00-07:00")).reply).toBe("Nothing else is planned today.");
+  });
+
+  it("answers a leave question with the walk even when a study block comes first", async () => {
+    const morning = {
+      ...plan,
+      items: [
+        { id: "study-a-0", type: "study_block", title: "Work on: ENG 102: Reading response", start: "2026-11-16T09:30:00-07:00" },
+        ...plan.items,
+      ],
+    };
+    const ask = (text: string) => command({ text, plan: morning, now: "2026-11-16T08:00:00-07:00" }).then((r) => r.json.reply);
+    expect(await ask("When should I leave?")).toBe(
+      "Leave by 10:20 am for CSE 230 at 10:30 am in Brickyard 210, a 10-minute walk. Until then: Work on: ENG 102: Reading response at 9:30 am.",
+    );
+    expect(await ask("am I late")).toBe(
+      "Leave by 10:20 am for CSE 230 at 10:30 am in Brickyard 210, a 10-minute walk. Until then: Work on: ENG 102: Reading response at 9:30 am.",
+    );
+    expect(await ask("what's next?")).toBe("Next: Work on: ENG 102: Reading response at 9:30 am. Then leave by 10:20 am for CSE 230.");
   });
 
   it("answers 400 for bad bodies and survives a broken plan", async () => {
@@ -87,6 +105,6 @@ describe("POST /api/command with Gemini", () => {
   it("turns Gemini's next_item into a briefing with the computed reply", async () => {
     generateJson.mockResolvedValueOnce({ action: "next_item" });
     const res = await command({ text: "uh where am I supposed to be", plan, now: "2026-11-16T08:00:00-07:00" });
-    expect(res.json).toEqual({ action: "briefing", reply: "Next: CSE 230 at 10:30 AM in BYENG 210. Leave by 10:20 AM." });
+    expect(res.json).toEqual({ action: "briefing", reply: "Next: CSE 230 at 10:30 am in Brickyard 210. Leave by 10:20 am." });
   });
 });

@@ -19,14 +19,14 @@ const plan: DayPlan = {
 };
 
 describe("buildDayIcs", () => {
-  const ics = buildDayIcs(plan, { now: new Date("2026-11-16T15:00:00Z"), calendarName: "DayPilot: Alex" });
+  const ics = buildDayIcs(plan, { now: new Date("2026-11-16T15:00:00Z"), calendarName: "Sundial: Alex" });
   const events = parseIcs(ics);
 
   it("is valid iCalendar with CRLF lines of 75 octets or less", () => {
     expect(ics.startsWith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n")).toBe(true);
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
     for (const line of ics.split("\r\n")) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
-    expect(unfold(ics)).toContain("X-WR-CALNAME:DayPilot: Alex");
+    expect(unfold(ics)).toContain("X-WR-CALNAME:Sundial: Alex");
   });
 
   it("has the class, study block, event and open deadline, but not submitted work", () => {

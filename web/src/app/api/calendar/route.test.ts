@@ -23,11 +23,11 @@ describe("POST /api/calendar", () => {
     const res = await post({ plan, name: "Alex" });
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
-    expect(res.headers.get("Content-Disposition")).toBe('attachment; filename="daypilot-2026-11-16.ics"');
+    expect(res.headers.get("Content-Disposition")).toBe('attachment; filename="sundial-2026-11-16.ics"');
     const ics = await res.text();
     expect(parseIcs(ics).map((e) => e.summary)).toEqual(expect.arrayContaining(plan.items.filter((i) => i.type === "class").map((i) => i.title)));
     expect(ics).toContain("TRIGGER;VALUE=DATE-TIME:");
-    expect(ics).toContain("X-WR-CALNAME:DayPilot: Alex");
+    expect(ics).toContain("X-WR-CALNAME:Sundial: Alex");
   });
 
   it("drops malformed items instead of failing", async () => {

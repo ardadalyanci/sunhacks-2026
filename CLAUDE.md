@@ -1,11 +1,11 @@
-# DayPilot: sunhacks 2026 team repo
+# Sundial: sunhacks 2026 team repo
 
-Working name: **DayPilot**, the AI day planner for ASU students. (We dropped the earlier name "Sunny": ASU's official chatbot is already called Sunny, heysunny.asu.edu.) Built at sunhacks 9.0 (ASU Tempe) by a team of 3. Each teammate drives their own Claude Code session in their own clone of this repo; this file is how those sessions stay in sync.
+Name: **Sundial** (sundial.club), the AI day planner for ASU students: a sundial tells time by the sun, and our sun mascot Sol tells you when to leave. (It was called DayPilot until Sat Nov 14, 18:40; we dropped the earlier name "Sunny" because ASU's official chatbot is already called Sunny, heysunny.asu.edu.) Built at sunhacks 9.0 (ASU Tempe) by a team of 3. Each teammate drives their own Claude Code session in their own clone of this repo; this file is how those sessions stay in sync.
 
 ## The product in one sentence
-DayPilot plans an ASU student's day: it pulls today's Canvas deadlines, your classes, the Tempe heat and the club events that match your interests into one timeline, tells you when to leave for each class, and talks back when you ask "how's my day?".
+Sundial plans an ASU student's day: it pulls today's Canvas deadlines, your classes, the Tempe heat and the club events that match your interests into one timeline, tells you when to leave for each class, and talks back when you ask "how's my day?".
 
-Positioning for judges: "ASU Mobile shows you information. DayPilot plans your day." Last year's SunHacks winners Edwin (Canvas AI TA) and Plz_use_it (Canvas + Calendar study scheduler) already did "Canvas + AI", so the demo leads with leave-times, heat and real club picks, not with the Canvas list.
+Positioning for judges: "ASU Mobile shows you information. Sundial plans your day." Last year's SunHacks winners Edwin (Canvas AI TA) and Plz_use_it (Canvas + Calendar study scheduler) already did "Canvas + AI", so the demo leads with leave-times, heat and real club picks, not with the Canvas list.
 
 ## MVP flows, in build order
 1. **Setup**: the student pastes their own Canvas access token (Canvas → Account → Settings → New Access Token; ASU allows it), enters class times once (day, time, building), and picks interests. No ASU password, ever.

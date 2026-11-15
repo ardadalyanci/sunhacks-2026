@@ -1,4 +1,4 @@
-// Campus events for DayPilot: ASU Events (public JSON) + SunDevilCentral (public iCal), Tempe only,
+// Campus events for Sundial: ASU Events (public JSON) + SunDevilCentral (public iCal), Tempe only,
 // next 7 days, as Opportunity[] (lib/types.ts). Server-only. Each source is cached in memory for 1 hour;
 // if a refresh fails we keep serving the last good copy, and one source failing never hides the other.
 //
@@ -211,12 +211,12 @@ interface SourceCache {
   error?: string;
 }
 // globalThis survives `next dev` hot reloads, so editing code does not refetch 6 MB of iCal every time.
-const store = ((globalThis as { __daypilotEventCache?: Partial<Record<SourceKey, SourceCache>> }).__daypilotEventCache ??= {});
+const store = ((globalThis as { __sundialEventCache?: Partial<Record<SourceKey, SourceCache>> }).__sundialEventCache ??= {});
 const inflight: Partial<Record<SourceKey, Promise<SourceCache>>> = {};
 
 async function download(url: string, as: "json" | "text"): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { "User-Agent": "DayPilot student day planner (hackathon project)", Accept: as === "json" ? "application/json" : "text/calendar" },
+    headers: { "User-Agent": "Sundial student day planner (hackathon project)", Accept: as === "json" ? "application/json" : "text/calendar" },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     cache: "no-store",
     redirect: "follow",
