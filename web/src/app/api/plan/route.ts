@@ -142,9 +142,10 @@ async function writeBriefing(items: DayItem[], suggestions: DayItem[], body: Pla
     return `${clock(i.start)} ${i.type}: ${i.title}${place}${leave}${status}`;
   });
   const prompt = [
-    "Write the morning briefing a friendly assistant would say out loud to an ASU student in Tempe.",
+    "Write the day briefing a friendly assistant would say out loud to an ASU student in Tempe.",
+    `It is now ${clock(body.now ?? new Date().toISOString())}; greet for that time of day and talk only about what is still ahead.`,
     "3 to 5 short sentences, at most 90 words, plain text, no lists, no emoji. Use times like 1:12 PM.",
-    "Mention the heat if it is hot, when to leave for the first class, unsubmitted deadlines and the planned study time, and at most one suggested event.",
+    "Mention the heat if it is hot, when to leave for the next class (name the course), unsubmitted deadlines and the planned study time, and at most one suggested event.",
     body.weather ? `Weather: now ${Math.round(body.weather.tempF)}°F, high ${Math.round(body.weather.highF)}°F, hot: ${body.weather.isHot}.` : "Weather: unknown.",
     `Schedule:\n${lines.join("\n") || "nothing scheduled"}`,
     `Suggested events: ${suggestions.map((s) => `${s.title} at ${clock(s.start)}`).join("; ") || "none"}`,

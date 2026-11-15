@@ -3,7 +3,8 @@
 // the answer is bad, generateJson returns null and the caller falls back to plain code.
 import { GoogleGenAI } from "@google/genai";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
+// The SDK calls the v1 API, which has no "-latest" aliases, so pin a model that v1 serves.
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const CACHE_TTL_MS = 60 * 60 * 1000; // the free tier is small, so identical prompts are answered from memory
 const CACHE_MAX_ENTRIES = 200;
 const TIMEOUT_MS = 12_000; // a slow answer should not stall the Today screen; the fallback is instant
