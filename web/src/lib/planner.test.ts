@@ -84,6 +84,22 @@ describe("buildings", () => {
     expect(walkMinutes(undefined, byeng, false)).toBe(10);
   });
 
+  it("gives a slower walker more time for the same walk, and more again on a hot day", () => {
+    const byeng = BUILDINGS[0];
+    const manz = BUILDINGS[3];
+    const normal = walkMinutes(manz, byeng, false);
+    const slower = walkMinutes(manz, byeng, false, true);
+    const slowerHot = walkMinutes(manz, byeng, true, true);
+    expect(slower).toBeGreaterThan(normal);
+    expect(slowerHot).toBeGreaterThan(slower);
+    expect(slowerHot - slower).toBeGreaterThanOrEqual(4); // a shade stop, not just 2 minutes
+    expect(slowerHot).toBeGreaterThan(walkMinutes(manz, byeng, true));
+    // An unknown building: 10 minutes at the usual pace, 35% more when slower, plus 5 in the heat.
+    expect(walkMinutes(undefined, byeng, false, true)).toBe(14);
+    expect(walkMinutes(undefined, byeng, true, true)).toBe(19);
+    expect(walkMinutes(byeng, byeng, false, true)).toBe(3);
+  });
+
   it("hasPhrase needs whole words", () => {
     expect(hasPhrase("robotics | engineering", "robotics")).toBe(true);
     expect(hasPhrase("startup pitch", "art")).toBe(false);
@@ -191,6 +207,19 @@ describe("leave times", () => {
     // Same building as the class before: 2 minutes of buffer plus 2 for the heat.
     expect(items[2].leaveAt).toBe("2026-11-16T13:26:00-07:00");
   });
+
+  it("leaves earlier for every stop at a slower pace", () => {
+    const stops = () => [
+      item({ id: "c1", type: "class", start: "2026-11-16T10:30:00-07:00", buildingId: "BYENG" }),
+      item({ id: "c2", type: "class", start: "2026-11-16T13:30:00-07:00", buildingId: "COOR" }),
+    ];
+    const usual = stops();
+    const slower = stops();
+    addLeaveTimes(usual, BUILDINGS, "Manzanita", { tempF: 99, highF: 104, isHot: true });
+    addLeaveTimes(slower, BUILDINGS, "Manzanita", { tempF: 99, highF: 104, isHot: true }, true);
+    for (let i = 0; i < usual.length; i++) expect(ms(slower[i].leaveAt!)).toBeLessThan(ms(usual[i].leaveAt!));
+    expect(slower[0].leaveAt).toBe(toMstIso(new Date(ms(slower[0].start) - walkMinutes(BUILDINGS[3], BUILDINGS[0], true, true) * MIN)));
+  });
 });
 
 describe("fallbacks without Gemini", () => {
@@ -219,5 +248,18 @@ describe("fallbacks without Gemini", () => {
     expect(text).toContain("leave by 10:14 AM");
     expect(text).toContain("Lab 7");
     expect(text).toContain("Robotics build night at 4:00 PM");
+  });
+
+  it("names assignments the short way and does not call a shift a class", () => {
+    const text = templateBriefing(
+      [
+        item({ type: "class", title: "Work shift", start: "2026-11-15T10:00:00-07:00", leaveAt: "2026-11-15T09:47:00-07:00" }),
+        item({ type: "class", title: "Study group: CSE 230", start: "2026-11-15T15:00:00-07:00" }),
+        item({ type: "deadline", title: "CSE 230: Lab 7 (pipelining)", start: "2026-11-15T23:59:00-07:00", done: false }),
+      ],
+      [],
+    );
+    expect(text).toContain("You have 2 things planned. First up is Work shift");
+    expect(text).toContain("starting with Lab 7 for CSE 230, due 11:59 PM");
   });
 });

@@ -1,5 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { polishLine } from "./places";
+import { polishLine, spokenAssignment, spokenStop } from "./places";
+
+describe("spokenStop", () => {
+  it("turns a course-labeled commitment into what students say", () => {
+    expect(spokenStop("Study group: MAT 343")).toBe("MAT 343 study group");
+    expect(spokenStop("Work shift")).toBe("Work shift");
+    expect(spokenStop("CSE 230")).toBe("CSE 230");
+    expect(spokenStop("Robotics club: build night")).toBe("Robotics club: build night");
+  });
+});
+
+describe("spokenAssignment", () => {
+  it("names an assignment the short way students say it", () => {
+    expect(spokenAssignment("CSE 230: Lab 7 (pipelining)")).toBe("Lab 7 for CSE 230");
+    expect(spokenAssignment("ENG 102: Reading response")).toBe("the Reading response for ENG 102");
+    expect(spokenAssignment("MAT 343: Homework 9")).toBe("Homework 9 for MAT 343");
+    expect(spokenAssignment("CSE 240: The final project")).toBe("The final project for CSE 240");
+  });
+
+  it("leaves titles without a course code alone", () => {
+    expect(spokenAssignment("Lab safety quiz")).toBe("Lab safety quiz");
+    expect(spokenAssignment("CSE230 Lab 7")).toBe("CSE230 Lab 7");
+  });
+});
 
 describe("polishLine", () => {
   it("writes times the way the app does", () => {
