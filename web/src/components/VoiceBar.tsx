@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { polishLine } from "@/lib/places";
 import Mascot from "./Mascot";
 import { MASCOT } from "./brand";
@@ -12,6 +12,7 @@ type Recognition = {
   maxAlternatives: number;
   start(): void;
   stop(): void;
+  abort(): void; // stops without delivering a pending result
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -34,14 +35,28 @@ function bestVoice(): SpeechSynthesisVoice | undefined {
   );
 }
 
+// Each speak() call is a run. A run cut short by a newer one (or by leaving the day) must not report that it
+// ended, or it would stop the newer run's talking animation.
+let speechRun = 0;
+
+/** Stops whatever Sol is saying, and keeps the stopped run from reporting back. */
+export function stopSpeaking() {
+  speechRun++;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
 /**
  * Says `text` one sentence at a time (Chrome's voices can stop partway through one long utterance) and calls
- * `onDone` when the last sentence ends or speech is not available.
+ * `onDone` when the last sentence ends or speech is not available. A run cut short by a newer one stays quiet.
  */
 export function speak(text: string, onDone?: () => void) {
   if (!("speechSynthesis" in window)) return onDone?.();
   const synth = window.speechSynthesis;
   synth.cancel();
+  const mine = ++speechRun;
+  const done = () => {
+    if (mine === speechRun) onDone?.();
+  };
   const voice = bestVoice();
   const sentences = (text.match(/[^.?!]+[.?!]*/g) ?? [text]).map((s) => s.trim()).filter(Boolean);
   sentences.forEach((sentence, index) => {
@@ -50,12 +65,12 @@ export function speak(text: string, onDone?: () => void) {
     utterance.rate = 1.03;
     if (voice) utterance.voice = voice;
     if (index === sentences.length - 1) {
-      utterance.onend = () => onDone?.();
-      utterance.onerror = () => onDone?.();
+      utterance.onend = done;
+      utterance.onerror = done;
     }
     synth.speak(utterance);
   });
-  if (!sentences.length) onDone?.();
+  if (!sentences.length) done();
 }
 
 type Props = {
@@ -74,16 +89,37 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   const [typed, setTyped] = useState("");
   const recognition = useRef<Recognition | null>(null);
 
+  const alive = useRef(false); // false once the bar is gone: an answer that lands later is not said
+  const talking = useRef<((speaking: boolean) => void) | null>(null); // set while Sol speaks, to reset on leave
+
+  // Leaving the day (another day, another page, or the hidden page React keeps) stops Sol mid-sentence and drops
+  // a question still being heard, so the old day's answer never plays over the new one.
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      recognition.current?.abort();
+      stopSpeaking();
+      talking.current?.(false);
+      talking.current = null;
+    };
+  }, []);
+
   function setListening(value: boolean) {
     setListeningState(value);
     onListeningChange?.(value);
   }
 
   function say(text: string) {
+    if (!alive.current) return;
     const line = polishLine(text);
     setReply(line);
+    talking.current = onSpeakingChange ?? null;
     onSpeakingChange?.(true);
-    speak(line, () => onSpeakingChange?.(false));
+    speak(line, () => {
+      talking.current = null;
+      onSpeakingChange?.(false);
+    });
   }
 
   async function handle(text: string) {
@@ -156,7 +192,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
 
       <form onSubmit={submit} className="mt-3 flex gap-2">
         <label className="sr-only" htmlFor="command">
-          Type a question or command for {MASCOT}
+          Ask {MASCOT}, like “when should I leave?”
         </label>
         <input
           id="command"

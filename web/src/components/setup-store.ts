@@ -1,5 +1,6 @@
 // What the setup screen saves in the browser. Nothing here is sent to our server except per request.
-import type { ClassBlock, DayItem } from "@/lib/types";
+import type { ClassBlock, DayItem, Weekday } from "@/lib/types";
+import { WEEKDAYS } from "./time";
 
 export interface SavedSetup {
   name: string;
@@ -31,22 +32,55 @@ export function loadCalendarId(): string | undefined {
   }
 }
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const isWeekday = (d: unknown): d is Weekday => typeof d === "string" && (WEEKDAYS as string[]).includes(d);
+
+/** One saved class, or null when a field has the wrong type (an old or hand-edited setup). */
+function asClass(value: unknown): ClassBlock | null {
+  const c = value as Partial<Record<keyof ClassBlock, unknown>> | null;
+  if (!c || typeof c !== "object" || typeof c.course !== "string" || !c.course.trim()) return null;
+  if (!Array.isArray(c.days) || typeof c.start !== "string" || typeof c.end !== "string") return null;
+  if (!HHMM.test(c.start) || !HHMM.test(c.end)) return null;
+  const days = c.days.filter(isWeekday);
+  if (days.length === 0) return null;
+  const block: ClassBlock = { course: c.course, days, start: c.start, end: c.end };
+  if (typeof c.location === "string" && c.location) block.location = c.location;
+  return block;
+}
+
+/**
+ * The saved setup, with every field checked: a value of the wrong type is dropped instead of crashing Today on
+ * every reload. Null when nothing is saved or no class is left.
+ */
 export function loadSetup(): SavedSetup | null {
   try {
     const raw = localStorage.getItem(SETUP_KEY);
     if (!raw) return null;
-    const setup = JSON.parse(raw) as SavedSetup;
-    return Array.isArray(setup.classes) && setup.classes.length > 0 ? setup : null;
+    const saved = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!saved || typeof saved !== "object" || !Array.isArray(saved.classes)) return null;
+    const classes = saved.classes.map(asClass).filter((c): c is ClassBlock => c !== null);
+    if (classes.length === 0) return null;
+    const setup: SavedSetup = {
+      name: typeof saved.name === "string" ? saved.name : "",
+      classes,
+      interests: Array.isArray(saved.interests) ? saved.interests.filter((i): i is string => typeof i === "string") : [],
+    };
+    if (typeof saved.startBuildingId === "string" && saved.startBuildingId) setup.startBuildingId = saved.startBuildingId;
+    if (saved.pace === "slower") setup.pace = "slower";
+    return setup;
   } catch {
     return null;
   }
 }
 
+/**
+ * Saves the setup. A blank `token` keeps the token already saved in this tab: the form never shows it again,
+ * and only "Forget my token" (forgetToken) removes it.
+ */
 export function saveSetup(setup: SavedSetup, token: string) {
   try {
     localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
     if (token) sessionStorage.setItem(TOKEN_KEY, token);
-    else sessionStorage.removeItem(TOKEN_KEY);
   } catch {
     // storage blocked (private mode): the sample day still works
   }
@@ -92,20 +126,30 @@ export function saveAccepted(date: string, ids: string[]) {
   }
 }
 
-const HIDDEN_KEY = "daypilot.hidden"; // timeline items the student removed: { "2026-11-14": [keys] }
+// Timeline items the student removed: { "2026-11-14": [keys] }. sessionStorage, like the added events: a
+// removal lasts through reloads and what-if pills in this tab, and a new tab (the next judge on a shared demo
+// laptop) gets the full day back.
+const HIDDEN_KEY = "daypilot.hidden";
 const HIDDEN_DAYS = 14; // days remembered; older ones are dropped
 
 /**
  * Stable name for a timeline item. Planner ids such as study-block numbers can shift when the day is planned
- * again, so removed items are remembered by what they are and when they happen.
+ * again. Study time is remembered per assignment (its title names it), so a re-plan that moves or splits the
+ * block keeps it removed. Everything else has fixed times and is remembered by what it is and when it happens.
  */
 export function itemKey(item: DayItem): string {
+  if (item.type === "study_block") return [item.type, item.title].join("|");
   return [item.type, item.title, item.start, item.end ?? ""].join("|");
 }
 
 function readHidden(): Record<string, string[]> {
   try {
-    const saved = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "{}") as unknown;
+    localStorage.removeItem(HIDDEN_KEY); // removals used to be kept here for good; forget those
+  } catch {
+    // storage blocked
+  }
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(HIDDEN_KEY) ?? "{}") as unknown;
     if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
     const days: Record<string, string[]> = {};
     for (const [date, keys] of Object.entries(saved)) {
@@ -128,7 +172,7 @@ export function saveHidden(date: string, keys: string[]) {
   const days = { ...readHidden(), [date]: keys };
   const kept = Object.keys(days).sort().slice(-HIDDEN_DAYS);
   try {
-    localStorage.setItem(HIDDEN_KEY, JSON.stringify(Object.fromEntries(kept.map((d) => [d, days[d]]))));
+    sessionStorage.setItem(HIDDEN_KEY, JSON.stringify(Object.fromEntries(kept.map((d) => [d, days[d]]))));
   } catch {
     // storage blocked: the removal lasts until the page reloads
   }
