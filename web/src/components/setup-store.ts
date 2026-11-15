@@ -1,5 +1,5 @@
 // What the setup screen saves in the browser. Nothing here is sent to our server except per request.
-import type { ClassBlock } from "@/lib/types";
+import type { ClassBlock, DayItem } from "@/lib/types";
 
 export interface SavedSetup {
   name: string;
@@ -57,6 +57,35 @@ export function saveAccepted(ids: string[]) {
     sessionStorage.setItem(ACCEPTED_KEY, JSON.stringify(ids));
   } catch {
     // storage blocked: the choice lasts until the page reloads
+  }
+}
+
+const HIDDEN_KEY = "daypilot.hidden"; // timeline items the student removed, for one day
+
+/**
+ * Stable name for a timeline item. Planner ids such as study-block numbers can shift when the day is planned
+ * again, so removed items are remembered by what they are and when they happen.
+ */
+export function itemKey(item: DayItem): string {
+  return [item.type, item.title, item.start, item.end ?? ""].join("|");
+}
+
+/** Keys (see itemKey) of the items the student removed from the day `date`. */
+export function loadHidden(date: string): string[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "null") as { date?: unknown; keys?: unknown } | null;
+    if (!saved || saved.date !== date || !Array.isArray(saved.keys)) return [];
+    return saved.keys.filter((x): x is string => typeof x === "string");
+  } catch {
+    return [];
+  }
+}
+
+export function saveHidden(date: string, keys: string[]) {
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify({ date, keys }));
+  } catch {
+    // storage blocked: the removal lasts until the page reloads
   }
 }
 
