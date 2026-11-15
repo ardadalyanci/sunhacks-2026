@@ -60,7 +60,8 @@ export function saveAccepted(ids: string[]) {
   }
 }
 
-const HIDDEN_KEY = "daypilot.hidden"; // timeline items the student removed, for one day
+const HIDDEN_KEY = "daypilot.hidden"; // timeline items the student removed: { "2026-11-14": [keys] }
+const HIDDEN_DAYS = 14; // days remembered; older ones are dropped
 
 /**
  * Stable name for a timeline item. Planner ids such as study-block numbers can shift when the day is planned
@@ -70,20 +71,32 @@ export function itemKey(item: DayItem): string {
   return [item.type, item.title, item.start, item.end ?? ""].join("|");
 }
 
-/** Keys (see itemKey) of the items the student removed from the day `date`. */
-export function loadHidden(date: string): string[] {
+function readHidden(): Record<string, string[]> {
   try {
-    const saved = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "null") as { date?: unknown; keys?: unknown } | null;
-    if (!saved || saved.date !== date || !Array.isArray(saved.keys)) return [];
-    return saved.keys.filter((x): x is string => typeof x === "string");
+    const saved = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "{}") as unknown;
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
+    const days: Record<string, string[]> = {};
+    for (const [date, keys] of Object.entries(saved)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && Array.isArray(keys)) {
+        days[date] = keys.filter((x): x is string => typeof x === "string");
+      }
+    }
+    return days;
   } catch {
-    return [];
+    return {};
   }
 }
 
+/** Keys (see itemKey) of the items the student removed from the day `date`. */
+export function loadHidden(date: string): string[] {
+  return readHidden()[date] ?? [];
+}
+
 export function saveHidden(date: string, keys: string[]) {
+  const days = { ...readHidden(), [date]: keys };
+  const kept = Object.keys(days).sort().slice(-HIDDEN_DAYS);
   try {
-    localStorage.setItem(HIDDEN_KEY, JSON.stringify({ date, keys }));
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify(Object.fromEntries(kept.map((d) => [d, days[d]]))));
   } catch {
     // storage blocked: the removal lasts until the page reloads
   }

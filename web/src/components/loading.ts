@@ -35,23 +35,37 @@ export function newestWins<T>() {
 
 /**
  * Shares one load per key for a while: pages that mount one after another, or twice in React's StrictMode,
- * reuse the same request instead of starting their own. A failed load is forgotten, so the next visit retries.
+ * reuse the same request instead of starting their own, and going back to a day seen a moment ago is instant.
+ * Keeps the `maxEntries` most recently used keys. A failed load is forgotten, so the next visit retries.
  */
-export function createShared<T>(maxAgeMs: number) {
-  let entry: { key: string; at: number; value: Promise<T> } | null = null;
+export function createShared<T>(maxAgeMs: number, maxEntries = 8) {
+  type Entry = { at: number; value: Promise<T> };
+  const entries = new Map<string, Entry>();
+  function put(key: string, entry: Entry) {
+    entries.delete(key); // re-insert so the Map's order stays oldest first
+    entries.set(key, entry);
+    for (const oldest of entries.keys()) {
+      if (entries.size <= maxEntries) break;
+      entries.delete(oldest);
+    }
+  }
   return {
     get(key: string, load: () => Promise<T>, now = Date.now()): Promise<T> {
-      if (entry && entry.key === key && now - entry.at < maxAgeMs) return entry.value;
-      const mine = { key, at: now, value: load() };
-      entry = mine;
-      mine.value.catch(() => {
-        if (entry === mine) entry = null;
+      const hit = entries.get(key);
+      if (hit && now - hit.at < maxAgeMs) {
+        put(key, hit); // now the most recently used
+        return hit.value;
+      }
+      const entry = { at: now, value: load() };
+      put(key, entry);
+      entry.value.catch(() => {
+        if (entries.get(key) === entry) entries.delete(key);
       });
-      return mine.value;
+      return entry.value;
     },
     /** Stores a newer answer for `key`, for example after the student changed their day. */
     set(key: string, value: T, now = Date.now()) {
-      entry = { key, at: now, value: Promise.resolve(value) };
+      put(key, { at: now, value: Promise.resolve(value) });
     },
   };
 }

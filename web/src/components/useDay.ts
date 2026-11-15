@@ -3,14 +3,15 @@
 // Loads the student's day from the backend routes and keeps it in sync with what they add or remove.
 // No saved setup → the sample day from GET /api/demo (works with no token, feeds or Wi-Fi).
 // Saved setup → POST /api/canvas (if a token is saved) + GET /api/events + GET /api/weather → POST /api/plan.
-// Today and Events share one loaded day for a few minutes, so moving between them (or React's StrictMode
+// `date` picks a later day (up to 6 days ahead); /api/plan then plans and briefs it as a look-ahead.
+// Pages share loaded days for a few minutes, so moving between Today and Events (or React's StrictMode
 // double mount in dev) does not call Canvas, the feeds and Gemini again. Only the newest re-plan may change
 // the screen, so a voice command and a button press never overwrite each other.
 import { useEffect, useRef, useState } from "react";
 import type { CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
 import { createShared, newestWins } from "./loading";
 import { itemKey, loadAccepted, loadHidden, loadSetup, loadToken, saveAccepted, saveHidden } from "./setup-store";
-import { formatTime, parseLocal } from "./time";
+import { arizonaToday, formatTime, parseLocal } from "./time";
 
 const HOT_PREVIEW: Weather = { tempF: 104, highF: 109, isHot: true }; // same as GET /api/demo?hot=1
 const REUSE_MS = 5 * 60_000; // how long a loaded day is reused when moving between pages
@@ -57,10 +58,15 @@ type Loaded = {
 type Day = { loaded: Loaded; plan: DayPlan; hot: boolean };
 type Inputs = Omit<Day, "plan">;
 
-async function buildRequest(): Promise<Loaded> {
+/** The plan request for `date`; a date after `today` is a look-ahead. */
+async function buildRequest(date: string, today: string): Promise<Loaded> {
+  const later = date > today;
   const setup = loadSetup();
   if (!setup) {
-    const demo = await getJson<{ persona: { name: string }; request: PlanRequest }>("/api/demo");
+    // Today's sample day replays 8 am; a later day comes back with the real clock as its `now`.
+    const demo = await getJson<{ persona: { name: string }; request: PlanRequest }>(
+      later ? `/api/demo?date=${date}` : "/api/demo",
+    );
     if (!demo) throw new Error("The sample day did not load. Check that the app server is running.");
     return {
       request: { ...demo.request, acceptedEventIds: loadAccepted() },
@@ -75,7 +81,7 @@ async function buildRequest(): Promise<Loaded> {
   const token = loadToken();
   const [deadlines, events, weather] = await Promise.all([
     token
-      ? postJson<{ deadlines: DayItem[] }>("/api/canvas", { token })
+      ? postJson<{ deadlines: DayItem[] }>("/api/canvas", { token, date })
           .then((r) => r.deadlines)
           .catch((e: Error) => {
             notice = `Canvas did not load: ${e.message} Your classes and events are still here.`;
@@ -83,12 +89,13 @@ async function buildRequest(): Promise<Loaded> {
           })
       : Promise.resolve([] as DayItem[]),
     getJson<unknown>("/api/events").then(asEvents),
-    getJson<Weather>("/api/weather"),
+    getJson<Weather>(later ? `/api/weather?date=${date}` : "/api/weather"),
   ]);
   if (!token) notice = "Add your Canvas token in Setup to see your assignments here.";
 
   return {
     request: {
+      date,
       classes: setup.classes,
       deadlines,
       events,
@@ -104,14 +111,11 @@ async function buildRequest(): Promise<Loaded> {
   };
 }
 
-async function loadDay(): Promise<Day> {
-  const loaded = await buildRequest();
+async function loadDay(date: string, today: string): Promise<Day> {
+  const loaded = await buildRequest(date, today);
   const plan = await postJson<DayPlan>("/api/plan", loaded.request);
   return { loaded, plan, hot: false };
 }
-
-/** Today in Arizona, which has no daylight saving (always UTC-7). */
-const arizonaToday = () => new Date(Date.now() - 7 * 3_600_000).toISOString().slice(0, 10);
 
 /** Short hash, so the cache key changes with the Canvas token without holding the token itself. */
 function fingerprint(text: string) {
@@ -120,12 +124,13 @@ function fingerprint(text: string) {
   return (hash >>> 0).toString(36);
 }
 
-/** Everything in the browser that the day depends on. When any of it changes, the day is loaded again. */
-function inputKey() {
-  return JSON.stringify([arizonaToday(), loadSetup(), fingerprint(loadToken() ?? ""), [...loadAccepted()].sort()]);
+/** Everything in the browser that the day `date` depends on. When any of it changes, the day is loaded again. */
+function inputKey(date: string) {
+  const today = arizonaToday();
+  return JSON.stringify([date, today, loadSetup(), fingerprint(loadToken() ?? ""), [...loadAccepted()].sort()]);
 }
 
-// One loaded day per browser tab, shared by every page that calls useDay().
+// Loaded days for this browser tab, shared by every page that calls useDay().
 const shared = createShared<Day>(REUSE_MS);
 
 /** The plan without the timeline items the student removed. */
@@ -133,7 +138,8 @@ function visible(plan: DayPlan, hidden: string[]): DayPlan {
   return { ...plan, items: plan.items.filter((i) => !hidden.includes(itemKey(i))) };
 }
 
-export function useDay() {
+/** The student's day: today by default, or `date` ("2026-11-16") for a later day. */
+export function useDay(date?: string) {
   const [day, setDay] = useState<Day | null>(null); // the day on screen
   const [hot, setHot] = useState(false); // the heat preview switch: it moves at once, the plan follows
   const [hidden, setHidden] = useState<string[]>([]);
@@ -146,10 +152,14 @@ export function useDay() {
   const shown = useRef<Day | null>(null); // the day on screen
   const wanted = useRef<Inputs | null>(null); // the newest inputs, possibly still being planned
   const hiddenRef = useRef<string[]>([]);
+  const chosen = useRef(""); // the day the page asked for; a late answer for another day is not shown
 
   useEffect(() => {
+    const today = arizonaToday();
+    const wantedDate = date || today;
+    chosen.current = wantedDate;
     let active = true;
-    shared.get(inputKey(), loadDay).then(
+    shared.get(inputKey(wantedDate), () => loadDay(wantedDate, today)).then(
       (loaded) => {
         if (!active) return;
         shown.current = loaded;
@@ -158,6 +168,7 @@ export function useDay() {
         setDay(loaded);
         setHot(loaded.hot);
         setHidden(hiddenRef.current);
+        setError("");
         setBusy(false);
       },
       (e: unknown) => {
@@ -169,7 +180,7 @@ export function useDay() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [date]);
 
   /** Plans `next`; resolves to the plan the student ends up seeing, or null when planning failed. */
   function replan(next: Inputs): Promise<DayPlan | null> {
@@ -179,13 +190,16 @@ export function useDay() {
       () => postJson<DayPlan>("/api/plan", next.loaded.request),
       (plan) => {
         const planned: Day = { ...next, plan };
+        shared.set(inputKey(plan.date), planned);
+        setBusy(false);
+        if (plan.date !== chosen.current) return; // the student moved to another day meanwhile
         shown.current = planned;
-        shared.set(inputKey(), planned);
         setDay(planned);
         setError("");
-        setBusy(false);
       },
       (e) => {
+        setBusy(false);
+        if (next.loaded.request.date !== chosen.current) return;
         // Go back to the day on screen, so the heat switch and the saved events match what the student sees.
         const back = shown.current;
         if (back) {
@@ -194,7 +208,6 @@ export function useDay() {
           setHot(back.hot);
         }
         setError(message(e));
-        setBusy(false);
       },
     );
   }
@@ -278,6 +291,9 @@ export function useDay() {
     return `Removed ${item.title} from your day.`;
   }
 
+  // A different day was picked and is still loading; the previous day stays on screen until it arrives.
+  const switching = Boolean(date) && day !== null && day.plan.date !== date;
+
   return {
     plan: day ? visible(day.plan, hidden) : null,
     request: day?.loaded.request ?? null,
@@ -285,7 +301,8 @@ export function useDay() {
     isDemo: day?.loaded.isDemo ?? true,
     notice: day?.loaded.notice ?? "",
     error,
-    busy,
+    busy: busy || switching,
+    switching,
     hot,
     setHotPreview,
     accept,

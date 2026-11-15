@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import DayPicker from "@/components/DayPicker";
 import Mascot from "@/components/Mascot";
 import SkyDay from "@/components/SkyDay";
 import VoiceBar from "@/components/VoiceBar";
 import { PRODUCT } from "@/components/brand";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
+import { useChosenDay } from "@/components/useChosenDay";
 import { useDay } from "@/components/useDay";
 import type { DayItem } from "@/lib/types";
 
@@ -21,7 +23,8 @@ const KIND: Record<DayItem["type"], string> = {
 const clock = (iso: string) => formatTime(parseLocal(iso).hours);
 
 export default function TodayPage() {
-  const day = useDay();
+  const chosen = useChosenDay();
+  const day = useDay(chosen.date || undefined);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const { plan, request } = day;
@@ -40,7 +43,12 @@ export default function TodayPage() {
     );
   }
 
+  const later = chosen.today !== "" && plan.date > chosen.today; // a look-ahead at a coming day
+  const tomorrow = chosen.days[1];
+  const dueDay = (date: string) =>
+    date === chosen.today ? "today" : date === tomorrow ? "tomorrow" : formatDay(date);
   const heat = plan.weather?.isHot ? plan.weather : undefined;
+  const dim = day.switching ? "opacity-60 transition-opacity" : "transition-opacity"; // the old day while a new one loads
   const deadlines = [...(request?.deadlines ?? [])].sort((a, b) => a.start.localeCompare(b.start));
   const allDone = deadlines.length > 0 && deadlines.every((d) => d.done);
   const mood = listening ? "listening" : heat ? "hot" : allDone ? "proud" : "happy";
@@ -62,12 +70,22 @@ export default function TodayPage() {
       )}
       {!day.isDemo && day.notice && <p className="mb-6 rounded-2xl bg-sun-soft px-4 py-3">{day.notice}</p>}
 
-      <p className="text-lg text-ink-soft">{formatDay(plan.date)}</p>
+      <p aria-live="polite" className="text-lg text-ink-soft">
+        {day.switching
+          ? `Planning ${formatDay(chosen.date)}…`
+          : later
+            ? `Preview of ${formatDay(plan.date)}`
+            : formatDay(plan.date)}
+      </p>
       <h1 className="font-display text-5xl font-bold tracking-tight">
         {firstName ? `Your day, ${firstName}` : "Your day"}
       </h1>
+      <DayPicker days={chosen.days} date={chosen.date} />
 
-      <section className="mt-6 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6">
+      <section
+        aria-busy={day.switching}
+        className={`mt-6 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6 ${dim}`}
+      >
         <div className={`shrink-0 self-center sm:self-start ${listening ? "mascot-listening" : ""}`}>
           <Mascot size={128} mood={mood} animated />
         </div>
@@ -85,7 +103,9 @@ export default function TodayPage() {
       {heat && (
         <section role="alert" className="mt-4 rounded-3xl bg-[#ff8a3d] p-5 sm:p-6">
           <p className="font-display text-2xl font-bold">
-            It is {Math.round(heat.tempF)}°F now and up to {Math.round(heat.highF)}°F today
+            {later
+              ? `Up to ${Math.round(heat.highF)}°F on ${formatDay(plan.date).split(",")[0]}`
+              : `It is ${Math.round(heat.tempF)}°F now and up to ${Math.round(heat.highF)}°F today`}
           </p>
           <p className="mt-1 max-w-prose text-lg">
             Your leave times include extra minutes for the heat. Take water and stay in the shade between classes.
@@ -95,7 +115,7 @@ export default function TodayPage() {
 
       {day.error && <p className="mt-4 font-bold text-[#b91c1c]">{day.error}</p>}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div aria-busy={day.switching} className={`mt-6 grid gap-6 lg:grid-cols-[1fr_340px] ${dim}`}>
         <div className="min-w-0">
           <SkyDay
             date={plan.date}
@@ -104,16 +124,18 @@ export default function TodayPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
-          <label className="mt-3 flex items-center gap-2 text-ink-soft">
-            <input
-              type="checkbox"
-              checked={day.hot}
-              disabled={day.busy}
-              onChange={(e) => void day.setHotPreview(e.target.checked)}
-              className="h-4 w-4 accent-[#ff8a3d]"
-            />
-            Preview a 104°F day
-          </label>
+          {!later && (
+            <label className="mt-3 flex items-center gap-2 text-ink-soft">
+              <input
+                type="checkbox"
+                checked={day.hot}
+                disabled={day.busy}
+                onChange={(e) => void day.setHotPreview(e.target.checked)}
+                className="h-4 w-4 accent-[#ff8a3d]"
+              />
+              Preview a 104°F day
+            </label>
+          )}
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-live="polite">
@@ -203,7 +225,7 @@ export default function TodayPage() {
                       <li key={d.id} className="border-t border-ink/10 py-3 first:border-t-0">
                         <p className="font-bold leading-snug">{d.title}</p>
                         <p className="text-ink-soft">
-                          Due {date === plan.date ? "today" : formatDay(date)} at {clock(d.start)}
+                          Due {dueDay(date)} at {clock(d.start)}
                         </p>
                         <p className={`text-sm font-bold ${d.done ? "text-saguaro" : ""}`}>
                           {d.done ? "Turned in" : "Not turned in yet"}

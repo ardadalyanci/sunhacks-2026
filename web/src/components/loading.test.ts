@@ -73,6 +73,21 @@ describe("createShared", () => {
     expect(load).toHaveBeenCalledTimes(3);
   });
 
+  it("keeps several days, so going back to one is instant, and drops the oldest past the limit", async () => {
+    const shared = createShared<string>(60_000, 2);
+    const load = vi.fn().mockImplementation(async () => "day");
+    await shared.get("today", load, 0);
+    await shared.get("tomorrow", load, 1);
+    await shared.get("today", load, 2);
+    expect(load).toHaveBeenCalledTimes(2);
+
+    await shared.get("monday", load, 3); // the limit is 2: "tomorrow" was used longest ago and goes
+    await shared.get("today", load, 4);
+    expect(load).toHaveBeenCalledTimes(3);
+    await shared.get("tomorrow", load, 5);
+    expect(load).toHaveBeenCalledTimes(4);
+  });
+
   it("returns a stored newer answer without loading", async () => {
     const shared = createShared<string>(60_000);
     const load = vi.fn().mockResolvedValue("old day");
