@@ -30,6 +30,8 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] Arda: day picker on Today (Today, Tomorrow, next 5 days; branch `arda/future-days`): the chosen day lives in the URL hash, `useDay(date)` sends it to `/api/demo?date=`, `/api/canvas`, `/api/weather?date=` and `/api/plan` (look-ahead briefing from PR #15); later days show "Preview of …" and hide the 104°F toggle; removed blocks are saved per day
 - [x] Arda: phone pass on the live Vercel URL (https://sunhacks-2026.vercel.app, 375 px and 1440 px: sample day and a real setup with live weather, events and leave times, no console errors)
 - [x] Arda: after the live check (branch `arda/live-polish`): "Add to my calendar" on Today downloads the day from `POST /api/calendar`; Events opens on "For you" (interests + Gemini picks) instead of all ~485 events; a leave pin that would cover another block moves right with shorter text
+- [x] Arda: renamed the product to **Sundial** (domain sundial.club; Decision Log Sat 18:40): `components/brand.ts`, manifest, calendar file name; storage keys keep the `daypilot.` prefix so saved setups still load
+- [x] Arda: "Subscribe in your calendar" (PR #21 follow-up): the browser keeps one `calendarId` (`crypto.randomUUID()`), sends it with every `/api/plan`, and the calendar panel offers Google Calendar, Apple Calendar (webcal) and Copy link for `plan.calendarUrl`; without MongoDB it falls back to the one-day download
 
 ## C: backend 2 + data (Agent-3, Kerem)
 - [x] Kerem: `GET /api/events` → `{ events: Opportunity[] }`: ASU Events JSON + SunDevilCentral iCal, Tempe (and online), next 7 days, 1 h in-memory cache per source; tags include the setup interests they match (`lib/feeds/`)

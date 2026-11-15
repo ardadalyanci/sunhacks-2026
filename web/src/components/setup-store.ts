@@ -8,8 +8,27 @@ export interface SavedSetup {
   startBuildingId?: string;
 }
 
+// The keys keep the working name (DayPilot), so setups saved before the rename to Sundial still load.
 const SETUP_KEY = "daypilot.setup";
 const TOKEN_KEY = "daypilot.canvasToken"; // sessionStorage: gone when the tab closes
+const CALENDAR_KEY = "daypilot.calendarId"; // names this browser's calendar feed (GET /api/plan/<id>/calendar)
+
+/**
+ * The id of this browser's calendar feed: a random UUID made once and kept. /api/plan saves each planned day
+ * under it (MongoDB), and the feed URL is what the student subscribes to. Undefined when storage is blocked.
+ */
+export function loadCalendarId(): string | undefined {
+  try {
+    let id = localStorage.getItem(CALENDAR_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(CALENDAR_KEY, id);
+    }
+    return id;
+  } catch {
+    return undefined;
+  }
+}
 
 export function loadSetup(): SavedSetup | null {
   try {

@@ -10,7 +10,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
 import { createShared, newestWins } from "./loading";
-import { itemKey, loadAccepted, loadHidden, loadSetup, loadToken, saveAccepted, saveHidden } from "./setup-store";
+import {
+  itemKey,
+  loadAccepted,
+  loadCalendarId,
+  loadHidden,
+  loadSetup,
+  loadToken,
+  saveAccepted,
+  saveHidden,
+} from "./setup-store";
 import { arizonaToday, formatTime, parseLocal } from "./time";
 
 const HOT_PREVIEW: Weather = { tempF: 104, highF: 109, isHot: true }; // same as GET /api/demo?hot=1
@@ -69,7 +78,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
     );
     if (!demo) throw new Error("The sample day did not load. Check that the app server is running.");
     return {
-      request: { ...demo.request, acceptedEventIds: loadAccepted() },
+      request: { ...demo.request, acceptedEventIds: loadAccepted(), calendarId: loadCalendarId() },
       weather: demo.request.weather,
       name: demo.persona.name,
       isDemo: true,
@@ -103,6 +112,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
       interests: setup.interests,
       weather: weather ?? undefined,
       startBuildingId: setup.startBuildingId,
+      calendarId: loadCalendarId(), // /api/plan saves the day for the calendar feed (MongoDB) and sets calendarUrl
     },
     weather: weather ?? undefined,
     name: setup.name,
@@ -256,7 +266,7 @@ export function useDay(date?: string) {
     setHidden(hiddenRef.current);
   }
 
-  /** Runs a spoken or typed command and returns what DayPilot says back. Failures are said and shown. */
+  /** Runs a spoken or typed command and returns what Sol says back. Failures are said and shown. */
   async function command(text: string): Promise<string> {
     const current = shown.current;
     if (!current) return "Your day is still loading.";
