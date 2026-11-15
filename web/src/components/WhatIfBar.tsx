@@ -1,8 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { MASCOT } from "./brand";
 import Mascot from "./Mascot";
 import type { useDay } from "./useDay";
+import { useNow } from "./useNow";
+import { baseNow, canOversleep } from "./what-if";
 
 type Props = {
   day: ReturnType<typeof useDay>;
@@ -48,7 +51,12 @@ function Pill({ on, disabled, onToggle, onClass, label, children }: PillProps) {
  * Under them, Sol says in one line what the last change moved and what it did not.
  */
 export default function WhatIfBar({ day }: Props) {
-  const { whatIf, busy, skip, skipKey, change } = day;
+  const { whatIf, busy, skip, skipKey, change, plan, request } = day;
+  const clockNow = useNow();
+  // Oversleeping only makes sense in the morning, before the first walk. The plan's own clock decides: the sample
+  // replays 8 am, a real today uses the clock. A pill that is on always stays, so it can be turned off.
+  const oversleep = whatIf.overslept || !plan || !request || canOversleep(plan, baseNow(request, clockNow));
+  const replanning = busy && !day.switching; // a pill, "+ Add" or a voice action is being planned
   return (
     <div className="mt-3">
       <div role="group" aria-label="What if…" className="flex flex-wrap items-center gap-2">
@@ -65,15 +73,17 @@ export default function WhatIfBar({ day }: Props) {
           <WhatIf />
           it’s 104°?
         </Pill>
-        <Pill
-          on={whatIf.overslept}
-          disabled={busy}
-          onToggle={() => void day.setWhatIf({ overslept: !whatIf.overslept })}
-          onClass="border-ink bg-ink text-cloud"
-          label="What if I oversleep?"
-        >
-          <WhatIf />I oversleep?
-        </Pill>
+        {oversleep && (
+          <Pill
+            on={whatIf.overslept}
+            disabled={busy}
+            onToggle={() => void day.setWhatIf({ overslept: !whatIf.overslept })}
+            onClass="border-ink bg-ink text-cloud"
+            label="What if I oversleep?"
+          >
+            <WhatIf />I oversleep?
+          </Pill>
+        )}
         {skip && skipKey && (
           <Pill
             on={whatIf.skipped !== null}
@@ -87,13 +97,27 @@ export default function WhatIfBar({ day }: Props) {
           </Pill>
         )}
       </div>
-      {/* Always in the page, so screen readers hear each new note as it arrives. */}
+      {/* Always in the page, so screen readers hear each new note as it arrives. While Sol re-plans, his note
+          gives way to a line saying so; the old note stays invisible underneath, so the page does not jump. */}
       <div aria-live="polite">
-        {change && (
-          <p className="mt-3 flex max-w-prose items-start gap-3 rounded-2xl bg-sun-soft px-4 py-3">
-            <Mascot size={32} label="" className="mt-0.5 shrink-0" />
-            <span>{change}</span>
-          </p>
+        {(change || replanning) && (
+          <div className="mt-3 grid max-w-prose">
+            {change && (
+              <p
+                aria-hidden={replanning || undefined}
+                className={`flex items-start gap-3 rounded-2xl bg-sun-soft px-4 py-3 [grid-area:1/1] ${replanning ? "invisible" : ""}`}
+              >
+                <Mascot size={32} label="" className="mt-0.5 shrink-0" />
+                <span>{change}</span>
+              </p>
+            )}
+            {replanning && (
+              <p className="flex items-start gap-3 rounded-2xl bg-sun-soft px-4 py-3 [grid-area:1/1]">
+                <Mascot size={32} label="" className="mt-0.5 shrink-0" />
+                <span className="motion-safe:animate-pulse">{MASCOT} is re-planning your day…</span>
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -16,6 +16,8 @@ export const HOT_PREVIEW: Weather = { tempF: 104, highF: 109, isHot: true }; // 
 
 const OVERSLEEP_MIN = 60;
 const HOUR_MS = 3_600_000;
+const WAKE_UP = "08:00"; // the planner's day starts here (DAY_START in lib/planner.ts), so the alarm does too
+const LAST_OVERSLEEP_HOUR = 11; // past 11 am "What if I oversleep?" no longer makes sense on a real today
 
 /** "2026-11-14T08:00:00-07:00" for a moment in ms: Arizona time, UTC-7 all year. */
 export function arizonaIso(ms: number): string {
@@ -45,6 +47,30 @@ export function skipCandidate(request: PlanRequest, plan: DayPlan, baseNowIso: s
   return pick ? { course: pick.title, start: startOf(pick.start) } : null;
 }
 
+/**
+ * When the student would have got up: 8:00 am on the planned day, or the plan's own clock when that is later
+ * (the sample replays 8 am; a real day uses the clock). At 1 am the wake-up is still 8 am, not 1 am.
+ */
+export function wakeUp(date: string, baseNowIso: string): string {
+  const morning = `${date}T${WAKE_UP}:00-07:00`;
+  return Date.parse(baseNowIso) > Date.parse(morning) ? arizonaIso(Date.parse(baseNowIso)) : morning;
+}
+
+/** The wake-up an hour later: the plan's "now" while "What if I oversleep?" is on. */
+const lateWakeUp = (date: string, baseNowIso: string) =>
+  arizonaIso(Date.parse(wakeUp(date, baseNowIso)) + OVERSLEEP_MIN * 60_000);
+
+/**
+ * Whether "What if I oversleep?" still makes sense at `nowIso` (the plan's own clock): not once the day's first
+ * leave time has passed, and not past 11 am on the planned day.
+ */
+export function canOversleep(plan: DayPlan, nowIso: string): boolean {
+  const now = Date.parse(nowIso);
+  if (parseLocal(nowIso).date === plan.date && parseLocal(nowIso).hours >= LAST_OVERSLEEP_HOUR) return false;
+  const leaves = plan.items.flatMap((i) => (i.leaveAt ? [Date.parse(i.leaveAt)] : []));
+  return !leaves.length || Math.min(...leaves) > now;
+}
+
 /** The PlanRequest to send: the student's real one with every pill that is on applied. */
 export function applyWhatIf(
   baseRequest: PlanRequest,
@@ -53,7 +79,7 @@ export function applyWhatIf(
   baseNowIso: string,
 ): PlanRequest {
   const request: PlanRequest = { ...baseRequest, weather: whatIf.hot ? HOT_PREVIEW : realWeather };
-  if (whatIf.overslept) request.now = arizonaIso(Date.parse(baseNowIso) + OVERSLEEP_MIN * 60_000);
+  if (whatIf.overslept) request.now = lateWakeUp(baseRequest.date ?? baseNowIso.slice(0, 10), baseNowIso);
   const skipped = whatIf.skipped;
   if (skipped) {
     // Only this day's meeting is cancelled: a MWF class keeps its Monday and Friday.
@@ -64,6 +90,9 @@ export function applyWhatIf(
       return days.length ? [{ ...c, days }] : [];
     });
   }
+  // A what-if day is never saved: /api/plan stores any day sent with a calendarId over the real one that the
+  // subscribed calendar shows. With every pill off the id goes along again and the real day is saved.
+  if (whatIf.hot || whatIf.overslept || whatIf.skipped) delete request.calendarId;
   return request;
 }
 
@@ -78,10 +107,13 @@ export function whatIfCause(
     return { kind: "hot", on: after.hot, hotF: HOT_PREVIEW.tempF, realF: realWeather?.tempF };
   }
   if (before.overslept !== after.overslept) {
-    const late = arizonaIso(Date.parse(baseNowIso) + OVERSLEEP_MIN * 60_000);
+    // The pills show only on today, so the clock's own date is the planned day.
+    const date = baseNowIso.slice(0, 10);
+    const usual = wakeUp(date, baseNowIso);
+    const late = lateWakeUp(date, baseNowIso);
     return after.overslept
-      ? { kind: "overslept", on: true, from: baseNowIso, to: late }
-      : { kind: "overslept", on: false, from: late, to: baseNowIso };
+      ? { kind: "overslept", on: true, from: usual, to: late }
+      : { kind: "overslept", on: false, from: late, to: usual };
   }
   const course = after.skipped?.course ?? before.skipped?.course;
   if (course && before.skipped?.course !== after.skipped?.course) {

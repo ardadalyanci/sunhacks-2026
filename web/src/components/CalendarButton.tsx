@@ -16,6 +16,7 @@ const secondary = "rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg
  * Puts the day in the student's calendar, with a reminder at each leave time.
  * - With MongoDB, the plan carries `calendarUrl`: a feed of every day the student plans
  *   (GET /api/plan/<calendarId>/calendar, Agent-1). Subscribing once keeps the calendar app in sync.
+ *   A "What if…" day is never saved (applyWhatIf drops the calendarId), so it comes back without a feed.
  * - Without it, or for a one-off, the visible day downloads as an .ics file (POST /api/calendar, Agent-3).
  */
 export default function CalendarButton({ plan, name }: Props) {
@@ -73,6 +74,8 @@ export default function CalendarButton({ plan, name }: Props) {
                 Subscribe once: every day you plan in {PRODUCT} shows up in your calendar, with a reminder at each
                 leave time.
               </p>
+              {/* The feed is built on the server, which never hears what was removed in this browser. */}
+              <p className="mt-1 text-sm text-ink-soft">Things you remove from your day stay removed on this device only.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <a
                   href={`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}`}
@@ -93,7 +96,7 @@ export default function CalendarButton({ plan, name }: Props) {
                 type="button"
                 onClick={download}
                 disabled={working}
-                className="mt-3 font-bold underline underline-offset-4 disabled:opacity-50"
+                className="mt-1 inline-flex min-h-10 items-center font-bold underline underline-offset-4 disabled:opacity-50"
               >
                 {working ? "Making the file…" : "Or download just this day (.ics)"}
               </button>
