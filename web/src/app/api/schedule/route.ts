@@ -2,12 +2,15 @@
 // Body: multipart form with "image" (photo or screenshot) and/or "text" (pasted from MyASU).
 // Added by Agent-2 (UI) for the setup screen. lib/gemini.ts takes text prompts only, so this route calls the
 // Gemini REST API directly for the image; same env vars (GEMINI_API_KEY, GEMINI_MODEL) and default model.
+// Limits: bodies over about 8 MB get 413 before they are read, and each address gets 5 reads a minute (429).
 import type { ClassBlock } from "@/lib/types";
 import { DAYS, cleanClasses } from "./clean";
+import { clientAddress, scheduleLimit } from "./rate-limit";
 
 // gemini-3.5-flash-lite exists on both v1 (the SDK default) and v1beta; "gemini-flash-lite-latest" is v1beta only.
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_BODY_BYTES = MAX_IMAGE_BYTES + 256 * 1024; // the photo plus pasted text and the form's own bytes
 const TIMEOUT_MS = 20_000;
 
 const PROMPT = `You read class schedules for Arizona State University students.
@@ -40,13 +43,23 @@ const SCHEMA = {
   required: ["classes"],
 };
 
-function error(message: string, status: number) {
-  return Response.json({ error: message }, { status });
+function error(message: string, status: number, headers?: HeadersInit) {
+  return Response.json({ error: message }, { status, headers });
 }
 
 export async function POST(request: Request) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return error("Schedule reading is not set up yet: GEMINI_API_KEY is missing on the server.", 503);
+
+  // Checked before the body is read, so a huge upload or a flood of requests costs almost nothing.
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) {
+    return error("That photo is over 8 MB. Try a screenshot instead.", 413);
+  }
+  if (!scheduleLimit.allow(clientAddress(request))) {
+    return error("That is a lot of schedule reads in a row. Wait a minute, or type your classes in.", 429, {
+      "Retry-After": "60",
+    });
+  }
 
   let form: FormData;
   try {
