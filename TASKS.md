@@ -9,7 +9,8 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] `POST /api/canvas`: token in body → Canvas planner items → deadline `DayItem[]` with submitted status (never stored or logged)
 - [x] `POST /api/plan`: classes + deadlines + events → free gaps, study blocks, leave times, heat (code), event ranking + briefing (Gemini, with code fallbacks) → `DayPlan`
 - [x] `POST /api/command`: voice text → `CommandAction` (Gemini, with keyword-rule fallback)
-- [ ] Test `/api/plan` and `/api/command` with a real Gemini key (only the fallbacks were tested so far)
+- [x] Barış: test `/api/plan` and `/api/command` with a real Gemini key (PR #11: default model was missing on the v1 API, now `gemini-3.5-flash-lite`; time-aware briefing)
+- [x] Barış: voice answers "what's next / when do I leave?" from the plan (PR #12, `{ action: "briefing", reply }`; UI speaks `reply` once B adds one line)
 - [ ] Switch `lib/buildings.ts` to a static import once `data/buildings.json` exists (needed for deploys)
 - [x] Demo mode: `GET /api/demo` (sample student + full day for any date, `hot=1` for a heat day) and Canvas token `demo`; works with no Wi-Fi, token or Gemini
 - [ ] Deploy (Vercel or AWS Amplify) + custom domain

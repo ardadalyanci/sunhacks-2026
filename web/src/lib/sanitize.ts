@@ -111,7 +111,17 @@ export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "s
     const title = str(v.title, 200);
     const type = v.type;
     if (!id || !title || typeof type !== "string") return null;
-    return { id, title, type: type as DayItem["type"], start: isoDate(v.start) ?? "", source: "planner" };
+    const location = str(v.location, 120);
+    const leaveAt = isoDate(v.leaveAt);
+    return {
+      id,
+      title,
+      type: type as DayItem["type"],
+      start: isoDate(v.start) ?? "",
+      source: "planner",
+      ...(location ? { location } : {}),
+      ...(leaveAt ? { leaveAt } : {}),
+    };
   };
   return {
     items: list(plan.items, LIMITS.items).map(pick).filter((i): i is DayItem => i !== null),
