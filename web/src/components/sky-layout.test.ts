@@ -4,11 +4,14 @@ import {
   PIN_HEIGHT,
   assignmentName,
   blockTitle,
+  captionSpot,
   coversOtherBlock,
   dayBounds,
   dayStops,
   hourOn,
   isDarkHour,
+  layoutPins,
+  narrowedBlocks,
   rangeLabel,
   skyBackground,
   stackPins,
@@ -32,22 +35,125 @@ describe("hourOn", () => {
 });
 
 describe("dayBounds", () => {
-  it("keeps 8 am to 10 pm for a normal day", () => {
-    expect(dayBounds([item("class", at("10:30"), at("11:20"))], DATE)).toEqual({ first: 8, last: 22 });
+  const sun = { sunrise: 6.98, sunset: 17.4 }; // mid November in Tempe
+
+  it("ends an hour after the sunset, rounded up, on a day that is over by then", () => {
+    expect(dayBounds([item("class", at("10:30"), at("11:20"))], DATE, sun)).toEqual({ first: 8, last: 19 });
+    expect(dayBounds([], DATE, sun)).toEqual({ first: 8, last: 19 });
   });
 
-  it("stretches to an early class and its leave time", () => {
+  it("ends an hour after the last block when that is after the sunset", () => {
+    expect(dayBounds([item("event", at("18:00"), at("19:30"))], DATE, sun)).toEqual({ first: 8, last: 21 });
+    expect(dayBounds([item("study_block", at("20:00"), at("21:00"))], DATE, sun)).toEqual({ first: 8, last: 22 });
+  });
+
+  it("stretches the start to an early class and its leave time", () => {
     const early = item("class", at("07:30"), at("08:20"), at("07:12"));
-    expect(dayBounds([early], DATE)).toEqual({ first: 7, last: 22 });
+    expect(dayBounds([early], DATE, sun)).toEqual({ first: 7, last: 19 });
   });
 
-  it("stretches the end to an 11:59 pm deadline, but an early deadline stays at the top edge", () => {
-    expect(dayBounds([item("deadline", at("23:59"))], DATE)).toEqual({ first: 8, last: 24 });
-    expect(dayBounds([item("deadline", at("06:00"))], DATE)).toEqual({ first: 8, last: 22 });
+  it("never stretches for a deadline: an 11:59 pm or a 6 am one sits as a pin at the edge", () => {
+    expect(dayBounds([item("deadline", at("23:59"))], DATE, sun)).toEqual({ first: 8, last: 19 });
+    expect(dayBounds([item("deadline", at("06:00"))], DATE, sun)).toEqual({ first: 8, last: 19 });
+  });
+
+  it("reaches the current hour on a real today, so Sol's now stays on the sky", () => {
+    expect(dayBounds([], DATE, sun, 21.4)).toEqual({ first: 8, last: 22 });
+    expect(dayBounds([], DATE, sun, 9)).toEqual({ first: 8, last: 19 });
   });
 
   it("ends at midnight for an event that runs into the next day", () => {
-    expect(dayBounds([item("event", at("21:00"), at("01:00", "2026-11-15"))], DATE)).toEqual({ first: 8, last: 24 });
+    expect(dayBounds([item("event", at("21:00"), at("01:00", "2026-11-15"))], DATE, sun)).toEqual({ first: 8, last: 24 });
+  });
+
+  it("follows the later June sunset", () => {
+    expect(dayBounds([], "2026-06-21", sunTimes("2026-06-21")).last).toBe(21); // sunset 7:42 pm
+  });
+});
+
+describe("layoutPins", () => {
+  const study = { id: "study", top: 300, bottom: 335 }; // a short study block
+  const cls = { id: "class", top: 345, bottom: 400 }; // the class right after it
+
+  it("keeps a pin that touches nothing out of the lane", () => {
+    expect(layoutPins([{ center: 100, ownId: "x" }], 800, [study, cls])).toEqual([{ top: 100 - PIN_HEIGHT / 2, lane: false }]);
+  });
+
+  it("moves a leave pin that lands on the study block into the lane, and lets it sit on its own class's edge", () => {
+    expect(layoutPins([{ center: 330, ownId: "class" }], 800, [study, cls])[0].lane).toBe(true);
+    expect(layoutPins([{ center: 345, ownId: "class" }], 800, [cls])[0].lane).toBe(false);
+  });
+
+  it("decides the lane after stacking: a deadline pushed down onto a class goes into the lane", () => {
+    // A leave pin at 11:59 and a deadline at 12:00 sit in the free sky; stacked, the deadline lands on the 12:15 class.
+    const at1215 = { id: "phy", top: 330, bottom: 385 };
+    const spots = layoutPins(
+      [
+        { center: 300, ownId: "phy" },
+        { center: 302, ownId: "" },
+      ],
+      800,
+      [at1215],
+    );
+    expect(spots[0].lane).toBe(false);
+    expect(spots[1].top).toBeGreaterThan(spots[0].top);
+    expect(spots[1].lane).toBe(true);
+  });
+
+  it("counts a pin's own block once stacking has pushed it onto that block", () => {
+    const spots = layoutPins(
+      [
+        { center: 300, ownId: "" },
+        { center: 300, ownId: "class" },
+      ],
+      800,
+      [{ id: "class", top: 318, bottom: 380 }],
+    );
+    expect(spots[1].lane).toBe(true);
+  });
+
+  it("narrows only the blocks that share their height with a lane pin", () => {
+    const narrowed = narrowedBlocks(
+      [
+        { top: 310, lane: true },
+        { top: 100, lane: false },
+      ],
+      [study, cls, { id: "far", top: 90, bottom: 130 }],
+    );
+    expect([...narrowed]).toEqual(["study"]);
+  });
+
+  it("leaves a tall block wide when the lane pin only touches its top padding", () => {
+    // "Leave 1:25 pm" ends 12 px into the 12:50 study block and 7 px into the 1:30 work shift.
+    const spot = { top: 316, lane: true };
+    expect([...narrowedBlocks([spot], [{ id: "study", top: 290, bottom: 328 }, { id: "shift", top: 337, bottom: 500 }])]).toEqual(["study"]);
+    // A tall block with centered text says how much padding it has; 9 px of reach stays inside it.
+    expect(narrowedBlocks([{ top: 316, lane: true }], [{ id: "shift", top: 335, bottom: 500, pad: 56 }]).size).toBe(0);
+  });
+});
+
+describe("captionSpot", () => {
+  it("puts Sol's caption above his line when nothing is there", () => {
+    expect(captionSpot(300, [], 800)).toEqual({ below: false, right: false });
+  });
+
+  it("puts it below his line at the very top of the sky", () => {
+    expect(captionSpot(14, [], 800)).toEqual({ below: true, right: false });
+  });
+
+  it("keeps clear of a leave pin at Sol's hour by moving to the right side", () => {
+    // Sol has just reached the 10:18 leave pin: it covers both the space above and below him on the left.
+    expect(captionSpot(300, [{ top: 300 - PIN_HEIGHT / 2, right: false }], 800)).toEqual({ below: false, right: true });
+  });
+
+  it("at rest, keeps clear of a block's text by moving to the right side", () => {
+    // Sol rests at 8 am on the top edge, and the first study block starts right there.
+    expect(captionSpot(14, [], 800, [{ id: "study", top: 16, bottom: 76 }])).toEqual({ below: true, right: true });
+    expect(captionSpot(300, [], 800, [{ id: "far", top: 500, bottom: 560 }])).toEqual({ below: false, right: false });
+  });
+
+  it("goes below when only the space above is taken", () => {
+    expect(captionSpot(300, [{ top: 260, right: false }], 800)).toEqual({ below: true, right: false });
   });
 });
 
