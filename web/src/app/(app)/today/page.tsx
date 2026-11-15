@@ -81,6 +81,17 @@ export default function TodayPage() {
       : later
         ? `No classes on ${weekdayOf(plan.date)}.`
         : `No classes today${name}.`;
+  // Where Sol rests on the sky: the sample's own clock (8 am), the live clock on a real today, none ahead.
+  const azNow = new Date(clockNow - 7 * 3_600_000);
+  const nowHour = later
+    ? undefined
+    : day.isDemo
+      ? request?.now
+        ? parseLocal(request.now).hours
+        : undefined
+      : clockNow
+        ? azNow.getUTCHours() + azNow.getUTCMinutes() / 60
+        : undefined;
   const weatherLine = plan.weather
     ? later
       ? ` · high ${Math.round(plan.weather.highF)}°F`
@@ -201,6 +212,7 @@ export default function TodayPage() {
             date={plan.date}
             items={plan.items}
             hot={Boolean(heat)}
+            nowHour={nowHour}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />

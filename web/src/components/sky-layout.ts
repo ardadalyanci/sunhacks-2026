@@ -111,12 +111,83 @@ const HEAT: [number, string][] = [
   [18.6, "rgb(255 110 50 / 0)"],
 ];
 
+export type Sun = { sunrise: number; sunset: number }; // Arizona clock hours, e.g. 6.98 and 17.4
+
+/**
+ * Sunrise and sunset in Tempe (33.42° N, 111.93° W) on `date`, in Arizona hours (UTC-7 all year).
+ * NOAA's solar equations; good to a couple of minutes, which is all a sky needs.
+ */
+export function sunTimes(date: string): Sun {
+  const rad = Math.PI / 180;
+  const lat = 33.42;
+  const lng = -111.93;
+  const noon = Date.parse(`${date}T12:00:00Z`);
+  const dayOfYear = Math.floor((noon - Date.UTC(new Date(noon).getUTCFullYear(), 0, 0)) / 86_400_000);
+  const g = ((2 * Math.PI) / 365) * (dayOfYear - 1); // fractional year at noon
+  const eqTime =
+    229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl =
+    0.006918 -
+    0.399912 * Math.cos(g) +
+    0.070257 * Math.sin(g) -
+    0.006758 * Math.cos(2 * g) +
+    0.000907 * Math.sin(2 * g) -
+    0.002697 * Math.cos(3 * g) +
+    0.00148 * Math.sin(3 * g);
+  const hourAngle =
+    Math.acos(Math.cos(90.833 * rad) / (Math.cos(lat * rad) * Math.cos(decl)) - Math.tan(lat * rad) * Math.tan(decl)) / rad;
+  const local = (utcMinutes: number) => (utcMinutes / 60 - 7 + 24) % 24;
+  return { sunrise: local(720 - 4 * (lng + hourAngle) - eqTime), sunset: local(720 - 4 * (lng - hourAngle) - eqTime) };
+}
+
+/** The sky's colors pinned to the real sun: peach at sunrise, gold before sunset, purple after, then night. */
+export function skyStops({ sunrise, sunset }: Sun): [number, string][] {
+  return [
+    [sunrise - 1.5, "#2b2766"],
+    [sunrise, "#f9d9bd"],
+    [sunrise + 1.5, "#eef6ff"],
+    [(sunrise + sunset) / 2, "#d4e8ff"],
+    [sunset - 1.5, "#ffe9bd"],
+    [sunset, "#ffcf8f"],
+    [sunset + 0.75, "#9b86d6"],
+    [sunset + 2.25, "#2b2766"],
+  ];
+}
+
 /** True for hours where the sky is dark, so labels on it need light text. */
-export const isDarkHour = (hour: number) => hour <= 5 || hour >= 19;
+export const isDarkHour = (hour: number, sun?: Sun) =>
+  sun ? hour <= sun.sunrise - 0.75 || hour >= sun.sunset + 1 : hour <= 5 || hour >= 19;
 
 /** CSS background for a sky whose hour `h` is `y(h)` px from the top, so each hour gets its own color. */
-export function skyBackground(y: (hour: number) => number, hot: boolean): string {
+export function skyBackground(y: (hour: number) => number, hot: boolean, sun?: Sun): string {
   const gradient = (stops: [number, string][]) =>
     `linear-gradient(to bottom, ${stops.map(([hour, color]) => `${color} ${Math.round(y(hour))}px`).join(", ")})`;
-  return hot ? `${gradient(HEAT)}, ${gradient(SKY)}` : gradient(SKY);
+  const sky = sun ? skyStops(sun) : SKY;
+  return hot ? `${gradient(HEAT)}, ${gradient(sky)}` : gradient(sky);
+}
+
+export type Stop = { hour: number; text: string; mood?: "proud" };
+
+/** The moments "Play my day" stops on: each walk, study block, deadline, and the sunset. */
+export function dayStops(items: DayItem[], date: string, sun: Sun, place: (location?: string) => string): Stop[] {
+  const stops: Stop[] = [];
+  for (const i of items) {
+    if (i.leaveAt && (i.type === "class" || i.type === "event")) {
+      stops.push({ hour: hourOn(i.leaveAt, date), text: `Leave now for ${place(i.location) || i.title}` });
+    }
+    if (i.type === "study_block") stops.push({ hour: hourOn(i.start, date), text: `Time for ${blockTitle(i.title).replace(/^Work on /, "")}` });
+    if (i.type === "deadline") {
+      const name = assignmentName(i.title);
+      stops.push(i.done ? { hour: hourOn(i.start, date), text: `${name}: turned in`, mood: "proud" } : { hour: hourOn(i.start, date), text: `${name} is due` });
+    }
+  }
+  stops.push({ hour: sun.sunset, text: `Sunset, ${formatTime(sun.sunset)}` });
+  return stops.sort((a, b) => a.hour - b.hour);
+}
+
+/** The stop to show at `hour`: the last one reached in the past `holdHours`, or none. */
+export function stopAt(stops: Stop[], hour: number, holdHours = 0.6): Stop | undefined {
+  let found: Stop | undefined;
+  for (const s of stops) if (s.hour <= hour && hour - s.hour <= holdHours) found = s;
+  return found;
 }
