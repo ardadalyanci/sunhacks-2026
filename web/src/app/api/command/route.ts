@@ -16,6 +16,9 @@ import type { CommandAction, DayItem } from "@/lib/types";
 /** "Drop the study block", "the study time, skip it": a removal that names a study block, in either order. */
 const isStudyRemoval = (text: string) => /\b(remove|drop|cancel|skip|delete)\b/i.test(text) && /\bstudy (block|time|session)s?\b/i.test(text);
 
+/** "Should I go to the lunch talk?", "is the mixer worth it": asking, not telling Sol to do something. */
+const isQuestion = (text: string) => /\?|^\s*(should|shall|can|could|would|will|is|are|do|does|what|why|how|when|where|which)\b/i.test(text);
+
 const STOPWORDS = new Set(["the", "a", "an", "to", "my", "me", "please", "add", "remove", "drop", "cancel", "skip", "join", "meeting", "event", "club", "from", "for", "and", "of", "on", "at", "in"]);
 
 export async function POST(request: Request) {
@@ -38,8 +41,12 @@ export async function POST(request: Request) {
   // "Work on: …" titles and sometimes answers that there is none (and that answer gets cached). Only when the
   // student names a study block, time or session, so "cancel the study group" (a commitment) still goes to Gemini.
   const quick = isStudyRemoval(text) ? byRules(text, addable, removable) : null;
-  const decision =
-    (quick?.action === "remove_item" ? quick : null) ?? (await understand(text, addable, removable)) ?? byRules(text, addable, removable);
+  const rules = byRules(text, addable, removable);
+  let decision = (quick?.action === "remove_item" ? quick : null) ?? (await understand(text, addable, removable)) ?? rules;
+  // "Add the robotics meeting" once came back as "I couldn't find a robotics meeting" while robotics night was a
+  // pick (Gemini does not always see "meeting" in "build night"). When the student asks to add something and a pick
+  // shares its words, add it. Not for questions: "should I go to the lunch talk?" gets Gemini's answer.
+  if (decision.action === "unknown" && rules.action === "add_event" && !isQuestion(text)) decision = rules;
   const action: CommandAction =
     decision.action === "next_item" ? { action: "briefing", reply: polishLine(nextReply(plan.items, nowMs, text)) } : decision;
   return Response.json(action);

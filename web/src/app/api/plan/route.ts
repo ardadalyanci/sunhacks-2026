@@ -185,6 +185,8 @@ const BANNED =
 // The model still slips one of these in now and then. A briefing with one is not used (the plain-code briefing
 // is, and the answer is not cached), because Sol says it out loud.
 const STOCK_PHRASES = /\b(good (morning|afternoon|evening)|be sure to|make sure|don'?t forget|remember|stay hydrated|hey sun devil)\b/i;
+// A broken clock time, like the "I saved 8 to 00 AM" the model once wrote: no time on the day has hour 0.
+const BROKEN_TIME = /(^|[^\d:])0{1,2}(:\d{2})?\s?[AaPp]\.?[Mm]\b/;
 
 // An event this close to the end of the stop before it is "right after" it; later than that it is just "after".
 const RIGHT_AFTER_MIN = 30;
@@ -339,7 +341,7 @@ async function writeBriefing(items: DayItem[], suggestions: DayItem[], openDeadl
     { type: "object", properties: { briefing: { type: "string" } }, required: ["briefing"] },
     (v) => {
       const text = (v as { briefing?: unknown })?.briefing;
-      return typeof text === "string" && Boolean(text.trim()) && !STOCK_PHRASES.test(text);
+      return typeof text === "string" && Boolean(text.trim()) && !STOCK_PHRASES.test(text) && !BROKEN_TIME.test(text);
     },
   );
   const text = result?.briefing ? tidyBriefing(result.briefing) : "";

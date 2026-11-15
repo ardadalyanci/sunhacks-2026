@@ -177,6 +177,19 @@ describe("POST /api/command with Gemini", () => {
     expect(generateJson).not.toHaveBeenCalled();
   });
 
+  it("adds a pick the student clearly named even when Gemini says it can't find it, but answers questions", async () => {
+    generateJson.mockResolvedValue({ action: "unknown", reply: "I couldn't find a robotics meeting today." });
+    expect((await command({ text: "add the robotics meeting", plan })).json).toEqual({ action: "add_event", itemId: "ev-e1" });
+    generateJson.mockResolvedValue({ action: "unknown", reply: "Yes: it's at 3 pm and it's about poetry. Say add the open mic." });
+    expect((await command({ text: "should I go to the poetry open mic?", plan })).json).toEqual({
+      action: "unknown",
+      reply: "Yes: it's at 3 pm and it's about poetry. Say add the open mic.",
+    });
+    // Not for removals: "cancel the study group" must not remove a study block.
+    generateJson.mockResolvedValue({ action: "unknown", reply: "Your study group is a commitment, so I can't take it off." });
+    expect((await command({ text: "cancel the study group", plan })).json.action).toBe("unknown");
+  });
+
   it("still asks Gemini about a study group, which is not a study block", async () => {
     generateJson.mockResolvedValueOnce({ action: "unknown", reply: "Your MAT 343 study group is a commitment, so I can't take it off." });
     const { json } = await command({ text: "cancel the study group", plan });

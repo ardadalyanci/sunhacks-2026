@@ -406,6 +406,18 @@ describe("POST /api/plan: Sol's picks keep their time", () => {
     expect(prompt).toContain("commitment: MAT 343 study group"); // a study group is not a class
   });
 
+  it("does not use a briefing with a broken clock time", async () => {
+    generateJson.mockImplementation(async (...args: unknown[]) => {
+      if (!String(args[0]).includes("Write what Sol says")) return null;
+      const isValid = args[2] as (v: unknown) => boolean;
+      expect(isValid({ briefing: "I saved 8 to 00 AM for Lab 7." })).toBe(false);
+      expect(isValid({ briefing: "I saved 8 to 10 AM for Lab 7, due at 11:00 PM." })).toBe(true);
+      return null;
+    });
+    await plan(sunday);
+    expect(generateJson.mock.calls.some((c) => String(c[0]).includes("Write what Sol says"))).toBe(true);
+  });
+
   it("takes 'now' away from a clock time in Gemini's briefing", async () => {
     generateJson.mockImplementation(async (...args: unknown[]) =>
       String(args[0]).includes("Write what Sol says") ? { briefing: "Work on Lab 7 for CSE 230 right now at 8 AM. I saved the lunch hour for you." } : null,
