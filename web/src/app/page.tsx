@@ -4,7 +4,7 @@ import { MASCOT, PRODUCT } from "@/components/brand";
 
 const DAY = [
   {
-    time: "10:15 am",
+    time: "10:13 am",
     text: "Leave for BYENG 210",
     note: "It counts the walk from your dorm, so you sit down in CSE 230 on time.",
     style: "bg-ink text-cloud",
@@ -16,7 +16,7 @@ const DAY = [
     style: "border-2 border-dashed border-sun bg-sun-soft",
   },
   {
-    time: "1:15 pm",
+    time: "1:19 pm",
     text: "Leave for COOR 170",
     note: "On a 104°F day it adds minutes for the heat and tells you to take water.",
     style: "bg-[#ff8a3d]",
@@ -65,7 +65,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center">
             <p className="relative max-w-sm rounded-3xl bg-cloud px-6 py-5 text-lg font-bold leading-snug shadow-[0_24px_60px_-28px_rgba(20,50,74,0.55)]">
-              “Lab 7 is due tonight, so I saved you time after CSE 230. Leave for COOR by 1:15.”
+              “Lab 7 is due tonight, so I saved you time after CSE 230. Leave for COOR by 1:19.”
               <span aria-hidden className="absolute -bottom-2.5 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 bg-cloud" />
             </p>
             <Mascot size={300} animated className="mt-6 max-w-full" />

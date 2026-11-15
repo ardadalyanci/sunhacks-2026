@@ -78,7 +78,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
     );
     if (!demo) throw new Error("The sample day did not load. Check that the app server is running.");
     return {
-      request: { ...demo.request, acceptedEventIds: loadAccepted(), calendarId: loadCalendarId() },
+      request: { ...demo.request, acceptedEventIds: loadAccepted(date), calendarId: loadCalendarId() },
       weather: demo.request.weather,
       name: demo.persona.name,
       isDemo: true,
@@ -108,7 +108,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
       classes: setup.classes,
       deadlines,
       events,
-      acceptedEventIds: loadAccepted(),
+      acceptedEventIds: loadAccepted(date),
       interests: setup.interests,
       weather: weather ?? undefined,
       startBuildingId: setup.startBuildingId,
@@ -137,7 +137,7 @@ function fingerprint(text: string) {
 /** Everything in the browser that the day `date` depends on. When any of it changes, the day is loaded again. */
 function inputKey(date: string) {
   const today = arizonaToday();
-  return JSON.stringify([date, today, loadSetup(), fingerprint(loadToken() ?? ""), [...loadAccepted()].sort()]);
+  return JSON.stringify([date, today, loadSetup(), fingerprint(loadToken() ?? ""), [...loadAccepted(date)].sort()]);
 }
 
 // Loaded days for this browser tab, shared by every page that calls useDay().
@@ -214,7 +214,7 @@ export function useDay(date?: string) {
         const back = shown.current;
         if (back) {
           wanted.current = { loaded: back.loaded, hot: back.hot };
-          saveAccepted(back.loaded.request.acceptedEventIds ?? []);
+          saveAccepted(back.plan.date, back.loaded.request.acceptedEventIds ?? []);
           setHot(back.hot);
         }
         setError(message(e));
@@ -231,7 +231,7 @@ export function useDay(date?: string) {
   }
 
   function setAccepted(now: Inputs, ids: string[]) {
-    saveAccepted(ids);
+    saveAccepted(now.loaded.request.date ?? arizonaToday(), ids);
     return replan({ ...now, loaded: { ...now.loaded, request: { ...now.loaded.request, acceptedEventIds: ids } } });
   }
 

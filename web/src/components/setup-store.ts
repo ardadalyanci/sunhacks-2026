@@ -60,20 +60,32 @@ export function clearSetup() {
   }
 }
 
-const ACCEPTED_KEY = "daypilot.accepted"; // events the student added, shared by Today and Events
+// Events the student added, per day ({ "2026-11-14": [ids] }), shared by Today and Events. Per day because the
+// sample day reuses its event ids every day: adding Robotics today must not add it tomorrow.
+const ACCEPTED_KEY = "daypilot.accepted";
 
-export function loadAccepted(): string[] {
+function readAccepted(): Record<string, string[]> {
   try {
-    const ids = JSON.parse(sessionStorage.getItem(ACCEPTED_KEY) ?? "[]") as unknown;
-    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+    const saved = JSON.parse(sessionStorage.getItem(ACCEPTED_KEY) ?? "{}") as unknown;
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {}; // the older single list: start fresh
+    const days: Record<string, string[]> = {};
+    for (const [date, ids] of Object.entries(saved)) {
+      if (Array.isArray(ids)) days[date] = ids.filter((x): x is string => typeof x === "string");
+    }
+    return days;
   } catch {
-    return [];
+    return {};
   }
 }
 
-export function saveAccepted(ids: string[]) {
+/** Events the student added to the day `date`. */
+export function loadAccepted(date: string): string[] {
+  return readAccepted()[date] ?? [];
+}
+
+export function saveAccepted(date: string, ids: string[]) {
   try {
-    sessionStorage.setItem(ACCEPTED_KEY, JSON.stringify(ids));
+    sessionStorage.setItem(ACCEPTED_KEY, JSON.stringify({ ...readAccepted(), [date]: ids }));
   } catch {
     // storage blocked: the choice lasts until the page reloads
   }

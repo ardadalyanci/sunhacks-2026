@@ -82,25 +82,20 @@ export default function TodayPage() {
         {firstName ? `Your day, ${firstName}` : "Your day"}
       </h1>
       <DayPicker days={chosen.days} date={chosen.date} />
+      {!later && (
+        <label className="mt-3 inline-flex items-center gap-2 text-ink-soft">
+          <input
+            type="checkbox"
+            checked={day.hot}
+            disabled={day.busy}
+            onChange={(e) => void day.setHotPreview(e.target.checked)}
+            className="h-4 w-4 accent-[#ff8a3d]"
+          />
+          Preview a 104°F day
+        </label>
+      )}
 
-      <section
-        aria-busy={day.switching}
-        className={`mt-6 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6 ${dim}`}
-      >
-        <div className={`shrink-0 self-center sm:self-start ${listening ? "mascot-listening" : ""}`}>
-          <Mascot size={128} mood={mood} animated />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="max-w-prose text-lg leading-relaxed">{plan.briefing}</p>
-          {!plan.aiUsed && (
-            <p className="mt-2 text-sm text-ink-soft">Gemini is not connected, so this plan was made with plain rules.</p>
-          )}
-          <div className="mt-4">
-            <VoiceBar briefing={plan.briefing} onCommand={day.command} onListeningChange={setListening} />
-          </div>
-        </div>
-      </section>
-
+      {/* The heat warning comes first, right under the switch that previews it. */}
       {heat && (
         <section role="alert" className="mt-4 rounded-3xl bg-[#ff8a3d] p-5 sm:p-6">
           <p className="font-display text-2xl font-bold">
@@ -114,6 +109,30 @@ export default function TodayPage() {
         </section>
       )}
 
+      <section
+        aria-busy={day.switching}
+        className={`mt-4 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6 ${dim}`}
+      >
+        <div className={`shrink-0 self-center sm:self-start ${listening ? "mascot-listening" : ""}`}>
+          <Mascot size={128} mood={mood} animated />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="max-w-prose text-lg leading-relaxed">{plan.briefing}</p>
+          {!plan.aiUsed && (
+            <p className="mt-2 text-sm text-ink-soft">Gemini is not connected, so this plan was made with plain rules.</p>
+          )}
+          <div className="mt-4">
+            {/* A new day starts with a clean voice bar, not the last day's answer. */}
+            <VoiceBar
+              key={plan.date}
+              briefing={plan.briefing}
+              onCommand={day.command}
+              onListeningChange={setListening}
+            />
+          </div>
+        </div>
+      </section>
+
       {day.error && <p className="mt-4 font-bold text-[#b91c1c]">{day.error}</p>}
 
       <div aria-busy={day.switching} className={`mt-6 grid gap-6 lg:grid-cols-[1fr_340px] ${dim}`}>
@@ -125,20 +144,8 @@ export default function TodayPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
-          <div className="mt-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="mt-4">
             <CalendarButton plan={plan} name={firstName} />
-            {!later && (
-              <label className="flex items-center gap-2 py-2 text-ink-soft">
-                <input
-                  type="checkbox"
-                  checked={day.hot}
-                  disabled={day.busy}
-                  onChange={(e) => void day.setHotPreview(e.target.checked)}
-                  className="h-4 w-4 accent-[#ff8a3d]"
-                />
-                Preview a 104°F day
-              </label>
-            )}
           </div>
         </div>
 
