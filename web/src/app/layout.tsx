@@ -18,7 +18,7 @@ const body = Atkinson_Hyperlegible_Next({
 
 export const metadata: Metadata = {
   title: PRODUCT,
-  description: `ASU Mobile shows you information. ${PRODUCT} plans your day.`,
+  description: `ASU Mobile shows your schedule. ${PRODUCT} plans your day.`,
   appleWebApp: { capable: true, title: PRODUCT, statusBarStyle: "default" },
 };
 
