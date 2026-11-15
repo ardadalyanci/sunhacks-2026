@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 import { placeLabel } from "@/lib/places";
 import type { DayItem } from "@/lib/types";
 import Mascot from "./Mascot";
+import { MASCOT } from "./brand";
 import {
   PIN_HEIGHT,
   assignmentName,
@@ -32,6 +33,9 @@ type Props = {
   items: DayItem[];
   hot?: boolean;
   nowHour?: number; // where Sol rests on the sky when nothing plays (the current time on this day)
+  suggestion?: DayItem; // Sol's top event pick, drawn as a dashed "+ Add" block in its free gap
+  onAdd?: (id: string) => void;
+  busy?: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
@@ -51,7 +55,7 @@ function keepInView(el: HTMLElement | null) {
  * that falls inside a block gets a short label ("Done 5 pm") in a lane at the right edge, and that block
  * narrows so the label never covers its text.
  */
-export default function SkyDay({ date, items, hot = false, nowHour, selectedId, onSelect }: Props) {
+export default function SkyDay({ date, items, hot = false, nowHour, suggestion, onAdd, busy = false, selectedId, onSelect }: Props) {
   const today = items.filter((i) => parseLocal(i.start).date === date);
   const { first, last } = dayBounds(today, date);
   const y = (hour: number) => PAD + (hour - first) * ROW;
@@ -148,6 +152,17 @@ export default function SkyDay({ date, items, hot = false, nowHour, selectedId, 
       return { item, start, end, top, height: Math.max(32, (Math.min(end, last) - start) * ROW - 4) };
     });
   const boxes = blocks.map((b) => ({ id: b.item.id, top: b.top, bottom: b.top + b.height }));
+
+  // Sol's top pick sits in its free gap as a dashed block, so the plan visibly makes room for it.
+  let ghost: { item: DayItem; start: number; end: number; top: number; height: number } | null = null;
+  if (suggestion && onAdd && parseLocal(suggestion.start).date === date) {
+    const start = hourOn(suggestion.start, date);
+    const end = suggestion.end ? hourOn(suggestion.end, date) : start + 1;
+    const top = y(start) + 2;
+    const h = Math.max(32, (Math.min(end, last) - start) * ROW - 4);
+    const free = !boxes.some((b) => Math.min(top + h, b.bottom) - Math.max(top, b.top) > 4);
+    if (free && start >= first && end <= last) ghost = { item: suggestion, start, end, top, height: h };
+  }
 
   const pins: Pin[] = [];
   for (const item of today) {
@@ -249,6 +264,30 @@ export default function SkyDay({ date, items, hot = false, nowHour, selectedId, 
       )}
 
       <ol className="absolute inset-0">
+        {ghost && onAdd && (
+          <li className="absolute left-16 right-3" style={{ top: ghost.top, height: ghost.height }}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAdd(ghost.item.id)}
+              aria-label={`Add ${MASCOT}'s pick: ${ghost.item.title} at ${formatTime(ghost.start)}`}
+              className="flex h-full w-full items-start justify-between gap-3 overflow-hidden rounded-2xl border-2 border-dashed border-dusk bg-cloud/40 px-3 py-2 text-left hover:bg-cloud/70 disabled:opacity-60"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-bold text-dusk">
+                  {MASCOT}’s pick: {ghost.item.title}
+                </span>
+                {ghost.height >= 56 && (
+                  <span className="block text-sm text-ink-soft">
+                    {rangeLabel(ghost.start, ghost.end)}
+                    {ghost.item.location ? ` · ${placeLabel(ghost.item.location)}` : ""}
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 rounded-full bg-dusk px-3 py-1 text-sm font-bold text-cloud">+ Add</span>
+            </button>
+          </li>
+        )}
         {blocks.map(({ item, start, end, top, height: blockHeight }) => {
           const selected = item.id === selectedId;
           const style =
@@ -300,14 +339,14 @@ export default function SkyDay({ date, items, hot = false, nowHour, selectedId, 
         {pins.map((pin, k) => (
           <li
             key={pin.key}
-            className={`absolute left-16 right-3 z-10 flex ${pin.right ? "justify-end" : ""}`}
+            className={`pointer-events-none absolute left-16 right-3 z-10 flex ${pin.right ? "justify-end" : ""}`}
             style={{ top: tops[k] }}
           >
             <button
               type="button"
               onClick={() => onSelect(pin.itemId)}
               aria-pressed={pin.itemId === selectedId}
-              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-[13px] font-bold sm:text-sm ${
+              className={`pointer-events-auto inline-flex h-7 items-center gap-1 rounded-full px-3 text-[13px] font-bold sm:text-sm ${
                 pin.lane ? "max-w-[7rem]" : pin.right ? "max-w-[85%]" : "max-w-full"
               } ${pin.tone} ${pin.itemId === selectedId ? "ring-4 ring-sun" : ""}`}
             >

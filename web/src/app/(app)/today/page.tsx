@@ -213,6 +213,9 @@ export default function TodayPage() {
             items={plan.items}
             hot={Boolean(heat)}
             nowHour={nowHour}
+            suggestion={plan.suggestions[0]}
+            onAdd={(id) => void day.accept(id)}
+            busy={day.busy}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
