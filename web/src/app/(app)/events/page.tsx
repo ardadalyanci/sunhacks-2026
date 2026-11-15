@@ -12,9 +12,12 @@ const SOURCE: Partial<Record<Opportunity["source"], string>> = {
   sundevilcentral: "Sun Devil Central",
 };
 
+const FOR_YOU = "For you"; // events that match the student's interests, plus Gemini's picks for today
+const ALL = "All";
+
 export default function EventsPage() {
   const day = useDay();
-  const [tag, setTag] = useState("All");
+  const [tag, setTag] = useState(FOR_YOU);
   const { plan, request } = day;
 
   if (!plan || !request) {
@@ -29,10 +32,22 @@ export default function EventsPage() {
   const why = new Map(plan.suggestions.map((s) => [s.id, s.why]));
   const onDay = new Set(plan.items.filter((i) => i.type === "event").map((i) => i.id));
   const interests = request.interests ?? [];
+  const wanted = new Set(interests.map((i) => i.toLowerCase()));
+  const forYou = (e: Opportunity) =>
+    why.has(`ev-${e.id}`) || onDay.has(`ev-${e.id}`) || e.tags.some((t) => wanted.has(t.toLowerCase()));
+  const filter = interests.length > 0 ? tag : ALL; // no interests saved: nothing to match, show everything
   const events = (request.events ?? [])
     .filter((e) => e.startsAt)
-    .filter((e) => tag === "All" || e.tags.some((t) => t.toLowerCase() === tag.toLowerCase()))
+    .filter((e) =>
+      filter === ALL ? true : filter === FOR_YOU ? forYou(e) : e.tags.some((t) => t.toLowerCase() === filter.toLowerCase()),
+    )
     .sort((a, b) => a.startsAt!.localeCompare(b.startsAt!));
+  const summary =
+    filter === FOR_YOU
+      ? `${events.length} events in the next 7 days match your interests.`
+      : filter === ALL
+        ? `${events.length} events in the next 7 days.`
+        : `${events.length} events tagged ${filter}.`;
 
   const byDay = new Map<string, Opportunity[]>();
   for (const e of events) {
@@ -49,13 +64,13 @@ export default function EventsPage() {
 
       {interests.length > 0 && (
         <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filter by interest">
-          {["All", ...interests].map((value) => (
+          {[FOR_YOU, ...interests, ALL].map((value) => (
             <button
               key={value}
               type="button"
               aria-pressed={tag === value}
               onClick={() => setTag(value)}
-              className={`rounded-full border-2 px-4 py-1.5 font-bold capitalize ${
+              className={`rounded-full border-2 px-4 py-1.5 font-bold ${value === FOR_YOU || value === ALL ? "" : "capitalize"} ${
                 tag === value ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
               }`}
             >
@@ -65,12 +80,16 @@ export default function EventsPage() {
         </div>
       )}
 
-      <div className="mt-8 max-w-3xl">
+      {events.length > 0 && <p className="mt-4 text-ink-soft">{summary}</p>}
+
+      <div className="mt-6 max-w-3xl">
         {events.length === 0 && (
           <p className="text-lg">
-            {tag === "All"
-              ? "No events yet. They appear here once the ASU Events and Sun Devil Central feeds are connected."
-              : `No events tagged ${tag}. Try All.`}
+            {filter === ALL
+              ? "No events in the next 7 days. ASU Events and Sun Devil Central may be unreachable right now."
+              : filter === FOR_YOU
+                ? "No events match your interests this week. Try All."
+                : `No events tagged ${filter}. Try All.`}
           </p>
         )}
         {[...byDay.entries()].map(([date, list]) => (

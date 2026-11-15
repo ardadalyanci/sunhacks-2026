@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import CalendarButton from "@/components/CalendarButton";
 import DayPicker from "@/components/DayPicker";
 import Mascot from "@/components/Mascot";
 import SkyDay from "@/components/SkyDay";
@@ -124,18 +125,21 @@ export default function TodayPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
-          {!later && (
-            <label className="mt-3 flex items-center gap-2 text-ink-soft">
-              <input
-                type="checkbox"
-                checked={day.hot}
-                disabled={day.busy}
-                onChange={(e) => void day.setHotPreview(e.target.checked)}
-                className="h-4 w-4 accent-[#ff8a3d]"
-              />
-              Preview a 104°F day
-            </label>
-          )}
+          <div className="mt-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+            <CalendarButton plan={plan} name={firstName} />
+            {!later && (
+              <label className="flex items-center gap-2 py-2 text-ink-soft">
+                <input
+                  type="checkbox"
+                  checked={day.hot}
+                  disabled={day.busy}
+                  onChange={(e) => void day.setHotPreview(e.target.checked)}
+                  className="h-4 w-4 accent-[#ff8a3d]"
+                />
+                Preview a 104°F day
+              </label>
+            )}
+          </div>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-live="polite">
