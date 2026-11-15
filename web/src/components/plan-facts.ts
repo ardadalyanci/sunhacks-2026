@@ -7,6 +7,7 @@ import { interestLabel, INTEREST_CHIPS } from "./interests";
 import { untilText } from "./next-walk";
 import { assignmentName, hourOn, rangeLabel } from "./sky-layout";
 import { arizonaToday, formatDay, formatTime, parseLocal } from "./time";
+import { walkLegs } from "./walk-map";
 
 export type PlanFact = { key: string; label: string; text: string };
 export type Source = { name: string; url: string };
@@ -14,11 +15,15 @@ export type Source = { name: string; url: string };
 type Options = { isDemo: boolean; later: boolean };
 
 // The heat preview ("What if it's 104°F?") sends these made-up numbers instead of the forecast
-// (HOT_PREVIEW in useDay.ts, the hot sample in lib/demo.ts), so they are not Open-Meteo's.
+// (HOT_PREVIEW in what-if.ts, the hot sample in lib/demo.ts), so they are not Open-Meteo's.
 const PREVIEW_HEAT = { tempF: 104, highF: 109 };
 
-// The fallback ranking (rankByOverlap in lib/planner.ts) writes this reason; Gemini writes its own.
-const RULES_WHY = /^Matches your interest in /;
+// The fallback ranking (rankByOverlap in lib/planner.ts) writes "You picked robotics."; Gemini is told never to
+// start a reason that way, so this tells the two apart.
+const RULES_WHY = /^You picked /;
+
+// A class is a title that is exactly a course code ("CSE 230", "BIO 181L"); "MAT 343 study group" is not.
+const COURSE = /^[A-Z]{2,4} \d{3}[A-Z]?$/;
 
 const MAX_DUE_LISTED = 3; // a long Canvas list reads as "and 4 more"
 
@@ -56,20 +61,21 @@ function interestWord(key: string): string {
   return known ? interestLabel(key).toLowerCase() : key;
 }
 
+/** A class by its code ("CSE 230"); anything else as "your work shift" or "your MAT 343 study group". */
+function scheduleName(title: string): string {
+  if (COURSE.test(title)) return title;
+  return `your ${/^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title}`;
+}
+
 function scheduleFact(plan: DayPlan): PlanFact | null {
   const fixed = plan.items.filter((i) => i.type === "class");
   if (!fixed.length) return null;
-  const courses = fixed.filter((i) => /^[A-Z]{2,4} \d{3}/.test(i.title)).length;
-  const kind =
-    courses === fixed.length
-      ? plural(fixed.length, "class", "classes")
-      : courses === 0
-        ? plural(fixed.length, "commitment")
-        : `${fixed.length} classes and commitments`;
+  const allCourses = fixed.every((i) => COURSE.test(i.title));
+  const kind = allCourses ? plural(fixed.length, "class", "classes") : plural(fixed.length, "thing");
   return {
     key: "schedule",
     label: "Your schedule",
-    text: `${kind} on ${weekday(plan.date)}: ${joinList(fixed.map((i) => i.title))}.`,
+    text: `${kind} on ${weekday(plan.date)}: ${joinList(fixed.map((i) => scheduleName(i.title)))}.`,
   };
 }
 
@@ -94,15 +100,32 @@ function canvasFact(request: PlanRequest, plan: DayPlan, { isDemo, later }: Opti
   return { key: "canvas", label: isDemo ? "Assignments" : "Canvas", text: `${head}: ${joinList(parts)}.` };
 }
 
+const walkMinutes = (i: DayItem) => Math.round((Date.parse(i.start) - Date.parse(i.leaveAt!)) / 60_000);
+
+/**
+ * The walks, counted the way the "Your walks" map draws them (walkLegs), so both cards give the same numbers. The
+ * map has no line for the walk to the first stop when the day's start is unknown, so that one is named apart.
+ */
 function walksFact(request: PlanRequest, plan: DayPlan): PlanFact | null {
-  const walks = plan.items.filter((i) => (i.type === "class" || i.type === "event") && i.leaveAt);
+  const walks = plan.items
+    .filter((i) => (i.type === "class" || i.type === "event") && i.leaveAt && parseLocal(i.start).date === plan.date)
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   if (!walks.length) return null;
-  const minutes = walks.reduce((sum, i) => sum + Math.round((Date.parse(i.start) - Date.parse(i.leaveAt!)) / 60_000), 0);
+  const { legs } = walkLegs(plan.items, plan.date, request.startBuildingId);
+  const source = `Each leave time comes from distances between ${buildings.length} ASU buildings from OpenStreetMap.`;
+  // No map at all (one stop, or only places the map does not know): count the plan's own walks.
+  if (!legs.length) {
+    const minutes = walks.reduce((sum, i) => sum + walkMinutes(i), 0);
+    return { key: "walks", label: "Walks", text: `${plural(walks.length, "walk")}, ${plural(minutes, "minute")} on foot in all. ${source}` };
+  }
+  const minutes = legs.reduce((sum, leg) => sum + leg.minutes, 0);
   const start = findPlace(request.startBuildingId).building ? `, starting from ${placeLabel(request.startBuildingId)}` : "";
+  const first = walks[0];
+  const plus = legs.some((leg) => leg.itemId === first.id) ? "" : `, plus the walk to your first ${first.type === "event" ? "event" : "class"}`;
   return {
     key: "walks",
     label: "Walks",
-    text: `${plural(walks.length, "walk")}, ${plural(minutes, "minute")} on foot in all${start}. Each leave time comes from distances between ${buildings.length} ASU buildings from OpenStreetMap.`,
+    text: `${plural(legs.length, "walk")}, ${plural(minutes, "minute")} on foot in all${start}${plus}. ${source}`,
   };
 }
 
@@ -155,11 +178,12 @@ function eventsFact(request: PlanRequest, plan: DayPlan, { isDemo }: Options): P
   }
   const onDay = events.filter((e) => e.startsAt && azDate(e.startsAt) === plan.date).length;
   const live = events.filter((e) => e.source !== "seed").length;
+  const samples = events.length - live; // the sample student's made-up events, only on the sample's today
   const week =
-    isDemo && live
-      ? `${plural(events.length - live, "sample event")} mixed with ${live} from the live ASU feeds this week`
-      : isDemo
-        ? plural(events.length, "sample event")
+    isDemo && samples && live
+      ? `${plural(samples, "sample event")} mixed with ${live} from the live ASU feeds this week`
+      : isDemo && samples
+        ? plural(samples, "sample event")
         : `${plural(events.length, "event")} this week from ASU Events and Sun Devil Central`;
   const added = plan.items.filter((i) => i.type === "event").length;
   const suggest = plan.suggestions.length
