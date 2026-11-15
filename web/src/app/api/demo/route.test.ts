@@ -89,3 +89,18 @@ describe("POST /api/canvas with the demo token", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("GET /api/demo for a later day", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps 8 AM for today and uses the real clock for a look-ahead", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-14T17:40:00-07:00"));
+    expect((await demo("?date=2026-11-14")).json.request.now).toBe("2026-11-14T08:00:00-07:00");
+    const ahead = (await demo("?date=2026-11-15")).json.request;
+    expect(ahead.now).toBe("2026-11-14T17:40:00-07:00");
+    const day = await planFor(ahead);
+    expect(day.briefing).toMatch(/^Tomorrow, Sun Nov 15\./);
+    expect(day.items.filter((i) => i.type === "class")).toHaveLength(3); // the whole day, not just what is left of today
+  });
+});
