@@ -18,6 +18,7 @@ const ROUTE_FACTOR = 1.3; // campus paths are not straight lines
 const SLOWER_PACE_FACTOR = 1.35; // "Give me more time to walk" in Setup
 const HEAT_EXTRA_MIN = 2;
 const HEAT_EXTRA_SLOWER_MIN = 5;
+const SAME_BUILDING_BREAK_MIN = 60; // a longer break between two stops in one building gets a leave time again
 
 // A class is a course code and nothing else ("CSE 230", "BIO 181L"). "MAT 343 study group" or "Work shift" is a
 // commitment the student added, and Sol calls it by its own name.
@@ -90,6 +91,10 @@ export function hasPhrase(hay: string, needle: string): boolean {
  */
 export function findBuilding(buildings: Building[], ref?: string): Building | undefined {
   if (!ref?.trim() || isOnline(ref)) return undefined;
+  // A code in parentheses names the building: "Life Sciences Center E (LSE)" is the E wing, not "Life Sciences Center".
+  const code = /\(([A-Z]{2,6})\)/.exec(ref)?.[1];
+  const coded = code && buildings.find((b) => b.id === code);
+  if (coded) return coded;
   let best: { b: Building; len: number } | undefined;
   for (const b of buildings) {
     for (const needle of [b.id, b.name, ...(b.aliases ?? [])]) {
@@ -251,14 +256,17 @@ export function placeStudyBlocks(
       return { from, room: Math.min(g.end, due) - from };
     };
 
-    for (const g of [...gaps].sort((a, b) => a.start - b.start)) {
+    const sorted = [...gaps].sort((a, b) => a.start - b.start);
+    for (const g of sorted) {
       if (need <= 0) break;
       const { from, room } = roomIn(g);
       if (room < shortest) continue;
+      // Saving a full block for later only makes sense when a later gap can hold one.
+      const laterRoom = sorted.some((h) => h !== g && h.start >= g.end && roomIn(h).room >= shortest);
       if (need <= room) place(g, from, need); // the rest fits here
       else if (need - room >= shortest) place(g, from, room); // fill the gap; a full block is still left for later
-      else if (need >= 2 * shortest) place(g, from, need - shortest); // leave exactly one full block for later
-      // else: too little to split, so look for a later gap that holds all of it
+      else if (need >= 2 * shortest && laterRoom) place(g, from, need - shortest); // leave exactly one full block for later
+      // else: too little to split, so look for a later gap that holds all of it (or fill the roomiest one below)
     }
     // Nothing later held what was left: the biggest piece that fits, in the roomiest gap. A shortfall, never padding.
     if (need > 0) {
@@ -276,7 +284,8 @@ export function placeStudyBlocks(
 /**
  * Sets `leaveAt` on classes and events, walking from the previous located stop (or the start building).
  * `slower` gives every walk the student's slower pace (see walkMinutes).
- * Another room in the same building is no walk, so that stop gets no leave time. When a walk has to start before
+ * Another room in the same building within an hour is no walk, so that stop gets no leave time; after a longer
+ * break it gets the leave time for a walk from an unknown place. When a walk has to start before
  * the stop before it ends (a slower pace or the heat on a short break), the leave time stays honest and `why` says
  * so, starting with "Tight:".
  */
@@ -301,13 +310,17 @@ export function addLeaveTimes(
       continue;
     }
     const there = findBuilding(buildings, item.buildingId ?? item.location);
-    const sameBuilding = lastStop && there && lastStop.id === there.id;
+    const sameBuilding = Boolean(lastStop && there && lastStop.id === there.id);
     lastStop = there;
-    if (sameBuilding) {
-      delete item.leaveAt; // down the hall, not a walk
+    // Down the hall right after the stop before is no walk. After a longer break the student has likely left
+    // (lunch, the library), so they get the leave time for a walk from a place we do not know.
+    const breakMs = before ? new Date(item.start).getTime() - new Date(before.end ?? before.start).getTime() : 0;
+    if (sameBuilding && breakMs <= SAME_BUILDING_BREAK_MIN * MIN) {
+      delete item.leaveAt;
       continue;
     }
-    const leave = new Date(item.start).getTime() - walkMinutes(here, there, hot, slower) * MIN;
+    const from = sameBuilding ? undefined : here;
+    const leave = new Date(item.start).getTime() - walkMinutes(from, there, hot, slower) * MIN;
     item.leaveAt = toMstIso(new Date(leave));
     if (there) here = there;
     // Only a real squeeze: a stop that starts before the one before it ends is a clash, not a tight walk.
@@ -389,7 +402,7 @@ export function templateBriefing(items: DayItem[], suggestions: DayItem[], weath
     const name = stopName(first);
     parts.push(
       first.leaveAt
-        ? `Leave at ${clock(first.leaveAt)} for ${name}${where}${rank}.`
+        ? `${Date.parse(first.leaveAt) <= nowMs ? "Leave now" : `Leave at ${clock(first.leaveAt)}`} for ${name}${where}${rank}.`
         : `${capitalize(name)} starts at ${clock(first.start)}${where}${rank}.`,
     );
   }

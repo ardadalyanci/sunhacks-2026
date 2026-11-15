@@ -61,6 +61,15 @@ describe("buildings", () => {
     expect(findBuilding(BUILDINGS, "MU")?.id).toBe("MU");
   });
 
+  it("trusts a building code in parentheses over a longer name", () => {
+    const wings: Building[] = [
+      { id: "LSA", name: "Life Sciences Center A Wing", lat: 33.42, lng: -111.93, aliases: ["Life Sciences Center"] },
+      { id: "LSE", name: "Life Sciences E Wing", lat: 33.42, lng: -111.93 },
+    ];
+    expect(findBuilding(wings, "Life Sciences Center E (LSE), Room 104")?.id).toBe("LSE");
+    expect(findBuilding(wings, "Life Sciences Center")?.id).toBe("LSA");
+  });
+
   it("does not match parts of words or online places", () => {
     expect(findBuilding(BUILDINGS, "Music Building")).toBeUndefined();
     expect(findBuilding(BUILDINGS, "Community room")).toBeUndefined();
@@ -212,6 +221,21 @@ describe("study blocks", () => {
     expect(times(placeStudyBlocks([deadline("a", "2026-11-16T23:00:00-07:00")], gaps, now, () => 45))).toEqual([["13:00", "13:45"]]);
   });
 
+  it("fills a single gap when no later gap could take a saved piece", () => {
+    const one = (minutes: number) => [{ start: now, end: now + minutes * MIN }];
+    expect(times(placeStudyBlocks([deadline("a", "2026-11-16T23:00:00-07:00")], one(50), now, () => 70))).toEqual([["08:00", "08:50"]]);
+    expect(times(placeStudyBlocks([deadline("a", "2026-11-16T23:00:00-07:00")], one(75), now, () => 90))).toEqual([["08:00", "09:15"]]);
+    // With a later gap the split still saves a full block for it: 40 + 30.
+    const two = [
+      { start: now, end: ms("2026-11-16T08:40:00-07:00") },
+      { start: ms("2026-11-16T13:00:00-07:00"), end: ms("2026-11-16T13:40:00-07:00") },
+    ];
+    expect(times(placeStudyBlocks([deadline("a", "2026-11-16T23:00:00-07:00")], two, now, () => 70))).toEqual([
+      ["08:00", "08:40"],
+      ["13:00", "13:30"],
+    ]);
+  });
+
   it("places a shorter piece rather than padding when nothing later fits", () => {
     const gaps = [
       { start: now, end: ms("2026-11-16T08:40:00-07:00") },
@@ -237,7 +261,7 @@ describe("leave times", () => {
   it("walks from the previous stop, skips online items and adds time on hot days", () => {
     const items = [
       item({ id: "c1", type: "class", start: "2026-11-16T10:30:00-07:00", buildingId: "BYENG" }),
-      item({ id: "e1", start: "2026-11-16T12:00:00-07:00", location: "Online" }),
+      item({ id: "e1", start: "2026-11-16T12:00:00-07:00", end: "2026-11-16T13:00:00-07:00", location: "Online" }),
       item({ id: "c2", type: "class", start: "2026-11-16T13:30:00-07:00", buildingId: "BYENG" }),
     ];
     addLeaveTimes(items, BUILDINGS, "Manzanita", { tempF: 99, highF: 104, isHot: true });
@@ -258,6 +282,22 @@ describe("leave times", () => {
     expect(items[0].leaveAt).toBeDefined();
     expect(items[1].leaveAt).toBeUndefined();
     expect(items[2].leaveAt).toBe(toMstIso(new Date(ms(items[2].start) - walkMinutes(BUILDINGS[2], BUILDINGS[0], false) * MIN)));
+  });
+
+  it("gives a leave time again after a long break in the same building", () => {
+    const day = (second: string) => [
+      item({ id: "a", type: "class", title: "CSE 230", start: "2026-11-16T09:00:00-07:00", end: "2026-11-16T09:50:00-07:00", location: "BYENG 210" }),
+      item({ id: "b", type: "class", title: "CSE 240", start: `2026-11-16T${second}:00-07:00`, location: "BYENG 190" }),
+    ];
+    const longBreak = day("15:00");
+    addLeaveTimes(longBreak, BUILDINGS, "Manzanita");
+    expect(longBreak[0].leaveAt).toBeDefined();
+    // Five hours later the student has likely left: the walk from a place we do not know.
+    const defaultWalk = walkMinutes(undefined, BUILDINGS[0], false);
+    expect(longBreak[1].leaveAt).toBe(toMstIso(new Date(ms("2026-11-16T15:00:00-07:00") - defaultWalk * MIN)));
+    const shortBreak = day("10:45"); // 55 minutes after: still down the hall
+    addLeaveTimes(shortBreak, BUILDINGS, "Manzanita");
+    expect(shortBreak[1].leaveAt).toBeUndefined();
   });
 
   it("walks again after a stop in a place it does not know", () => {
@@ -390,6 +430,8 @@ describe("fallbacks without Gemini", () => {
     expect(templateBriefing(day, [], undefined, undefined, ms("2026-11-16T14:00:00-07:00"))).toBe(
       "Leave at 2:50 PM for CSE 240 in Brickyard 190, the last of your 2 classes. Quiz 5 for CSE 240 is due at 11:59 PM.",
     );
+    // Between the leave time and the start: "Leave now", never a time that has passed.
+    expect(templateBriefing(day, [], undefined, undefined, ms("2026-11-16T14:55:00-07:00"))).toMatch(/^Leave now for CSE 240 in Brickyard 190,/);
     expect(templateBriefing(day, [], undefined, undefined, ms("2026-11-16T16:00:00-07:00"))).toBe(
       "Your classes are done for today. Quiz 5 for CSE 240 is due at 11:59 PM.",
     );

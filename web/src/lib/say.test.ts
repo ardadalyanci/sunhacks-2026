@@ -53,6 +53,14 @@ describe("tidyBriefing", () => {
     expect(tidyBriefing("You know at 3 pm it gets hot.")).toBe("You know at 3 pm it gets hot.");
   });
 
+  it("reads a.m. and p.m. as times, not as the end of a sentence", () => {
+    expect(tidyBriefing("Leave at 10:18 a.m. for your study group at Hayden. I saved 8 a.m. to 10 a.m. for Lab 7, due at 11:59 p.m. tonight.")).toBe(
+      "Leave at 10:18 am for your study group at Hayden. I saved 8 am to 10 am for Lab 7, due at 11:59 pm tonight.",
+    );
+    expect(tidyBriefing("Lab 7 is due at 11:59 p.m. Then rest.")).toBe("Lab 7 is due at 11:59 pm. Then rest.");
+    expect(tidyBriefing("It's due at 5 P.M.")).toBe("It's due at 5 pm.");
+  });
+
   it("cuts the stock openers the model still slips in", () => {
     expect(tidyBriefing("I saved 8 am for Lab 7. You can also check out the lunch & learn at noon.")).toBe(
       "I saved 8 am for Lab 7. Check out the lunch & learn at noon.",
