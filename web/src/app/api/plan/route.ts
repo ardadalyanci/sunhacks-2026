@@ -70,15 +70,22 @@ export async function POST(request: Request) {
   const slower = body.pace === "slower";
   const fixedStops = sortByStart([...classes, ...acceptedEvents]);
   addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather, slower);
-  const gaps = freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), fixedStops, CLASS_TRAVEL_BUFFER_MIN);
+  const dayGaps = (stops: DayItem[]) => freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), stops, CLASS_TRAVEL_BUFFER_MIN);
+  const gaps = dayGaps(fixedStops);
   const travelMin = walkMinutes(undefined, undefined, body.weather?.isHot ?? false, slower);
-  const candidates = pickCandidates(fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin), interests, MAX_CANDIDATES);
+  // Sol ranks the events of the day as it was before the student added any (the classes alone), with the added
+  // ones among them: the same question as before the add (a cached answer, not a new Gemini call), and the pick
+  // that held its time before the add is still known (see picksThenStudy).
+  const classStops = sortByStart(classItems(body.classes, date, buildings));
+  addLeaveTimes(classStops, buildings, body.startBuildingId, body.weather, slower);
+  const candidates = pickCandidates(fittingEvents(dayEvents, dayGaps(classStops), nowMs, travelMin), interests, MAX_CANDIDATES);
+  const fitsNow = new Set(fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin).map((e) => e.id));
   const openDeadlines = deadlines.filter((d) => !d.done && Date.parse(d.start) > nowMs);
 
   // 3. Gemini, two calls in parallel: rank events for this student (best first), and estimate homework time on
   //    its own, so adding an event does not change the estimates and move the morning's study blocks.
   const about = new Map((body.events ?? []).map((o) => [`ev-${o.id}`, o.description ?? ""]));
-  const [ranked, estimated] = await Promise.all([rankEvents(candidates, interests, fixedStops, about), estimateMinutes(openDeadlines)]);
+  const [ranked, estimated] = await Promise.all([rankEvents(candidates, interests, classStops, about), estimateMinutes(openDeadlines)]);
   const byId = new Map(candidates.map((c) => [c.id, c]));
   const seen = new Set<string>();
   let ordered: DayItem[] = (ranked ?? [])
@@ -87,10 +94,10 @@ export async function POST(request: Request) {
   if (!ordered.length) ordered = rankByOverlap(candidates, interests).map(({ item, why }) => ({ ...item, why }));
   const estimates = new Map((estimated ?? []).map((e) => [e.id, Math.min(180, Math.max(15, Math.round(e.minutes)))]));
 
-  // 4. Hold the top pick's time, then place study blocks in what is left, so the pick drawn on the timeline is
-  //    never under homework. The other picks are alternatives the student can still add ("add the robotics
-  //    meeting"); a study block moves out of the way when one is added.
-  const { suggestions, study } = picksThenStudy(ordered, gaps, openDeadlines, nowMs, travelMin, (id) => estimates.get(id) ?? defaultStudyMinutes());
+  // 4. Sol's picks and the study blocks: the top pick holds its time and the study blocks go around it, until the
+  //    student adds that pick. Every pick shown costs no homework time (see picksThenStudy).
+  const minutesFor = (id: string) => estimates.get(id) ?? defaultStudyMinutes();
+  const { suggestions, study } = picksThenStudy(ordered, gaps, openDeadlines, nowMs, travelMin, minutesFor, accepted, fitsNow);
   const items = sortByStart([...fixedStops, ...deadlinesToday, ...study]);
 
   // 5. Gemini call 3: the spoken briefing.
@@ -116,10 +123,15 @@ export async function POST(request: Request) {
 type Gap = Parameters<typeof reserveTime>[0][number];
 
 /**
- * Sol's picks and the study blocks. Only the top pick holds its time: study blocks go around it, and homework is
- * not pushed late for events the student has not added. The other picks (best first) are alternatives. Each one
- * fits between the fixed stops on its own, so two of them may overlap, and each is shown only when adding it
- * would leave no assignment with less study time than it has now. `gaps` is left as it was.
+ * Sol's picks and the study blocks. `ordered` is Sol's ranking of the day before any add, so it may hold events the
+ * student has added since (`accepted`); `fitsNow` are the events that still fit around everything on the day.
+ * A pick is shown only when adding it leaves every assignment the study time it gets with nothing held: a pick
+ * never costs homework time. The top pick is the best event that costs none (or was added): it holds its time, so
+ * study blocks go around it and the pick drawn on the timeline is not under homework. It is the same event before
+ * and after the student adds another one, so homework moves only when the added event itself needs the time and
+ * Sol's "Nothing else moved." stays true. Once the student adds the top pick itself, nothing is held: no other pick
+ * starts pushing homework around. Each other pick is tested together with the held top pick when the two do not
+ * overlap (the day the student gets by adding it), alone when they do. `gaps` is left as it was.
  */
 function picksThenStudy(
   ordered: DayItem[],
@@ -128,17 +140,15 @@ function picksThenStudy(
   nowMs: number,
   travelMin: number,
   minutesFor: (id: string) => number,
+  accepted: Set<string>,
+  fitsNow: Set<string>,
 ): { suggestions: DayItem[]; study: DayItem[] } {
   const hold = (free: Gap[], e: DayItem) => reserveTime(free, Date.parse(e.start) - travelMin * 60_000, Date.parse(e.end ?? e.start));
   // reserveTime and placeStudyBlocks change the gaps (and the gap objects) they get, so each try works on a copy.
-  const freeAround = (held: DayItem[]) => {
+  const studyWith = (held: DayItem[]) => {
     const free = gaps.map((g) => ({ ...g }));
     for (const e of held) hold(free, e);
-    return free;
-  };
-  const studyWith = (held: DayItem[]) => {
-    const free = freeAround(held);
-    return { free, study: placeStudyBlocks(deadlines, free, nowMs, minutesFor) };
+    return placeStudyBlocks(deadlines, free, nowMs, minutesFor);
   };
   // Study minutes per assignment (blocks are titled "Work on: <assignment>").
   const minutes = (study: DayItem[]) => {
@@ -146,22 +156,24 @@ function picksThenStudy(
     for (const b of study) total.set(b.title, (total.get(b.title) ?? 0) + Date.parse(b.end ?? b.start) - Date.parse(b.start));
     return total;
   };
-
+  const floor = minutes(studyWith([]));
+  const keeps = (held: DayItem[]) => {
+    const got = minutes(studyWith(held));
+    return [...floor].every(([title, ms]) => (got.get(title) ?? 0) >= ms);
+  };
   const overlap = (a: DayItem, b: DayItem) =>
     Date.parse(a.start) < Date.parse(b.end ?? b.start) && Date.parse(b.start) < Date.parse(a.end ?? a.start);
 
-  const top = ordered.slice(0, 1);
-  const study = studyWith(top).study;
-  const floor = minutes(study);
-  const picks = [...top];
-  for (const e of ordered.slice(1)) {
+  const best = ordered.find((e) => accepted.has(e.id) || (fitsNow.has(e.id) && keeps([e])));
+  const top = best && !accepted.has(best.id) ? best : undefined; // an added event is a fixed stop already
+  const picks: DayItem[] = [];
+  for (const e of ordered) {
     if (picks.length >= MAX_SUGGESTIONS) break;
-    // Once this one is added it is a fixed stop; the top pick still holds its time unless the two overlap.
-    const kept = overlap(top[0], e) ? [e] : [...top, e];
-    const got = minutes(studyWith(kept).study);
-    if ([...floor].every(([title, ms]) => (got.get(title) ?? 0) >= ms)) picks.push(e);
+    if (accepted.has(e.id) || !fitsNow.has(e.id)) continue;
+    // A pick that fails alone is never shown, so the held top pick is also the first pick shown.
+    if (e === top || keeps(top && !overlap(top, e) ? [top, e] : [e])) picks.push(e);
   }
-  return { suggestions: picks, study };
+  return { suggestions: picks, study: studyWith(top ? [top] : []) };
 }
 
 type Pick = { id: string; why: string };

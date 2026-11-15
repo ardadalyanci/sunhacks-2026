@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { demoScenario } from "@/lib/demo";
+import { demoEvents, demoScenario } from "@/lib/demo";
 import type { DayItem, DayPlan } from "@/lib/types";
 
 vi.mock("@/lib/buildings", () => ({
@@ -338,6 +338,46 @@ describe("POST /api/plan: Sol's picks keep their time", () => {
     const { json } = await plan(req);
     expect(studyMinutes(json, "Lab 7")).toBe(180);
     expect(json.suggestions.map((s) => s.id)).toEqual(["ev-e1"]);
+  });
+
+  it("moves homework only for the event the student adds, never for a new top pick", async () => {
+    const picks = ["ev-demo-lunch-talk", "ev-demo-robotics", "ev-demo-mixer"];
+    gemini(picks, { "canvas-assignment-demo-2": 120, "canvas-assignment-demo-3": 45 });
+    const reading = (json: DayPlan) =>
+      json.items.filter((i) => i.type === "study_block" && i.title.includes("Reading response")).map((b) => `${t(b.start)}-${t(b.end)}`);
+    const atRest = (await plan(sunday)).json;
+    expect(reading(atRest)).toEqual(["16:00-16:45"]); // the lunch & learn holds noon
+    expect(atRest.suggestions[0].id).toBe("ev-demo-lunch-talk");
+
+    // "+ Add" on the lunch & learn: robotics night is the top pick now, but it does not start holding 4 pm.
+    const lunch = (await plan({ ...sunday, acceptedEventIds: ["demo-lunch-talk"] })).json;
+    expect(reading(lunch)).toEqual(["16:00-16:45"]);
+    expect(lunch.suggestions.map((s) => s.id)).toEqual(["ev-demo-robotics", "ev-demo-mixer"]);
+
+    // "Add the robotics meeting": robotics needs 4 pm, so the reading moves, and the lunch & learn still holds noon.
+    const robotics = (await plan({ ...sunday, acceptedEventIds: ["demo-robotics"] })).json;
+    expect(reading(robotics)).toEqual(["17:30-18:15"]);
+    expect(robotics.suggestions[0].id).toBe("ev-demo-lunch-talk");
+    // Then adding the lunch & learn moves nothing.
+    expect(reading((await plan({ ...sunday, acceptedEventIds: ["demo-robotics", "demo-lunch-talk"] })).json)).toEqual(["17:30-18:15"]);
+
+    // Every ranking is the one Gemini gave for the day before any add: one question, asked (and cached) once.
+    const rankPrompts = new Set(generateJson.mock.calls.map((c) => String(c[0])).filter((p) => p.includes("EVENTS:")));
+    expect(rankPrompts.size).toBe(1);
+  });
+
+  it("never lets the top pick take study time from homework due soon", async () => {
+    // Lab 7 is due at 10 am and the only pick sits in the morning: the pick is not shown and Lab 7 gets 8 to 10.
+    const lunchEarly = { ...demoEvents("2026-11-15")[0], startsAt: "2026-11-15T08:20:00-07:00", endsAt: "2026-11-15T09:20:00-07:00" };
+    const req = {
+      ...sunday,
+      deadlines: sunday.deadlines!.map((d) => (d.id === "canvas-assignment-demo-2" ? { ...d, start: "2026-11-15T10:00:00-07:00" } : d)),
+      events: [lunchEarly],
+    };
+    gemini(["ev-demo-lunch-talk"], { "canvas-assignment-demo-2": 120, "canvas-assignment-demo-3": 45 });
+    const { json } = await plan(req);
+    expect(studyMinutes(json, "Lab 7")).toBe(120);
+    expect(json.suggestions).toEqual([]);
   });
 
   it("gives Gemini each event's hook and the commitment around it, and asks for varied reasons", async () => {

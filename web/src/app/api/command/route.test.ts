@@ -165,4 +165,24 @@ describe("POST /api/command with Gemini", () => {
     const isValid = generateJson.mock.calls[0][2] as (v: unknown) => boolean;
     expect(isValid({ action: "unknown", reply: "I can add the poetry open mic." })).toBe(true);
   });
+
+  it("drops a named study block by the keyword rule, without asking Gemini (its 'none here' answer got cached)", async () => {
+    generateJson.mockResolvedValue({ action: "unknown", reply: "I couldn't find a study block to drop today." });
+    expect((await command({ text: "drop the study block", plan })).json).toEqual({ action: "remove_item", itemId: "study-canvas-quiz-3-1" });
+    expect((await command({ text: "Study time at 11, skip it", plan })).json).toEqual({ action: "remove_item", itemId: "study-canvas-quiz-3-1" });
+    expect(generateJson).not.toHaveBeenCalled();
+  });
+
+  it("still asks Gemini about a study group, which is not a study block", async () => {
+    generateJson.mockResolvedValueOnce({ action: "unknown", reply: "Your MAT 343 study group is a commitment, so I can't take it off." });
+    const { json } = await command({ text: "cancel the study group", plan });
+    expect(generateJson).toHaveBeenCalledTimes(1);
+    expect(json.action).toBe("unknown");
+  });
+
+  it("asks Gemini when no study block is left to drop", async () => {
+    const noStudy = { ...plan, items: plan.items.filter((i) => i.type !== "study_block") };
+    await command({ text: "drop the study block", plan: noStudy });
+    expect(generateJson).toHaveBeenCalledTimes(1);
+  });
 });
