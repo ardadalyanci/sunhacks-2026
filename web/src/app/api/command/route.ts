@@ -31,7 +31,8 @@ export async function POST(request: Request) {
   const nowMs = typeof body?.now === "string" && !Number.isNaN(Date.parse(body.now)) ? Date.parse(body.now) : Date.now();
 
   const decision = (await understand(text, addable, removable)) ?? byRules(text, addable, removable);
-  const action: CommandAction = decision.action === "next_item" ? { action: "briefing", reply: nextReply(plan.items, nowMs) } : decision;
+  const action: CommandAction =
+    decision.action === "next_item" ? { action: "briefing", reply: nextReply(plan.items, nowMs, text) } : decision;
   return Response.json(action);
 }
 
@@ -39,15 +40,32 @@ export async function POST(request: Request) {
 const NEXT = { action: "next_item" } as const;
 type Decision = CommandAction | typeof NEXT;
 
-/** The next class, event or study block after `nowMs`, with where it is and when to leave. */
-function nextReply(items: DayItem[], nowMs: number): string {
-  const next = items
+/** Questions about the walk itself ("when should I leave", "am I late") lead with the next leave time. */
+const LEAVE_WORDS = /\b(leave|leaving|head out|walk|late)\b/i;
+
+/**
+ * "What's next / when do I leave": the next class, event or study block after `nowMs`, and the next walk.
+ * A leave question names the walk first, even when a study block comes before it ("Until then: …").
+ */
+function nextReply(items: DayItem[], nowMs: number, text: string): string {
+  const upcoming = items
     .filter((i) => (i.type === "class" || i.type === "event" || i.type === "study_block") && Date.parse(i.start) > nowMs)
-    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0];
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  const next = upcoming[0];
   if (!next) return "Nothing else is planned today.";
-  const place = next.location ? ` in ${next.location}` : "";
-  const leave = next.leaveAt ? (Date.parse(next.leaveAt) <= nowMs ? " Leave now." : ` Leave by ${clock(next.leaveAt)}.`) : "";
-  return `Next: ${next.title} at ${clock(next.start)}${place}.${leave}`;
+  const walk = upcoming.find((i) => i.leaveAt); // the next stop the student walks to
+  const at = (i: DayItem) => `${i.title} at ${clock(i.start)}${i.location ? ` in ${i.location}` : ""}`;
+  const leaveBy = (leaveAt: string) => (Date.parse(leaveAt) <= nowMs ? "Leave now" : `Leave by ${clock(leaveAt)}`);
+
+  if (walk?.leaveAt && LEAVE_WORDS.test(text)) {
+    const minutes = Math.max(1, Math.round((Date.parse(walk.start) - Date.parse(walk.leaveAt)) / 60_000));
+    const line = `${leaveBy(walk.leaveAt)} for ${at(walk)}, a ${minutes}-minute walk.`;
+    return walk === next ? line : `${line} Until then: ${next.title} at ${clock(next.start)}.`;
+  }
+  if (next.leaveAt) return `Next: ${at(next)}. ${leaveBy(next.leaveAt)}.`;
+  if (!walk?.leaveAt) return `Next: ${at(next)}.`;
+  const then = Date.parse(walk.leaveAt) <= nowMs ? "Then leave now" : `Then leave by ${clock(walk.leaveAt)}`;
+  return `Next: ${at(next)}. ${then} for ${walk.title}.`;
 }
 
 async function understand(text: string, addable: DayItem[], removable: DayItem[]): Promise<Decision | null> {
@@ -94,7 +112,7 @@ async function understand(text: string, addable: DayItem[], removable: DayItem[]
 
 function byRules(text: string, addable: DayItem[], removable: DayItem[]): Decision {
   const t = text.toLowerCase();
-  if (/\b(next|what now|where (do|should) i (go|be)|when (do|should) i (leave|go))\b/.test(t)) return NEXT;
+  if (/\b(next|what now|where (do|should) i (go|be)|when (do|should) i (leave|go|head out)|head out|am i late|my walk)\b/.test(t)) return NEXT;
   if (/(how'?s|how is|what'?s|what is).*(day|today|schedule|next)|brief/.test(t)) return { action: "briefing" };
   if (/\b(remove|drop|cancel|skip|delete)\b/.test(t)) {
     const hit = bestMatch(t, removable);
