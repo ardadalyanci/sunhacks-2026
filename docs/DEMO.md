@@ -52,7 +52,7 @@ One person drives the laptop, one talks. One sentence per beat; let the screen d
 | 3b | Turn off oversleep, then 104°, without talking. | (nothing) | "Back to starting at 8 am: I moved Lab 7 to 8–10 am…", then "Back to 78°: your walks are 2 minutes later again." Headline back to 10:18 am. |
 | 4 | Type "When should I leave?" in the box and press Send (or use the mic). | "You can just ask him." | Sol's chat bubble: "Leave at 10:18 am for your MAT 343 study group at Hayden, a 12-minute walk." Code reads it from the plan, so it follows whatever pills are on. |
 | 5 | Type or say "Add the robotics meeting". | "And he takes orders. Gemini turns the sentence into an action on the plan." | Sol's bubble: "Added Robotics club build night at 4:15 pm." His note: "Added Robotics club build night, 4:15–5:30 pm. I moved the Reading response to 5:30–6:15 pm." |
-| 6 | The "+ Add" button on the dashed "Sol's pick" block on the sky (Lunch & learn, noon). | "Sol also finds club events that fit the gaps in your day, ranked by Gemini against your interests." | "Added Lunch & learn: landing a software internship, noon–12:50 pm, so leave at 11:55 am for MU 202. I moved the Reading response to 6:45–7:30 pm." The new leave pin "Leave 11:55 am for the MU, 5 min" is on the sky. |
+| 6 | The "+ Add" button on the dashed "Sol's pick" block on the sky (Lunch & learn, noon). | "Sol also finds club events that fit the gaps in your day, ranked by Gemini against your interests." | "Added Lunch & learn: landing a software internship, noon–12:50 pm, so leave at 11:55 am for MU 202. Nothing else moved." The new leave pin "Leave 11:55 am for the MU, 5 min" is on the sky. |
 | 7 | "Play my day". | "The timeline is the Arizona sky, with Tempe's real sunrise and sunset." | Sol rides the sky from 8 am to the end of the day in 14 seconds, with a short caption as he passes each walk and deadline. Press Stop if time is short. |
 | 8 | The "Tomorrow" chip, then open "How Sol planned this day" at the bottom. | "From tomorrow on, every pick is a real event from the live ASU feeds. And nothing is a black box: this is what Gemini did and what code did." | "Tomorrow, leave at 10:13 am." for CSE 230 in Brickyard 210, a 17-minute walk. "Fits your day" lists real events from ASU Events and Sun Devil Central. The panel's Events step counts the live events this week and on Monday. |
 | 9 | Hand over the phone. | "On a phone it lives on the home screen, and the plan lands in your own calendar." | Tap any block: its details open as a sheet from the bottom of the screen. Then the calendar app with Sundial's events and a reminder at each leave time. |
@@ -61,7 +61,7 @@ Close with: "ASU Mobile shows your schedule. Sundial plans your day."
 
 **About Tomorrow's picks (beat 8).** They come from Gemini and the live feeds, so they change. In our test run on
 the final build Monday's picks were Innovation Fest (4:30 pm, MU 242), "The Agentic Self with Professor will.i.am"
-(6 pm) and a club's Weekly Meeting (6 pm). Never promise a named event. Read out whatever the first pick is and say
+(6 pm) and a club's general meeting, named with its club (6 pm). Never promise a named event. Read out whatever the first pick is and say
 "that's a real event this week". If "Fits your day" is missing on Tomorrow (no live event fits his free time), skip
 straight to "How Sol planned this day" and point at the Events step. On today, Sunday, the picks are Diego's 5 sample
 events, which the Events page marks "made up for the sample day"; that is why beat 8 uses Tomorrow.
@@ -84,7 +84,7 @@ map with minutes and a Directions link), or tap "Show as a list".
 | 104° | Leave at 10:16 am | 14 min, leave 10:16 am; 7 min, leave 1:23 pm. "2 walks, 21 minutes on foot, with extra minutes for the heat." | same as no pills | |
 | 104° and oversleep | Leave at 10:16 am | as 104° | Lab 7 9–10:16 am and 4–4:44 pm; Reading response 4:44–5:29 pm | |
 | Robotics added | Leave at 10:18 am | as no pills (MU 230 is the same building as the work shift, so no walk) | Reading response 5:30–6:15 pm | |
-| Robotics and lunch & learn added | Leave at 10:18 am | 12 min, leave 10:18 am; Hayden to the MU 5 min, leave 11:55 am. Still 2 walks, 17 minutes. | Reading response 6:45–7:30 pm | 8 am to 9 pm |
+| Robotics and lunch & learn added | Leave at 10:18 am | 12 min, leave 10:18 am; Hayden to the MU 5 min, leave 11:55 am. Still 2 walks, 17 minutes. | Reading response stays 5:30–6:15 pm (a noon event does not move it) | |
 | Tomorrow (Monday) | Tomorrow, leave at 10:13 am | Manzanita to Brickyard 17 min (10:13 am), Brickyard to PSF 16 min (11:59 am), PSF to Brickyard 16 min (2:44 pm). "3 walks, 49 minutes on foot." | Reading response 8–8:45 am; Quiz 5 8:45–9:15 am | 8 am to 10 pm with Innovation Fest as the pick |
 
 Sunrise 6:59 am and sunset 5:26 pm on Sunday; sunrise 7 am and sunset 5:26 pm on Monday. The what-if pills only
@@ -159,7 +159,8 @@ multiply it by 1.3 because campus paths are not straight, divide by 80 meters a 
 minutes to get out of one building and into the next, and round up, never below 3 minutes. On a hot day
 (feels-like 95°F or more at any hour from 8 am to 8 pm, from Open-Meteo) every walk gets 2 more minutes. If a
 location does not match any building, the walk counts as 10 minutes. Two stops in the same building get no walk
-and no leave time (the lunch & learn in MU 202 and the work shift in the MU). If a leave time falls before the
+and no leave time when one follows the other within an hour (the lunch & learn in MU 202 and the work shift in
+the MU); after a longer break Sol gives a leave time again. If a leave time falls before the
 stop before it ends, Sol keeps the honest time and says so in a note that starts "Tight:". Example: Manzanita Hall
 to Hayden Library is 568 m in a straight line, so 12 minutes, or 14 on a hot day. It is not turn-by-turn routing:
 it does not know doors, stairs, construction or crowds, and we have not timed real walks against it. That is why
@@ -179,8 +180,8 @@ Gemini. "How Sol planned this day" says which of these ran for the day on screen
 No. Gemini's estimate is the most a study block gets: a 45-minute reading is one 45-minute block. A long
 assignment can be split across two gaps (Lab 7 becomes 9–10:16 am and 4–4:44 pm when Diego oversleeps), but the
 pieces add up to the estimate, and if the time before the due date runs out Sol places less rather than inventing
-work. Only Sol's top pick holds its time; study blocks go around it. The other picks are alternatives, and when you
-add one, a study block may move (Sol's note says where).
+work. Only Sol's top pick holds its time, and only when that costs no homework time. The other picks are
+alternatives, and a study block moves only when the event you add needs its time (Sol's note says where).
 
 **Why not just Google Calendar or ASU Mobile?**
 A calendar holds the times you type in. It does not know which Canvas assignments are still not turned in, how far

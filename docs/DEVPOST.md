@@ -22,7 +22,7 @@ Sundial turns an ASU student's day into one plan.
 
 - **When to leave.** Today opens on the next walk, like "Leave at 10:18 am, Diego.", with the walk minutes, a
   countdown and a "Walk me there" link to Google Maps. Leave times come from the distances between 52 ASU Tempe
-  buildings. Two stops in the same building need no walk, and a leave time that falls before the last stop ends
+  buildings. Back-to-back stops in the same building need no walk, and a leave time that falls before the last stop ends
   says so plainly ("Tight: …").
 - **Plans around the heat.** Live Tempe weather from Open-Meteo. On a hot day every walk starts earlier and Sol
   shows a heat warning in °F and °C. Students who need more time to walk (a slower pace, a mobility aid, heat that
@@ -32,7 +32,7 @@ Sundial turns an ASU student's day into one plan.
   one takes, and a block is never longer than that estimate.
 - **Finds events worth the walk.** Live events from ASU Events and Sun Devil Central for the next 7 days. Gemini
   ranks the ones that fit the student's free time against their interests and says why in one line, and a dashed
-  "+ Add" block puts Sol's pick on the day. Only that top pick holds its time; the others are alternatives. Even
+  "+ Add" block puts Sol's pick on the day. Only that top pick holds its time, and never at the cost of homework; the others are alternatives. Even
   for the sample student, every pick from tomorrow on is a real event from the live feeds.
 - **"What if…"** One tap previews a 104° day, oversleeping by an hour, or a cancelled class, in any mix. Sol
   re-plans and says what moved. With two or three on, one note names them all and compares the leave time with the
@@ -95,7 +95,7 @@ creates, the public ASU Events feed, the public Sun Devil Central calendar feed 
   thrown away for the plain-code one instead of being spoken. A short clean-up pass trims filler words, and the
   reason under each pick has to lead with a concrete hook from the event (free lunch, pizza, no experience needed).
 - **Picks against study time.** Holding time for every suggested event pushed homework late into the evening for
-  events the student had not even chosen. Now only the top pick holds its time, study blocks go around it, and a
+  events the student had not even chosen. Now only the top pick holds its time, homework moves only for an event the student adds, and a
   study block is never padded past Gemini's estimate.
 - **The free tier.** Answers are cached by prompt for an hour, in memory and in Atlas, and each Gemini call gives up
   after 12 seconds so a slow answer cannot stall the screen.
