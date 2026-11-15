@@ -7,12 +7,14 @@ Sundial never asks for your ASU password. It uses official sources only: the Can
 Built at sunhacks 9.0 (November 14-15, 2026, ASU Tempe). Live at https://sunhacks-2026.vercel.app.
 
 ## What it does
-- **Tells you when to leave.** The Today screen opens with the next walk ("Leave at 10:13 am") computed from the distance between 52 ASU buildings, with a countdown and walking directions.
+- **Tells you when to leave.** The Today screen opens with the next walk ("Leave at 10:18 am, Diego.") computed from the distance between 52 ASU buildings, with a countdown and walking directions.
 - **Plans around the heat.** Live Tempe weather; on hot days every walk starts earlier, and "What if it's 104°?" shows it any day. Students who need more time to walk can say so in setup.
-- **Fits your homework in.** Canvas deadlines (turned in or not) become study blocks in the free gaps before each one is due.
-- **Finds the club nights worth the walk.** About 490 live events a week from ASU Events and Sun Devil Central; Gemini ranks the ones that fit your free time against your interests and says why.
+- **Fits your homework in.** Canvas deadlines (turned in or not) become study blocks in the free gaps before each one is due, never longer than Gemini's estimate of the work.
+- **Finds the club nights worth the walk.** About 475 live events a week from ASU Events and Sun Devil Central; Gemini ranks the ones that fit your free time against your interests and says why, and "+ Add" puts Sol's pick on your day.
+- **"What if…"** One tap previews a 104° day, oversleeping, or a cancelled class, alone or together; Sol re-plans and says in one line what moved. A what-if day is never saved to your calendar.
 - **Shows the day as the Arizona sky.** The timeline's colors follow Tempe's real sunrise and sunset; "Play my day" runs Sol, the sun mascot, through it. The same day is also a plain large list for zoom and screen readers.
-- **Talks.** "Hear my day" reads a three-sentence briefing; "Ask Sol" takes "when should I leave?" or "add the robotics meeting" by voice or text.
+- **Talks.** "Hear my day" reads a three-sentence briefing; "Ask Sol" takes "when should I leave?" or "add the robotics meeting" by voice or text. With no Wi-Fi it still answers "what's next?" from the plan on screen, and errors read as plain sentences.
+- **Shows its work.** "How Sol planned this day" lists, with the day's real numbers, what Gemini did and what plain code did.
 - **Reaches your calendar.** Subscribe once in Google or Apple Calendar and every planned day arrives with a reminder at each leave time.
 
 ## Run it locally
