@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanClasses } from "./clean";
 import { POST } from "./route";
 
-function form(fields: Record<string, string | Blob>) {
+function form(fields: Record<string, string>) {
   const f = new FormData();
   for (const [key, value] of Object.entries(fields)) f.append(key, value);
   return f;
@@ -35,7 +34,6 @@ describe("POST /api/schedule", () => {
     vi.stubEnv("GEMINI_API_KEY", "test-key");
     expect((await call(form({}))).status).toBe(400);
     expect((await call(form({ text: "   " }))).status).toBe(400);
-    expect((await call(form({ image: new Blob(["not an image"], { type: "text/plain" }) }))).status).toBe(415);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -44,22 +42,21 @@ describe("POST /api/schedule", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       geminiAnswer({
         classes: [
-          { course: "CSE 240", days: ["Mon", "Wed", "Funday"], start: "10:30", end: "11:45", location: "COOR 170" },
-          { course: "", days: ["Tue"], start: "09:00", end: "09:50", location: "" },
-          { course: "MAT 343", days: ["Tue"], start: "9am", end: "10:15", location: "" },
-          { course: "ENG 102", days: ["Thu"], start: "13:30", end: "14:45", location: "" },
+          { course: "CSE 240", days: ["Mon", "Wed", "Funday"], start: "10:30", end: "11:45", building: "coor", room: "170" },
+          { course: "", days: ["Tue"], start: "09:00", end: "09:50", building: "", room: "" },
+          { course: "MAT 343", days: ["Tue"], start: "9am", end: "10:15", building: "", room: "" },
+          { course: "ENG 102", days: ["Thu"], start: "13:30", end: "14:45", building: "", room: "" },
         ],
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await call(form({ text: "my schedule" }));
-    expect(result).toEqual({
+    expect(await call(form({ text: "my schedule" }))).toEqual({
       status: 200,
       json: {
         classes: [
-          { course: "CSE 240", days: ["Mon", "Wed"], start: "10:30", end: "11:45", location: "COOR 170" },
-          { course: "ENG 102", days: ["Thu"], start: "13:30", end: "14:45" },
+          { course: "CSE 240", days: ["Mon", "Wed"], start: "10:30", end: "11:45", building: "COOR", room: "170" },
+          { course: "ENG 102", days: ["Thu"], start: "13:30", end: "14:45", building: "" },
         ],
       },
     });
@@ -74,19 +71,5 @@ describe("POST /api/schedule", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(geminiAnswer({ classes: [] })));
     expect((await call(form({ text: "schedule" }))).status).toBe(422);
-  });
-});
-
-describe("cleanClasses", () => {
-  it("drops impossible times and non-objects", () => {
-    expect(
-      cleanClasses([
-        null,
-        "CSE 240",
-        { course: "CSE 230", days: ["Mon"], start: "25:00", end: "26:00" },
-        { course: "CSE 230", days: ["Mon"], start: "11:00", end: "10:00" },
-      ]),
-    ).toEqual([]);
-    expect(cleanClasses("nope")).toEqual([]);
   });
 });

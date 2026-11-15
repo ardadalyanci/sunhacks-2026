@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sanitizePlanRequest } from "@/lib/sanitize";
-import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
+import type { DayItem, DayPlan, PlanRequest } from "@/lib/engine-types";
 
 vi.mock("@/lib/buildings", () => ({
   loadBuildings: async () => [
@@ -32,7 +32,7 @@ describe("GET /api/demo", () => {
   it("returns a persona and a clean PlanRequest for the given date", async () => {
     const { status, json } = await demo("?date=2026-11-15");
     expect(status).toBe(200);
-    expect(json.persona.name).toBe("Alex Rivera");
+    expect(json.persona.name).toBe("Alex");
     expect(json.request.date).toBe("2026-11-15");
     expect(json.request.classes.every((c: { days: string[] }) => c.days[0] === "Sun")).toBe(true);
     // Nothing in the sample data is dropped by the request sanitizer.

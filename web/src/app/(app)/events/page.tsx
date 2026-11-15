@@ -5,19 +5,19 @@ import Mascot from "@/components/Mascot";
 import { PRODUCT } from "@/components/brand";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useDay } from "@/components/useDay";
-import type { Opportunity } from "@/lib/types";
+import type { EventPick } from "@/lib/types";
 
-const SOURCE: Partial<Record<Opportunity["source"], string>> = {
+const SOURCE = {
+  sun_devil_central: "Sun Devil Central",
   asu_events: "ASU Events",
-  sundevilcentral: "Sun Devil Central",
-};
+} as const;
 
 export default function EventsPage() {
   const day = useDay();
-  const [tag, setTag] = useState("All");
-  const { plan, request } = day;
+  const [interest, setInterest] = useState<string>("All");
+  const { data, plan } = day;
 
-  if (!plan || !request) {
+  if (!data || !plan) {
     return (
       <div className="flex flex-col items-center py-20 text-center">
         <Mascot size={120} animated />
@@ -26,37 +26,34 @@ export default function EventsPage() {
     );
   }
 
-  const why = new Map(plan.suggestions.map((s) => [s.id, s.why]));
-  const onDay = new Set(plan.items.filter((i) => i.type === "event").map((i) => i.id));
-  const interests = request.interests ?? [];
-  const events = (request.events ?? [])
-    .filter((e) => e.startsAt)
-    .filter((e) => tag === "All" || e.tags.some((t) => t.toLowerCase() === tag.toLowerCase()))
-    .sort((a, b) => a.startsAt!.localeCompare(b.startsAt!));
-
-  const byDay = new Map<string, Opportunity[]>();
-  for (const e of events) {
-    const date = parseLocal(e.startsAt!).date;
-    byDay.set(date, [...(byDay.get(date) ?? []), e]);
-  }
+  const onDay = new Set(plan.items.filter((i) => i.kind === "event").map((i) => i.title));
+  const groups = new Map<string, EventPick[]>();
+  data.picks
+    .filter((p) => interest === "All" || p.event.interests.some((i) => i.toLowerCase() === interest.toLowerCase()))
+    .sort((a, b) => a.event.startsAt.localeCompare(b.event.startsAt))
+    .forEach((p) => {
+      const date = parseLocal(p.event.startsAt).date;
+      groups.set(date, [...(groups.get(date) ?? []), p]);
+    });
 
   return (
     <>
       <h1 className="font-display text-5xl font-bold tracking-tight">Events for you</h1>
       <p className="mt-2 max-w-2xl text-lg text-ink-soft">
-        From ASU Events and Sun Devil Central, ranked against your interests and the free time in your day.
+        From ASU Events and Sun Devil Central for the next 7 days, ranked by your interests and the gaps in your
+        schedule.
       </p>
 
-      {interests.length > 0 && (
+      {data.setup.interests.length > 0 && (
         <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filter by interest">
-          {["All", ...interests].map((value) => (
+          {["All", ...data.setup.interests].map((value) => (
             <button
               key={value}
               type="button"
-              aria-pressed={tag === value}
-              onClick={() => setTag(value)}
+              aria-pressed={interest === value}
+              onClick={() => setInterest(value)}
               className={`rounded-full border-2 px-4 py-1.5 font-bold capitalize ${
-                tag === value ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
+                interest === value ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
               }`}
             >
               {value}
@@ -66,38 +63,39 @@ export default function EventsPage() {
       )}
 
       <div className="mt-8 max-w-3xl">
-        {events.length === 0 && (
+        {groups.size === 0 && (
           <p className="text-lg">
-            {tag === "All"
+            {interest === "All"
               ? "No events yet. They appear here once the ASU Events and Sun Devil Central feeds are connected."
-              : `No events tagged ${tag}. Try All.`}
+              : `No events match ${interest} this week. Try All.`}
           </p>
         )}
-        {[...byDay.entries()].map(([date, list]) => (
+        {[...groups.entries()].map(([date, picks]) => (
           <section key={date} className="mb-8">
             <h2 className="font-display text-2xl font-bold">{formatDay(date)}</h2>
             <ul>
-              {list.map((e) => {
-                const itemId = `ev-${e.id}`;
-                const added = onDay.has(itemId);
+              {picks.map(({ event, why }) => {
+                const added = onDay.has(event.title);
                 const today = date === plan.date;
                 return (
-                  <li key={e.id} className="grid gap-3 border-t border-ink/10 py-5 sm:grid-cols-[96px_1fr] sm:items-start">
-                    <p className="font-display text-xl font-bold">{formatTime(parseLocal(e.startsAt!).hours)}</p>
+                  <li
+                    key={event.id}
+                    className="grid gap-3 border-t border-ink/10 py-5 sm:grid-cols-[96px_1fr] sm:items-start"
+                  >
+                    <p className="font-display text-xl font-bold">{formatTime(parseLocal(event.startsAt).hours)}</p>
                     <div>
-                      <h3 className="text-xl font-bold leading-snug">{e.title}</h3>
+                      <h3 className="text-xl font-bold leading-snug">{event.title}</h3>
                       <p className="text-ink-soft">
-                        {e.location ?? "Location on the event page"}
-                        {SOURCE[e.source] ? `, from ${SOURCE[e.source]}` : ""}
+                        {event.location ?? "Location on the event page"}, from {SOURCE[event.source]}
                       </p>
-                      <p className="mt-2 max-w-prose leading-relaxed">{why.get(itemId) ?? e.description}</p>
+                      <p className="mt-2 max-w-prose leading-relaxed">{why}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {today && (
                           <button
                             type="button"
                             disabled={day.busy}
                             aria-pressed={added}
-                            onClick={() => void (added ? day.unaccept(itemId) : day.accept(itemId))}
+                            onClick={() => void (added ? day.removeEvent(event.id) : day.addEvent(event.id))}
                             className={`rounded-full px-4 py-2 font-bold disabled:opacity-50 ${
                               added ? "border-2 border-ink hover:bg-ink/10" : "bg-ink text-cloud hover:bg-ink/90"
                             }`}
@@ -106,7 +104,7 @@ export default function EventsPage() {
                           </button>
                         )}
                         <a
-                          href={e.url}
+                          href={event.url}
                           target="_blank"
                           rel="noreferrer"
                           className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"

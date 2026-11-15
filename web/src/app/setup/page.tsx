@@ -5,26 +5,34 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
-import { clearSetup, saveSetup } from "@/components/setup-store";
 import { WEEKDAYS } from "@/components/time";
-import type { ClassBlock, Weekday } from "@/lib/types";
+import type { ClassBlock, StudentSetup, Weekday } from "@/lib/types";
+import { SETUP_KEY, TOKEN_KEY } from "@/lib/api-client";
 
-// Lowercase, so they match event tags from ASU Events and Sun Devil Central.
-const INTERESTS = [
-  "robotics",
-  "software",
-  "hackathons",
-  "career",
-  "soccer",
-  "sports",
-  "music",
-  "arts",
-  "volunteering",
-  "startups",
+// Building choices for the class form; the planner matches these codes to data/buildings.json.
+const BUILDINGS = [
+  { code: "BYENG", name: "Brickyard Engineering" },
+  { code: "COOR", name: "Coor Hall" },
+  { code: "ECG", name: "Engineering Center G Wing" },
+  { code: "ISTB4", name: "Interdisciplinary Science and Technology Building 4" },
+  { code: "LL", name: "Language and Literature" },
+  { code: "MU", name: "Memorial Union" },
+  { code: "PSH", name: "Physical Sciences H Wing" },
+  { code: "WXLR", name: "Wexler Hall" },
 ];
 
-// Hints for the location field; the planner matches "BYENG 210" to data/buildings.json.
-const BUILDING_HINTS = ["BYENG", "COOR", "ECG", "ISTB4", "LL", "MU", "PSH", "SDFC", "WXLR", "Hayden Library"];
+const INTERESTS = [
+  "Robotics",
+  "Soccer",
+  "Hiking",
+  "Gaming",
+  "Music",
+  "Volunteering",
+  "Startups",
+  "Art and design",
+  "Meeting first-gen students",
+  "Meeting international students",
+];
 
 type Method = "photo" | "paste" | "type";
 
@@ -36,7 +44,7 @@ const METHODS: { value: Method; label: string }[] = [
 
 const field = "mt-1 w-full rounded-2xl border-2 border-ink/20 bg-cloud px-4 py-3 focus:border-ink";
 
-const emptyClass = (): ClassBlock => ({ course: "", days: [], start: "09:00", end: "09:50", location: "" });
+const emptyClass = (): ClassBlock => ({ course: "", days: [], start: "09:00", end: "09:50", building: "" });
 
 export default function SetupPage() {
   const router = useRouter();
@@ -91,15 +99,20 @@ export default function SetupPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const kept = classes
-      .filter((c) => c.course.trim() && c.days.length)
-      .map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
-    if (kept.length === 0) {
-      setMessage("Add at least one class with its days, or use the sample student.");
-      return;
+    const setup: StudentSetup = {
+      name: name.trim() || "there",
+      classes: classes.filter((c) => c.course.trim() && c.days.length),
+      interests,
+    };
+    try {
+      localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
+      // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
+      if (token.trim()) sessionStorage.setItem(TOKEN_KEY, token.trim());
+      else sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem("daypilot.accepted"); // events picked for the sample day do not carry over
+    } catch {
+      // storage blocked (private mode): the sample day still works
     }
-    // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
-    saveSetup({ name: name.trim(), classes: kept, interests }, token.trim());
     router.push("/today");
   }
 
@@ -220,6 +233,7 @@ export default function SetupPage() {
           {classes.length > 0 && (
             <div className="mt-4 space-y-4">
               {classes.map((c, index) => {
+                const knownBuilding = BUILDINGS.some((b) => b.code === c.building);
                 return (
                   <div key={index} className="rounded-3xl border-2 border-ink/15 bg-cloud p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -233,14 +247,20 @@ export default function SetupPage() {
                         />
                       </label>
                       <label className="block">
-                        <span className="font-bold">Building and room</span>
-                        <input
-                          value={c.location ?? ""}
-                          onChange={(e) => updateClass(index, { location: e.target.value })}
-                          placeholder="BYENG 210"
-                          list="building-hints"
+                        <span className="font-bold">Building</span>
+                        <select
+                          value={c.building}
+                          onChange={(e) => updateClass(index, { building: e.target.value })}
                           className={field}
-                        />
+                        >
+                          <option value="">Choose a building</option>
+                          {!knownBuilding && c.building && <option value={c.building}>{c.building}</option>}
+                          {BUILDINGS.map((b) => (
+                            <option key={b.code} value={b.code}>
+                              {b.name} ({b.code})
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <label className="block">
                         <span className="font-bold">Starts</span>
@@ -316,7 +336,7 @@ export default function SetupPage() {
                   type="button"
                   aria-pressed={on}
                   onClick={() => toggleInterest(value)}
-                  className={`rounded-full border-2 px-4 py-2 font-bold capitalize ${
+                  className={`rounded-full border-2 px-4 py-2 font-bold ${
                     on ? "border-dusk bg-dusk text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
                   }`}
                 >
@@ -334,7 +354,13 @@ export default function SetupPage() {
           <button
             type="button"
             onClick={() => {
-              clearSetup();
+              try {
+                localStorage.removeItem(SETUP_KEY);
+                sessionStorage.removeItem(TOKEN_KEY);
+                sessionStorage.removeItem("daypilot.accepted");
+              } catch {
+                // nothing saved
+              }
               router.push("/today");
             }}
             className="rounded-full border-2 border-ink px-6 py-4 text-lg font-bold hover:bg-ink/10"
@@ -343,11 +369,6 @@ export default function SetupPage() {
           </button>
         </div>
       </form>
-      <datalist id="building-hints">
-        {BUILDING_HINTS.map((b) => (
-          <option key={b} value={b} />
-        ))}
-      </datalist>
     </main>
   );
 }

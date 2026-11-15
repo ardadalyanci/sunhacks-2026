@@ -20,7 +20,7 @@ import {
   walkMinutes,
   weekdayOf,
 } from "./planner";
-import type { DayItem } from "./types";
+import type { DayItem } from "./engine-types";
 
 const MIN = 60_000;
 const BUILDINGS: Building[] = [

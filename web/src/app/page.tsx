@@ -4,25 +4,25 @@ import { MASCOT, PRODUCT } from "@/components/brand";
 
 const DAY = [
   {
-    time: "10:15 am",
-    text: "Leave for BYENG 210",
-    note: "It counts the walk from your dorm, so you sit down in CSE 230 on time.",
+    time: "8:47 am",
+    text: "Leave for BYENG",
+    note: "A 9 minute walk, so you sit down in CSE 230 on time.",
     style: "bg-ink text-cloud",
   },
   {
-    time: "11:30 am",
+    time: "10:00 am",
     text: "Work on Lab 7",
-    note: "Due tonight on Canvas, so it saves time for it between your classes.",
+    note: "Due tonight on Canvas. Ninety minutes fit between your classes.",
     style: "border-2 border-dashed border-sun bg-sun-soft",
   },
   {
-    time: "1:15 pm",
-    text: "Leave for COOR 170",
-    note: "On a 104°F day it adds minutes for the heat and tells you to take water.",
+    time: "1:12 pm",
+    text: "Leave for LL",
+    note: "On a September afternoon it feels like 106°F. Take water.",
     style: "bg-[#ff8a3d]",
   },
   {
-    time: "4:15 pm",
+    time: "6:00 pm",
     text: "Robotics club build night",
     note: "From Sun Devil Central, because you picked robotics.",
     style: "border-2 border-dusk bg-cloud text-dusk",
@@ -65,7 +65,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center">
             <p className="relative max-w-sm rounded-3xl bg-cloud px-6 py-5 text-lg font-bold leading-snug shadow-[0_24px_60px_-28px_rgba(20,50,74,0.55)]">
-              “Lab 7 is due tonight, so I saved you time after CSE 230. Leave for COOR by 1:15.”
+              “Lab 7 is due tonight, so I saved you 90 minutes after CSE 230. Leave Wexler at 1:12.”
               <span aria-hidden className="absolute -bottom-2.5 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 bg-cloud" />
             </p>
             <Mascot size={300} animated className="mt-6 max-w-full" />

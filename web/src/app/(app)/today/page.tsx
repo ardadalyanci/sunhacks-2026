@@ -10,12 +10,12 @@ import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useDay } from "@/components/useDay";
 import type { DayItem } from "@/lib/types";
 
-const KIND: Record<DayItem["type"], string> = {
+const KIND: Record<DayItem["kind"], string> = {
   class: "Class",
-  deadline: "Assignment",
+  study: "Study block",
   event: "Event",
-  study_block: "Study block",
-  travel: "Walk",
+  leave: "Time to leave",
+  assignment: "Assignment",
 };
 
 const clock = (iso: string) => formatTime(parseLocal(iso).hours);
@@ -24,9 +24,9 @@ export default function TodayPage() {
   const day = useDay();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
-  const { plan, request } = day;
+  const { data, plan } = day;
 
-  if (!plan) {
+  if (!data || !plan) {
     return (
       <div className="flex flex-col items-center py-20 text-center">
         <Mascot size={128} animated mood={day.error ? "hot" : "happy"} />
@@ -40,18 +40,21 @@ export default function TodayPage() {
     );
   }
 
-  const heat = plan.weather?.isHot ? plan.weather : undefined;
-  const deadlines = [...(request?.deadlines ?? [])].sort((a, b) => a.start.localeCompare(b.start));
-  const allDone = deadlines.length > 0 && deadlines.every((d) => d.done);
+  const heat = plan.heatAlert;
+  const assignments = [...plan.items.filter((i) => i.kind === "assignment"), ...data.dueSoon];
+  const allDone = assignments.length > 0 && assignments.every((a) => a.submitted);
   const mood = listening ? "listening" : heat ? "hot" : allDone ? "proud" : "happy";
-  const firstName = day.name.split(" ")[0];
-  const selected =
-    plan.items.find((i) => i.id === selectedId) ?? plan.suggestions.find((s) => s.id === selectedId) ?? null;
-  const selectedIsSuggestion = selected !== null && plan.suggestions.some((s) => s.id === selected.id);
+  const selected = plan.items.find((i) => i.id === selectedId) ?? null;
+  const firstName = data.setup.name.split(" ")[0];
+  const tonight = data.picks.filter(
+    (p) =>
+      p.event.startsAt.startsWith(plan.date) &&
+      !plan.items.some((i) => i.kind === "event" && i.title === p.event.title),
+  );
 
   return (
     <>
-      {day.isDemo && (
+      {data.demo && (
         <p className="mb-6 rounded-2xl bg-cloud/70 px-4 py-3">
           You are looking at a sample student’s day.{" "}
           <Link href="/setup" className="font-bold underline underline-offset-4">
@@ -60,11 +63,10 @@ export default function TodayPage() {
           in two minutes.
         </p>
       )}
-      {!day.isDemo && day.notice && <p className="mb-6 rounded-2xl bg-sun-soft px-4 py-3">{day.notice}</p>}
 
       <p className="text-lg text-ink-soft">{formatDay(plan.date)}</p>
       <h1 className="font-display text-5xl font-bold tracking-tight">
-        {firstName ? `Your day, ${firstName}` : "Your day"}
+        {firstName && firstName !== "there" ? `Your day, ${firstName}` : "Your day"}
       </h1>
 
       <section className="mt-6 flex flex-col gap-5 rounded-3xl bg-cloud p-5 sm:flex-row sm:items-start sm:p-6">
@@ -73,9 +75,6 @@ export default function TodayPage() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="max-w-prose text-lg leading-relaxed">{plan.briefing}</p>
-          {!plan.aiUsed && (
-            <p className="mt-2 text-sm text-ink-soft">Gemini is not connected, so this plan was made with plain rules.</p>
-          )}
           <div className="mt-4">
             <VoiceBar briefing={plan.briefing} onCommand={day.command} onListeningChange={setListening} />
           </div>
@@ -85,11 +84,9 @@ export default function TodayPage() {
       {heat && (
         <section role="alert" className="mt-4 rounded-3xl bg-[#ff8a3d] p-5 sm:p-6">
           <p className="font-display text-2xl font-bold">
-            It is {Math.round(heat.tempF)}°F now and up to {Math.round(heat.highF)}°F today
+            Feels like {Math.round(heat.feelsLikeF)}°F at {clock(heat.at)}
           </p>
-          <p className="mt-1 max-w-prose text-lg">
-            Your leave times include extra minutes for the heat. Take water and stay in the shade between classes.
-          </p>
+          <p className="mt-1 max-w-prose text-lg">{heat.message}</p>
         </section>
       )}
 
@@ -106,55 +103,52 @@ export default function TodayPage() {
               onChange={(e) => void day.setHotPreview(e.target.checked)}
               className="h-4 w-4 accent-[#ff8a3d]"
             />
-            Preview a 104°F day
+            Preview a hot September day
           </label>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-live="polite">
           {selected ? (
             <section className="rounded-3xl bg-cloud p-5">
-              <p className="font-bold text-ink-soft">{selectedIsSuggestion ? "Suggested event" : KIND[selected.type]}</p>
+              <p className="font-bold text-ink-soft">{KIND[selected.kind]}</p>
               <h2 className="mt-1 font-display text-2xl font-bold leading-tight">{selected.title}</h2>
               <p className="mt-2">
-                {selected.type === "deadline"
-                  ? `Due ${clock(selected.start)}`
-                  : `${clock(selected.start)}${selected.end ? ` to ${clock(selected.end)}` : ""}`}
+                {selected.kind === "assignment" && selected.dueAt && `Due ${clock(selected.dueAt)}`}
+                {selected.kind === "leave" && selected.startsAt && `Leave at ${clock(selected.startsAt)}`}
+                {selected.startsAt && selected.endsAt && `${clock(selected.startsAt)} to ${clock(selected.endsAt)}`}
                 {selected.location ? `, ${selected.location}` : ""}
               </p>
-              {selected.leaveAt && <p className="mt-2 font-bold">Leave at {clock(selected.leaveAt)}.</p>}
-              {selected.why && <p className="mt-2">{selected.why}</p>}
-              {selected.type === "deadline" && (
-                <p className={`mt-2 font-bold ${selected.done ? "text-saguaro" : ""}`}>
-                  {selected.done ? "Turned in" : "Not turned in yet"}
+              {selected.kind === "leave" && selected.walkMinutes !== undefined && (
+                <p className="mt-2">It is a {selected.walkMinutes} minute walk, so you arrive with a few minutes to spare.</p>
+              )}
+              {selected.kind === "study" && (
+                <p className="mt-2">
+                  Saved for {assignments.find((a) => a.id === selected.forItemId)?.title ?? "an assignment"}
+                  {selected.estimatedMinutes ? `. It usually takes about ${selected.estimatedMinutes} minutes.` : "."}
+                </p>
+              )}
+              {selected.kind === "assignment" && (
+                <p className={`mt-2 font-bold ${selected.submitted ? "text-saguaro" : ""}`}>
+                  {selected.submitted ? "Turned in" : "Not turned in yet"}
                 </p>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
-                {selectedIsSuggestion && (
-                  <button
-                    type="button"
-                    disabled={day.busy}
-                    onClick={() => void day.accept(selected.id)}
-                    className="rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50"
-                  >
-                    Add to my day
-                  </button>
-                )}
                 {selected.url && (
                   <a
                     href={selected.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                    className="rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90"
                   >
-                    {selected.type === "deadline" ? "Open in Canvas" : "Open event page"}
+                    {selected.kind === "event" ? "Open event page" : "Open in Canvas"}
                   </a>
                 )}
-                {!selectedIsSuggestion && selected.type === "event" && (
+                {selected.kind === "event" && (
                   <button
                     type="button"
                     disabled={day.busy}
                     onClick={() => {
-                      void day.unaccept(selected.id);
+                      void day.removeEvent(selected.id);
                       setSelectedId(null);
                     }}
                     className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10 disabled:opacity-50"
@@ -162,7 +156,7 @@ export default function TodayPage() {
                     Remove from my day
                   </button>
                 )}
-                {selected.type === "study_block" && (
+                {selected.kind === "study" && (
                   <button
                     type="button"
                     onClick={() => {
@@ -187,43 +181,47 @@ export default function TodayPage() {
             <>
               <section className="rounded-3xl bg-cloud p-5">
                 <h2 className="font-display text-2xl font-bold">Due soon</h2>
-                {deadlines.length === 0 && (
+                {assignments.length === 0 && (
                   <p className="mt-2 text-ink-soft">Nothing due. Add your Canvas token in Setup to see assignments.</p>
                 )}
                 <ul className="mt-2">
-                  {deadlines.map((d) => {
-                    const date = parseLocal(d.start).date;
-                    return (
-                      <li key={d.id} className="border-t border-ink/10 py-3 first:border-t-0">
-                        <p className="font-bold leading-snug">{d.title}</p>
-                        <p className="text-ink-soft">
-                          Due {date === plan.date ? "today" : formatDay(date)} at {clock(d.start)}
-                        </p>
-                        <p className={`text-sm font-bold ${d.done ? "text-saguaro" : ""}`}>
-                          {d.done ? "Turned in" : "Not turned in yet"}
-                        </p>
-                      </li>
-                    );
-                  })}
+                  {assignments.map((a) => (
+                    <li key={a.id} className="border-t border-ink/10 py-3 first:border-t-0">
+                      <p className="font-bold leading-snug">{a.title}</p>
+                      <p className="text-ink-soft">
+                        {a.course ? `${a.course}, due` : "Due"}{" "}
+                        {a.dueAt
+                          ? `${parseLocal(a.dueAt).date === plan.date ? "today" : formatDay(parseLocal(a.dueAt).date)} at ${clock(a.dueAt)}`
+                          : "soon"}
+                      </p>
+                      <p className={`text-sm font-bold ${a.submitted ? "text-saguaro" : ""}`}>
+                        {a.submitted
+                          ? "Turned in"
+                          : a.estimatedMinutes
+                            ? `Not turned in, about ${a.estimatedMinutes} min of work`
+                            : "Not turned in yet"}
+                      </p>
+                    </li>
+                  ))}
                 </ul>
               </section>
 
-              {plan.suggestions.length > 0 && (
+              {tonight.length > 0 && (
                 <section className="rounded-3xl bg-sun-soft p-5">
                   <h2 className="font-display text-2xl font-bold">Fits in your day</h2>
                   <ul className="mt-2">
-                    {plan.suggestions.map((s) => (
-                      <li key={s.id} className="border-t border-ink/15 py-3 first:border-t-0">
-                        <p className="font-bold leading-snug">{s.title}</p>
+                    {tonight.map(({ event, why }) => (
+                      <li key={event.id} className="border-t border-ink/15 py-3 first:border-t-0">
+                        <p className="font-bold leading-snug">{event.title}</p>
                         <p className="text-ink-soft">
-                          {clock(s.start)}
-                          {s.location ? `, ${s.location}` : ""}
+                          {clock(event.startsAt)}
+                          {event.location ? `, ${event.location}` : ""}
                         </p>
-                        {s.why && <p className="mt-1">{s.why}</p>}
+                        <p className="mt-1">{why}</p>
                         <button
                           type="button"
                           disabled={day.busy}
-                          onClick={() => void day.accept(s.id)}
+                          onClick={() => void day.addEvent(event.id)}
                           className="mt-2 rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50"
                         >
                           Add to my day
