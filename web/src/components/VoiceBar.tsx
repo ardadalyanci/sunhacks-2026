@@ -93,7 +93,9 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   const talking = useRef<((speaking: boolean) => void) | null>(null); // set while Sol speaks, to reset on leave
 
   // Leaving the day (another day, another page, or the hidden page React keeps) stops Sol mid-sentence and drops
-  // a question still being heard, so the old day's answer never plays over the new one.
+  // a question still being heard, so the old day's answer never plays over the new one. The chat clears too:
+  // coming back to Today after adding an event on Events, an old answer ("I could not find that") would sit
+  // under a day it no longer describes, and Sol's note already says what the add changed.
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -102,6 +104,8 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
       stopSpeaking();
       talking.current?.(false);
       talking.current = null;
+      setHeard("");
+      setReply("");
     };
   }, []);
 
