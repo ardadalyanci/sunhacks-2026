@@ -1,4 +1,4 @@
-// Web app manifest: lets students install DayPilot on their phone's home screen (PWA).
+// Web app manifest: lets students install Sundial on their phone's home screen (PWA).
 import type { MetadataRoute } from "next";
 import { PRODUCT } from "@/components/brand";
 
