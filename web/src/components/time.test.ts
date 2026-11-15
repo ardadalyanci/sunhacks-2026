@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { formatTime } from "./time";
+import { arizonaToday, formatTime, shortDay, weekDates } from "./time";
+
+describe("day picker dates", () => {
+  it("uses the Arizona date, which is UTC-7 all year", () => {
+    expect(arizonaToday(Date.parse("2026-11-15T06:59:00Z"))).toBe("2026-11-14");
+    expect(arizonaToday(Date.parse("2026-11-15T07:00:00Z"))).toBe("2026-11-15");
+    expect(arizonaToday(Date.parse("2026-07-01T06:30:00Z"))).toBe("2026-06-30"); // no daylight saving in summer
+  });
+
+  it("lists a week from today across a month end, with short labels", () => {
+    expect(weekDates("2026-11-27")).toEqual([
+      "2026-11-27",
+      "2026-11-28",
+      "2026-11-29",
+      "2026-11-30",
+      "2026-12-01",
+      "2026-12-02",
+      "2026-12-03",
+    ]);
+    expect(shortDay("2026-11-16")).toBe("Mon 16");
+    expect(shortDay("2026-12-01")).toBe("Tue 1");
+  });
+});
 
 describe("formatTime", () => {
   it("formats clock hours the way students read them", () => {

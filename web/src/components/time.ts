@@ -39,10 +39,21 @@ export function formatDay(date: string) {
   });
 }
 
-/** Seven ISO dates starting from a Monday. */
-export function weekDates(monday: string) {
-  const start = new Date(`${monday}T12:00:00Z`).getTime();
+/** Seven ISO dates starting from `first` ("2026-11-14" → the 14th to the 20th). */
+export function weekDates(first: string) {
+  const start = new Date(`${first}T12:00:00Z`).getTime();
   return Array.from({ length: 7 }, (_, i) =>
     new Date(start + i * 86_400_000).toISOString().slice(0, 10),
   );
+}
+
+/** Today's date in Arizona ("2026-11-14"). Arizona has no daylight saving, so it is always UTC-7. */
+export function arizonaToday(nowMs = Date.now()) {
+  return new Date(nowMs - 7 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/** "Mon 16" for the day picker. */
+export function shortDay(date: string) {
+  const weekday = new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  return `${weekday} ${Number(date.slice(8, 10))}`;
 }
