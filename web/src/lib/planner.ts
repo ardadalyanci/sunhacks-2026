@@ -248,6 +248,21 @@ export function sortByStart(items: DayItem[]): DayItem[] {
 }
 
 /** Fallback ranking without Gemini: interests that appear as whole words in the event's tags or title. */
+/**
+ * At most `max` events to offer Gemini: the ones that match the interests first, then the rest by start time.
+ * Returned in time order. On a busy real day (80+ events) this keeps evening events that fit from being cut.
+ */
+export function pickCandidates(events: DayItem[], interests: string[], max: number): DayItem[] {
+  const wanted = interests.map((i) => i.toLowerCase());
+  const byStart = (a: DayItem, b: DayItem) => Date.parse(a.start) - Date.parse(b.start);
+  return events
+    .map((item) => ({ item, hits: wanted.filter((w) => hasPhrase([...(item.tags ?? []), item.title].join(" | "), w)).length }))
+    .sort((a, b) => b.hits - a.hits || byStart(a.item, b.item))
+    .slice(0, max)
+    .map((x) => x.item)
+    .sort(byStart);
+}
+
 export function rankByOverlap(events: DayItem[], interests: string[]): { item: DayItem; why: string }[] {
   const wanted = interests.map((i) => i.toLowerCase());
   return events

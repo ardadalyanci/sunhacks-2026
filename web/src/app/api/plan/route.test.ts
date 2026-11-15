@@ -151,6 +151,15 @@ describe("POST /api/plan with Gemini", () => {
     expect(prompt).not.toContain("ev-e4");
   });
 
+  it("on a busy day, sends Gemini the events that match the interests, not just the earliest ones", async () => {
+    const filler = Array.from({ length: 50 }, (_, n) => ev(`f${n}`, `Noon table ${n}`, "12:00", "12:30", "MU", ["social"]));
+    const req = { ...baseRequest, weather: undefined, events: [...filler, ev("late", "Robotics night build", "18:30", "19:30", "MU", ["robotics"])] };
+    const { json } = await plan(req);
+    const prompt = String(generateJson.mock.calls[0][0]);
+    expect(prompt).toContain("ev-late");
+    expect(json.suggestions.map((s) => s.id)).toContain("ev-late"); // code fallback ranks by interest
+  });
+
   it("plans a future day from its start and briefs it as a look-ahead", async () => {
     // Sunday evening, looking at Monday: Lab 7 (due Mon 23:59) is open, Saturday's work is not.
     const req = {
