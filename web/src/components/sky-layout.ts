@@ -18,7 +18,8 @@ export function hourOn(iso: string, date: string): number {
 /**
  * The whole hours the sky shows. It starts at 8 am, or earlier for an early class and its walk. It ends an
  * hour after the later of the last block and the sunset, rounded up, so an empty evening is not drawn; on a
- * real today it also reaches the current hour, so Sol's "now" stays on the sky. Deadlines never stretch it:
+ * real today it also reaches the current hour (back to it before 8 am, from 5 am on, so a 2 am visit does not
+ * draw a night of empty sky), so Sol's "now" stays on the sky. Deadlines never stretch it:
  * one due before the first hour or after the last sits as a pin at that edge, with its real time.
  */
 export function dayBounds(items: DayItem[], date: string, sun: Sun, nowHour?: number): { first: number; last: number } {
@@ -31,6 +32,7 @@ export function dayBounds(items: DayItem[], date: string, sun: Sun, nowHour?: nu
     if (item.leaveAt) first = Math.min(first, Math.floor(hourOn(item.leaveAt, date)));
     end = Math.max(end, item.end ? hourOn(item.end, date) : start + 0.5);
   }
+  if (nowHour !== undefined && nowHour >= 5) first = Math.min(first, Math.floor(nowHour));
   let last = Math.ceil(end + 1);
   if (nowHour !== undefined && nowHour >= first) last = Math.max(last, Math.ceil(nowHour));
   return { first: Math.max(0, first), last: Math.min(24, last) };

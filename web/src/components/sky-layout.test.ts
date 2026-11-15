@@ -62,6 +62,12 @@ describe("dayBounds", () => {
     expect(dayBounds([], DATE, sun, 9)).toEqual({ first: 8, last: 19 });
   });
 
+  it("starts at the current hour on a real today before 8 am, but not in the small hours", () => {
+    expect(dayBounds([], DATE, sun, 7.25)).toEqual({ first: 7, last: 19 });
+    expect(dayBounds([], DATE, sun, 5)).toEqual({ first: 5, last: 19 });
+    expect(dayBounds([], DATE, sun, 2)).toEqual({ first: 8, last: 19 });
+  });
+
   it("ends at midnight for an event that runs into the next day", () => {
     expect(dayBounds([item("event", at("21:00"), at("01:00", "2026-11-15"))], DATE, sun)).toEqual({ first: 8, last: 24 });
   });

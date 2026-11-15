@@ -36,18 +36,47 @@ const weekdayOf = (date: string) => formatDay(date).split(",")[0];
 /*
  * One DOM order for every screen: the phone order (hero, heat, Sol, sky, Due soon, Fits your day, walks, How Sol
  * planned). From lg up the same elements are placed on a two-column grid, so the sky starts right under the hero
- * and Sol talks from the right column. Keyboard and screen-reader order still follow what is seen.
+ * and Sol talks from the right column. On a hot day the laptop shows the heat card under Sol's bubble instead of
+ * across the page (see HeatCard), so the hot sky stays on the first screen. Keyboard and screen-reader order still
+ * follow what is seen.
  */
 const AT = {
   full: "lg:col-span-2 lg:row-start-1",
   hero: "lg:col-start-1 lg:row-start-2 lg:self-start",
   sol: "lg:col-start-2 lg:row-start-2 lg:self-start",
-  heat: "lg:col-span-2 lg:row-start-3",
-  sky: "lg:col-start-1 lg:row-start-4",
-  side: "lg:col-start-2 lg:row-start-4 lg:row-span-2",
-  walks: "lg:col-start-1 lg:row-start-5",
-  how: "lg:col-span-2 lg:row-start-6",
+  sky: "lg:col-start-1 lg:row-start-3",
+  side: "lg:col-start-2 lg:row-start-3 lg:row-span-2",
+  walks: "lg:col-start-1 lg:row-start-4",
+  how: "lg:col-span-2 lg:row-start-5",
 };
+
+/**
+ * The heat warning. On a phone or tablet (`wide` false) it runs across the page between the hero and Sol, with its
+ * own small sweating Sol; from lg up (`wide` true) it is a card under Sol's bubble, where the big Sol right above
+ * already sweats. Only one of the two is shown at a time, so each has its own heading id.
+ */
+function HeatCard({ title, wide }: { title: string; wide: boolean }) {
+  const id = wide ? "heat-title-side" : "heat-title";
+  return (
+    <section
+      aria-labelledby={id}
+      className={`rounded-3xl bg-gradient-to-r from-[#FFC627] to-[#F97316] text-ink ${
+        wide ? "mt-4 hidden p-5 lg:block" : "mt-4 flex items-center gap-4 p-5 sm:p-6 lg:hidden"
+      }`}
+    >
+      {!wide && <Mascot size={64} mood="hot" className="shrink-0" label="" />}
+      <div>
+        <p id={id} className={`font-display font-bold ${wide ? "text-xl leading-snug" : "text-2xl"}`}>
+          {title}
+        </p>
+        <p className={`mt-1 max-w-prose ${wide ? "" : "text-lg"}`}>
+          Every leave time {wide ? "on your day" : "below"} is a few minutes earlier, so you’re not sprinting to
+          class. Fill your bottle before you go, and cut through air-conditioned buildings when you can.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 export default function TodayPage() {
   const chosen = useChosenDay();
@@ -58,11 +87,13 @@ export default function TodayPage() {
   const [speaking, setSpeaking] = useState(false);
   const [view, setView] = useView();
   const sheet = useRef<HTMLElement>(null);
+  const cardTitle = useRef<HTMLHeadingElement>(null);
+  const opener = useRef<HTMLElement | null>(null); // what opened the selected item's card, to give focus back to
   const [sheetHeight, setSheetHeight] = useState(0);
   const { plan, request } = day;
   const grid = useRef<HTMLDivElement>(null);
   const hero = useRef<HTMLDivElement>(null);
-  const sol = useRef<HTMLElement>(null);
+  const sol = useRef<HTMLDivElement>(null);
   const side = useRef<HTMLElement>(null);
   const hasPlan = Boolean(plan);
 
@@ -94,6 +125,23 @@ export default function TodayPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId]);
+
+  // Focus follows the card: it moves to the card's heading when an item is picked (so Tab reaches its buttons next),
+  // and goes back to whatever opened it when the card closes (Close, Escape, Remove). Picking another item while
+  // the card is open keeps the first opener.
+  useEffect(() => {
+    if (!selectedId) {
+      const back = opener.current;
+      opener.current = null;
+      if (back?.isConnected) back.focus({ preventScroll: true });
+      return;
+    }
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body && !sheet.current?.contains(active)) {
+      opener.current = active;
+    }
+    cardTitle.current?.focus({ preventScroll: true });
   }, [selectedId]);
 
   // On a phone the card is a sheet over the page bottom; a spacer as tall as the sheet keeps the last rows reachable.
@@ -137,11 +185,14 @@ export default function TodayPage() {
   const dueDay = (date: string) =>
     date === chosen.today ? "today" : date === tomorrow ? "tomorrow" : formatDay(date);
   const heat = plan.weather?.isHot ? plan.weather : undefined;
-  // Sol may hang below the hero into the sky's row (Due soon then starts under him), except on a hot day, when the
-  // heat banner runs across the page between the two.
-  const overhang = heat
-    ? { sol: "", side: "" }
-    : { sol: "lg:mb-[calc(var(--sol-over,0px)*-1)]", side: "lg:mt-[calc(var(--sol-over,0px)+1.5rem)]" };
+  // Sol (with the heat card under his bubble on a hot day) may hang below the hero into the sky's row; Due soon
+  // then starts under him.
+  const overhang = { sol: "lg:mb-[calc(var(--sol-over,0px)*-1)]", side: "lg:mt-[calc(var(--sol-over,0px)+1.5rem)]" };
+  const heatTitle = heat
+    ? later
+      ? `Up to ${Math.round(heat.highF)}°F (${toCelsius(heat.highF)}°C) on ${weekdayOf(plan.date)}. Sorry, that’s me.`
+      : `${Math.round(heat.tempF)}°F (${toCelsius(heat.tempF)}°C) now, up to ${Math.round(heat.highF)}°F. Sorry, that’s me.`
+    : "";
   const dim = day.switching ? "opacity-60 transition-opacity" : "transition-opacity"; // the old day while a new one loads
   const deadlines = [...(request?.deadlines ?? [])].sort((a, b) => a.start.localeCompare(b.start));
   const allDone = deadlines.length > 0 && deadlines.every((d) => d.done);
@@ -154,8 +205,9 @@ export default function TodayPage() {
   const underCard = selected ? "lg:hidden" : "";
 
   // The headline is the next walk. The sample day and later days keep their own clock (request.now: 8 am for the
-  // sample, the real time for a look-ahead); a real today uses the live clock, so the countdown moves.
-  const nowMs = day.isDemo || later ? Date.parse(request?.now ?? plan.date) : clockNow;
+  // sample, the real time for a look-ahead, the late wake-up while "What if I oversleep?" is on); a real today
+  // otherwise uses the live clock, so the countdown moves.
+  const nowMs = day.isDemo || later || day.whatIf.overslept ? Date.parse(request?.now ?? plan.date) : clockNow;
   const walk = nowMs ? nextWalk(plan.items, nowMs) : null;
   const tight = walk?.item.why?.startsWith("Tight:") ? walk.item.why : null; // the walk starts before the last stop ends
   const hasWalks = plan.items.some((i) => i.leaveAt);
@@ -237,64 +289,53 @@ export default function TodayPage() {
         {day.error && <p className="mt-4 font-bold text-[#b91c1c]">{day.error}</p>}
       </div>
 
-      {/* The heat warning spans the page, right under the pill that previews it. Plain content: Sol's note says it. */}
-      {heat && (
+      {/* The heat warning on a phone or tablet: across the page, right under the pill that previews it. Plain
+          content: Sol's note says it. From lg up it sits under Sol's bubble instead (below). */}
+      {heat && <HeatCard title={heatTitle} wide={false} />}
+
+      {/* Sol and his speech bubble: beside the hero on a laptop (with the heat card under it), under it on a phone. */}
+      <div ref={sol} className={`min-w-0 ${overhang.sol} ${AT.sol}`}>
         <section
-          aria-labelledby="heat-title"
-          className={`mt-4 flex items-center gap-4 rounded-3xl bg-gradient-to-r from-[#FFC627] to-[#F97316] p-5 text-ink sm:p-6 lg:mt-6 ${AT.heat}`}
+          aria-busy={day.switching}
+          aria-label={`${MASCOT}’s briefing`}
+          className={`relative mt-10 flex flex-col sm:mt-4 sm:flex-row sm:items-start sm:gap-4 lg:mt-0 lg:flex-col lg:gap-3 ${dim}`}
         >
-          <Mascot size={64} mood="hot" className="shrink-0" label="" />
-          <div>
-            <p id="heat-title" className="font-display text-2xl font-bold">
-              {later
-                ? `Up to ${Math.round(heat.highF)}°F (${toCelsius(heat.highF)}°C) on ${weekdayOf(plan.date)}. Sorry, that’s me.`
-                : `${Math.round(heat.tempF)}°F (${toCelsius(heat.tempF)}°C) now, up to ${Math.round(heat.highF)}°F. Sorry, that’s me.`}
-            </p>
-            <p className="mt-1 max-w-prose text-lg">
-              Every leave time below is a few minutes earlier, so you’re not sprinting to class. Fill your bottle before
-              you go, and cut through air-conditioned buildings when you can.
-            </p>
+          {/* On a phone Sol is small and sits on his bubble's top edge; from sm up he stands beside it (above it on
+              a laptop) and the bubble's tail points at him. */}
+          <div
+            className={`absolute -top-8 left-4 z-10 shrink-0 sm:static sm:mt-2 sm:self-start lg:mt-0 lg:ml-6 ${
+              listening ? "mascot-listening" : speaking ? "mascot-talking" : ""
+            }`}
+          >
+            <Mascot size={112} mood={mood} animated className="h-16 w-16 sm:h-28 sm:w-28 lg:h-20 lg:w-20" />
+          </div>
+          <div className="relative min-w-0 flex-1 rounded-3xl bg-cloud p-5 sm:p-6 lg:w-full lg:p-5">
+            <span
+              aria-hidden
+              className="absolute hidden h-5 w-5 rotate-45 bg-cloud sm:top-10 sm:-left-2 sm:block lg:-top-2 lg:left-[54px]"
+            />
+            {/* Room on the first lines for the half of Sol that sits inside the bubble on a phone. */}
+            <span aria-hidden className="float-left h-4 w-[4.25rem] sm:hidden" />
+            <p className="relative max-w-prose text-lg leading-relaxed lg:text-base">{plan.briefing}</p>
+            {!plan.aiUsed && (
+              <p className="mt-2 text-sm text-ink-soft">
+                Gemini is not connected, so {MASCOT} planned this with plain rules.
+              </p>
+            )}
+            <div className="relative mt-4">
+              {/* A new day starts with a clean voice bar, not the last day's answer. */}
+              <VoiceBar
+                key={plan.date}
+                briefing={plan.briefing}
+                onCommand={day.command}
+                onListeningChange={setListening}
+                onSpeakingChange={setSpeaking}
+              />
+            </div>
           </div>
         </section>
-      )}
-
-      {/* Sol and his speech bubble: beside the hero on a laptop, under it on a phone. The tail points at him. */}
-      <section
-        aria-busy={day.switching}
-        ref={sol}
-        aria-label={`${MASCOT}’s briefing`}
-        className={`mt-4 flex flex-col gap-4 sm:flex-row sm:items-start lg:mt-0 lg:flex-col lg:gap-3 ${overhang.sol} ${AT.sol} ${dim}`}
-      >
-        <div
-          className={`shrink-0 self-center sm:mt-2 sm:self-start lg:mt-0 lg:ml-6 ${
-            listening ? "mascot-listening" : speaking ? "mascot-talking" : ""
-          }`}
-        >
-          <Mascot size={112} mood={mood} animated className="lg:h-20 lg:w-20" />
-        </div>
-        <div className="relative min-w-0 flex-1 rounded-3xl bg-cloud p-5 sm:p-6 lg:w-full lg:p-5">
-          <span
-            aria-hidden
-            className="absolute -top-2 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 bg-cloud sm:top-10 sm:-left-2 sm:translate-x-0 lg:-top-2 lg:left-[54px]"
-          />
-          <p className="relative max-w-prose text-lg leading-relaxed lg:text-base">{plan.briefing}</p>
-          {!plan.aiUsed && (
-            <p className="mt-2 text-sm text-ink-soft">
-              Gemini is not connected, so {MASCOT} planned this with plain rules.
-            </p>
-          )}
-          <div className="relative mt-4">
-            {/* A new day starts with a clean voice bar, not the last day's answer. */}
-            <VoiceBar
-              key={plan.date}
-              briefing={plan.briefing}
-              onCommand={day.command}
-              onListeningChange={setListening}
-              onSpeakingChange={setSpeaking}
-            />
-          </div>
-        </div>
-      </section>
+        {heat && <HeatCard title={heatTitle} wide />}
+      </div>
 
       <div aria-busy={day.switching} className={`mt-6 min-w-0 ${AT.sky} ${dim}`}>
         {/* The same day two ways: the sky, or a plain large list (easier with zoom or a screen reader). */}
@@ -351,7 +392,12 @@ export default function TodayPage() {
                     ? "On your schedule"
                     : KIND[selected.type]}
               </p>
-              <h2 id="selected-title" className="mt-1 font-display text-2xl font-bold leading-tight">
+              <h2
+                id="selected-title"
+                ref={cardTitle}
+                tabIndex={-1}
+                className="mt-1 font-display text-2xl font-bold leading-tight outline-none"
+              >
                 {selected.title}
               </h2>
               <p className="mt-2">
