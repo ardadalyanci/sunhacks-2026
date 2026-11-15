@@ -8,13 +8,16 @@ import { interestLabel } from "@/components/interests";
 import { rangeLabel } from "@/components/sky-layout";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useDay } from "@/components/useDay";
+import { eventTitle } from "@/lib/planner";
 import { placeLabel } from "@/lib/places";
-import type { Opportunity } from "@/lib/types";
+import type { DayItem, DayPlan, Opportunity } from "@/lib/types";
 
+// Where a listing came from. The sample student's own events are made up, and they sit among real ASU
+// events, so they say so plainly.
 const SOURCE: Partial<Record<Opportunity["source"], string>> = {
-  asu_events: "ASU Events",
-  sundevilcentral: "Sun Devil Central",
-  seed: "the sample day",
+  asu_events: "from ASU Events",
+  sundevilcentral: "from Sun Devil Central",
+  seed: "made up for the sample day",
 };
 
 const FOR_YOU = "For you"; // events that match the student's interests, plus Gemini's picks for today
@@ -38,10 +41,32 @@ function Reason({ text }: { text: string }) {
   );
 }
 
+/**
+ * Sol's picks in the order the student first saw them. The plan leaves an added event out of its suggestions, so
+ * an added pick keeps its card from the day itself (with the reason it had), its button turns to "On your day",
+ * and the next pick never slides under the cursor. A pick that is neither suggested nor on the day any more goes;
+ * new suggestions join at the end.
+ */
+function keepPicks(seen: DayItem[], plan: DayPlan): DayItem[] {
+  const suggested = new Map(plan.suggestions.map((s) => [s.id, s]));
+  const onDay = new Map(plan.items.filter((i) => i.type === "event").map((i) => [i.id, i]));
+  const kept = seen.flatMap((old) => {
+    const now = suggested.get(old.id) ?? onDay.get(old.id);
+    return now ? [{ ...now, why: suggested.has(old.id) ? now.why : old.why }] : [];
+  });
+  const ids = new Set(kept.map((s) => s.id));
+  return [...kept, ...plan.suggestions.filter((s) => !ids.has(s.id))];
+}
+
+const sameIds = (a: DayItem[], b: DayItem[]) => a.length === b.length && a.every((s, i) => s.id === b[i].id);
+
 export default function EventsPage() {
   const day = useDay();
   const [tag, setTag] = useState(FOR_YOU);
   const { plan, request } = day;
+  const [seenPicks, setSeenPicks] = useState<DayItem[]>([]);
+  const pickItems = plan ? keepPicks(seenPicks, plan) : [];
+  if (plan && !sameIds(pickItems, seenPicks)) setSeenPicks(pickItems); // React's "adjust state while rendering"
 
   if (!plan || !request) {
     return (
@@ -52,7 +77,7 @@ export default function EventsPage() {
     );
   }
 
-  const why = new Map(plan.suggestions.map((s) => [s.id, s.why]));
+  const why = new Map(pickItems.map((s) => [s.id, s.why]));
   const onDay = new Set(plan.items.filter((i) => i.type === "event").map((i) => i.id));
   const interests = request.interests ?? [];
   const wanted = new Set(interests.map((i) => i.toLowerCase()));
@@ -78,6 +103,10 @@ export default function EventsPage() {
     byDay.set(date, [...(byDay.get(date) ?? []), e]);
   }
 
+  // Sol's picks share the column evenly: two picks in two columns, three in three on wide screens.
+  const picks = pickItems.length;
+  const pickGrid = picks >= 3 ? "md:grid-cols-2 xl:grid-cols-3" : picks === 2 ? "sm:grid-cols-2" : "";
+
   function addButton(itemId: string) {
     const added = onDay.has(itemId);
     return (
@@ -86,7 +115,7 @@ export default function EventsPage() {
         disabled={day.busy}
         aria-pressed={added}
         onClick={() => void (added ? day.unaccept(itemId) : day.accept(itemId))}
-        className={`rounded-full px-4 py-2 font-bold disabled:opacity-50 ${
+        className={`whitespace-nowrap rounded-full px-4 py-2 font-bold disabled:opacity-50 ${
           added ? "border-2 border-ink hover:bg-ink/10" : "bg-ink text-cloud hover:bg-ink/90"
         }`}
       >
@@ -103,29 +132,31 @@ export default function EventsPage() {
           {all.length} events on campus in the next 7 days, from ASU Events and Sun Devil Central.
         </p>
 
-        {plan.suggestions.length > 0 && (
+        {pickItems.length > 0 && (
           <section className="mt-8">
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="font-display text-3xl font-bold">{MASCOT}’s picks for {formatDay(plan.date).split(",")[0]}</h2>
-              <p className="text-sm text-ink-soft">Ranked by Gemini for your interests and free time</p>
+              <p className="text-sm text-ink-soft">
+                {plan.aiUsed ? "Ranked by Gemini for your interests and free time" : "Matched to your interests and free time"}
+              </p>
             </div>
-            <ul className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {plan.suggestions.map((s) => (
-                <li key={s.id} className="flex flex-col rounded-3xl bg-sun-soft p-5">
+            <ul className={`mt-4 grid gap-4 ${pickGrid}`}>
+              {pickItems.map((s) => (
+                <li key={s.id} className="flex flex-col rounded-3xl bg-sun-soft p-5 xl:px-4">
                   {s.why && <Reason text={s.why} />}
                   <h3 className="mt-3 text-xl font-bold leading-snug">{s.title}</h3>
                   <p className="text-ink-soft">
                     {s.end ? rangeLabel(parseLocal(s.start).hours, parseLocal(s.end).hours) : clock(s.start)}
                     {s.location ? `, ${placeLabel(s.location)}` : ""}
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2 pt-1">
+                  <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     {addButton(s.id)}
                     {s.url && (
                       <a
                         href={s.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                        className="whitespace-nowrap rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
                       >
                         RSVP
                       </a>
@@ -183,15 +214,15 @@ export default function EventsPage() {
                       {/* A clashing event is not dimmed: fading the text broke contrast. The chip below says it clashes. */}
                       <div>
                         {reason && <Reason text={reason} />}
-                        <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{e.title}</h4>
+                        <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{eventTitle(e)}</h4>
                         <p className="text-ink-soft">
                           {whereText(e)}
-                          {SOURCE[e.source] ? `, from ${SOURCE[e.source]}` : ""}
+                          {SOURCE[e.source] ? `, ${SOURCE[e.source]}` : ""}
                         </p>
                         {fit && (
                           <p
-                            className={`mt-2 inline-block rounded-full px-3 py-0.5 text-sm font-bold ${
-                              fit.fits ? "bg-saguaro/15 text-saguaro" : "bg-[#8C1D40]/10 text-[#8C1D40]"
+                            className={`mt-2 inline-block rounded-full border px-3 py-0.5 text-sm font-bold ${
+                              fit.fits ? "border-saguaro/40 bg-cloud text-saguaro" : "border-[#8C1D40]/30 bg-cloud text-[#8C1D40]"
                             }`}
                           >
                             {fit.fits ? "Fits your day" : `Clashes with ${fit.clash.title}`}

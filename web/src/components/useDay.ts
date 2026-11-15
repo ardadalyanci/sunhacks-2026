@@ -9,10 +9,13 @@
 // the screen, so a voice command and a button press never overwrite each other.
 // The "What if…" pills never change the student's real request: each plan sends a copy with them applied, and
 // Sol says in one line what the re-plan changed (`change`).
-import { useEffect, useRef, useState } from "react";
+// Every failure is said in plain words (errors.ts) and leaves the app usable: the day on screen stays.
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
+import { briefingWithout } from "./briefing";
+import { HttpError, canvasNotice, errorText, offlineAnswer } from "./errors";
 import { createShared, newestWins } from "./loading";
-import { describeChange, type Cause } from "./plan-diff";
+import { describeChange, describeRemovedStudy, describeStack, type Cause } from "./plan-diff";
 import {
   itemKey,
   loadAccepted,
@@ -23,27 +26,46 @@ import {
   saveAccepted,
   saveHidden,
 } from "./setup-store";
-import { arizonaToday, formatTime, parseLocal } from "./time";
+import { arizonaToday, formatDay, formatTime, parseLocal, weekDates } from "./time";
+import { replaceChosenDay } from "./useChosenDay";
 import { useNow } from "./useNow";
-import { NO_WHAT_IF, applyWhatIf, baseNow, skipCandidate, whatIfCause, type WhatIf } from "./what-if";
+import {
+  HOT_PREVIEW,
+  NO_WHAT_IF,
+  applyWhatIf,
+  baseNow,
+  skipCandidate,
+  whatIfCause,
+  type WhatIf,
+} from "./what-if";
 
 const REUSE_MS = 5 * 60_000; // how long a loaded day is reused when moving between pages
+// A plan can take about 24 s on the server (two Gemini calls of up to 12 s); past this, venue Wi-Fi has stalled.
+const REQUEST_LIMIT_MS = 30_000;
+
+/** The answer's JSON, or an HttpError with the route's own `error` text when it answered with an error status. */
+async function readJson<T>(res: Response, url: string): Promise<T> {
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new HttpError(res.status, json.error ?? `Request to ${url} failed (${res.status}).`);
+  }
+  return (await res.json()) as T;
+}
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_LIMIT_MS),
   });
-  const json = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(json.error ?? `Request to ${url} failed (${res.status}).`);
-  return json;
+  return readJson<T>(res, url);
 }
 
 /** GET `url` as JSON; null when it fails, answers an error, or takes longer than `timeoutMs`. */
-async function getJson<T>(url: string, timeoutMs?: number): Promise<T | null> {
+async function getJson<T>(url: string, timeoutMs = REQUEST_LIMIT_MS): Promise<T | null> {
   try {
-    const res = await fetch(url, timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : undefined);
+    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
@@ -59,8 +81,6 @@ function asEvents(value: unknown): Opportunity[] {
 }
 
 const asEventItemId = (id: string) => (id.startsWith("ev-") ? id : `ev-${id}`);
-
-const message = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong.");
 
 type Loaded = {
   request: PlanRequest; // the student's real request, before any "What if…" pill
@@ -81,11 +101,13 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
     // Today's sample day replays 8 am; a later day comes back with the real clock as its `now`.
     // The sample student's own events are joined by the live ASU feeds when they answer in time, so the
     // sample shows real campus events too, and still works offline.
+    const demoUrl = later ? `/api/demo?date=${date}` : "/api/demo";
     const [demo, live] = await Promise.all([
-      getJson<{ persona: { name: string }; request: PlanRequest }>(later ? `/api/demo?date=${date}` : "/api/demo"),
+      fetch(demoUrl, { signal: AbortSignal.timeout(REQUEST_LIMIT_MS) }).then((res) =>
+        readJson<{ persona: { name: string }; request: PlanRequest }>(res, demoUrl),
+      ),
       getJson<unknown>("/api/events", LIVE_EVENTS_WAIT_MS).then(asEvents),
     ]);
-    if (!demo) throw new Error("The sample day did not load. Check that the app server is running.");
     return {
       request: {
         ...demo.request,
@@ -105,8 +127,8 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
     token
       ? postJson<{ deadlines: DayItem[] }>("/api/canvas", { token, date })
           .then((r) => r.deadlines)
-          .catch((e: Error) => {
-            notice = `Canvas did not load: ${e.message} Your classes and events are still here.`;
+          .catch((e: unknown) => {
+            notice = canvasNotice(e);
             return [] as DayItem[];
           })
       : Promise.resolve([] as DayItem[]),
@@ -156,9 +178,43 @@ function inputKey(date: string) {
 // Loaded days for this browser tab, shared by every page that calls useDay().
 const shared = createShared<Day>(REUSE_MS);
 
-/** The plan without the timeline items the student removed. */
+// Each day as last planned with every pill off, so Sol can explain two or three pills together against it.
+const bases = new Map<string, Day>();
+
+const pillsOn = (w: WhatIf) => Number(w.hot) + Number(w.overslept) + Number(w.skipped !== null);
+const isPill = (cause: Cause) => cause.kind === "hot" || cause.kind === "overslept" || cause.kind === "skip";
+
+/** The plan without the timeline items the student removed, and a briefing that no longer talks about them. */
 function visible(plan: DayPlan, hidden: string[]): DayPlan {
-  return { ...plan, items: plan.items.filter((i) => !hidden.includes(itemKey(i))) };
+  if (!hidden.length) return plan;
+  const gone = plan.items.filter((i) => hidden.includes(itemKey(i)));
+  const study = gone.filter((i) => i.type === "study_block").map((i) => i.title);
+  return {
+    ...plan,
+    items: plan.items.filter((i) => !gone.includes(i)),
+    briefing: briefingWithout(plan.briefing, study),
+  };
+}
+
+/** Sol's note when `now` has an event that `old` did not (or lost one), for example one added on Events. */
+function eventNote(old: Day, now: Day, hidden: string[]): string {
+  const was = (old.loaded.request.acceptedEventIds ?? []).map(asEventItemId);
+  const is = (now.loaded.request.acceptedEventIds ?? []).map(asEventItemId);
+  const added = is.find((id) => !was.includes(id));
+  const removed = was.find((id) => !is.includes(id));
+  const cause: Cause | null = added ? { kind: "added", id: added } : removed ? { kind: "removed", id: removed } : null;
+  if (!cause) return "";
+  return describeChange(cause, visible(old.plan, hidden), visible(now.plan, hidden), {
+    now: now.request.now ?? baseNow(now.loaded.request, Date.now()),
+    deadlines: now.request.deadlines,
+  });
+}
+
+/** "Monday" and the day picker's label for `date`, for "I couldn't plan Monday… tap Tomorrow again." */
+function dayWords(date: string, today: string) {
+  const weekday = formatDay(date).split(",")[0];
+  if (date === today) return { day: "today", chip: "Today" };
+  return { day: weekday, chip: date === weekDates(today)[1] ? "Tomorrow" : weekday };
 }
 
 /** The student's day: today by default, or `date` ("2026-11-16") for a later day. */
@@ -169,6 +225,8 @@ export function useDay(date?: string) {
   const [hidden, setHidden] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
+  const [failed, setFailed] = useState<string | null>(null); // a day that failed to load; it is not "switching"
+  const [attempt, setAttempt] = useState(0); // bumped by retry() to load the day again
   const [run] = useState(() => newestWins<DayPlan>());
   const clockNow = useNow();
 
@@ -178,35 +236,66 @@ export function useDay(date?: string) {
   const wanted = useRef<Inputs | null>(null); // the newest inputs, possibly still being planned
   const hiddenRef = useRef<string[]>([]);
   const chosen = useRef(""); // the day the page asked for; a late answer for another day is not shown
+  const keepError = useRef(""); // after a failed switch, the day we went back to: its reload keeps the red line
 
   useEffect(() => {
     const today = arizonaToday();
     const wantedDate = date || today;
     chosen.current = wantedDate;
     let active = true;
+    // A failed load is not kept in `shared`, so tapping the day again (or retry) really loads it again.
     shared.get(inputKey(wantedDate), () => loadDay(wantedDate, today)).then(
       (loaded) => {
         if (!active) return;
-        if (shown.current?.plan.date !== loaded.plan.date) setChange(""); // the note belongs to the day it was about
+        // The note belongs to the day it was about. Coming back to a day another page changed (an event added on
+        // Events), Sol says what that changed instead of keeping an old note.
+        const old = shown.current;
+        if (old?.plan.date !== loaded.plan.date) setChange("");
+        else if (old !== loaded) setChange(eventNote(old, loaded, loadHidden(loaded.plan.date)));
         shown.current = loaded;
         wanted.current = { loaded: loaded.loaded, whatIf: loaded.whatIf };
         hiddenRef.current = loadHidden(loaded.plan.date);
+        if (pillsOn(loaded.whatIf) === 0) bases.set(loaded.plan.date, loaded);
         setDay(loaded);
         setWhatIfState(loaded.whatIf);
         setHidden(hiddenRef.current);
-        setError("");
+        // Back on the day that stayed on screen after a failed switch: keep saying what happened.
+        const keep = keepError.current === loaded.plan.date;
+        keepError.current = "";
+        if (!keep) setError("");
+        setFailed(null);
         setBusy(false);
       },
       (e: unknown) => {
         if (!active) return;
-        setError(message(e));
         setBusy(false);
+        const back = shown.current;
+        if (date && back && back.plan.date !== wantedDate) {
+          // Switching days failed: the day on screen stays, the picker goes back to it, and tapping the failed
+          // day again is a fresh try.
+          setError(errorText(e, { doing: "switch", ...dayWords(wantedDate, today) }));
+          setFailed(wantedDate);
+          keepError.current = back.plan.date;
+          // Going back reads the day from `shared`, which forgets it after REUSE_MS and would load it from scratch
+          // (pills off, note gone, Gemini asked again). Put the day on screen back first, so it stays as it was.
+          shared.set(inputKey(back.plan.date), back);
+          replaceChosenDay(back.plan.date);
+          return;
+        }
+        setError(errorText(e, { doing: "first-load" }));
       },
     );
     return () => {
       active = false;
     };
-  }, [date]);
+  }, [date, attempt]);
+
+  /** Loads the day again after a failed first load (the "Try again" button). */
+  function retry() {
+    setError("");
+    setBusy(true);
+    setAttempt((n) => n + 1);
+  }
 
   /**
    * Plans `next` (the real request with its pills applied); resolves to the plan the student ends up seeing, or
@@ -225,14 +314,36 @@ export function useDay(date?: string) {
         setBusy(false);
         if (plan.date !== chosen.current) return; // the student moved to another day meanwhile
         const before = shown.current;
+        const base = bases.get(plan.date);
+        if (pillsOn(next.whatIf) === 0) bases.set(plan.date, planned);
         shown.current = planned;
         setDay(planned);
         setError("");
         if (cause && before?.plan.date === plan.date) {
           const hidden = hiddenRef.current;
           const now = request.now ?? baseNow(real, Date.now());
+          // Two or three pills on: say what the whole stack does to the plain day, not only the last pill.
+          const stacked =
+            isPill(cause) &&
+            pillsOn(next.whatIf) >= 2 &&
+            base !== undefined &&
+            JSON.stringify(base.loaded.request) === JSON.stringify(real);
           setChange(
-            describeChange(cause, visible(before.plan, hidden), visible(plan, hidden), { now, deadlines: request.deadlines }),
+            stacked
+              ? describeStack(
+                  {
+                    hotF: next.whatIf.hot ? HOT_PREVIEW.tempF : undefined,
+                    wakeAt: next.whatIf.overslept ? request.now : undefined,
+                    skipped: next.whatIf.skipped?.course,
+                  },
+                  visible(base.plan, hidden),
+                  visible(plan, hidden),
+                  { now },
+                )
+              : describeChange(cause, visible(before.plan, hidden), visible(plan, hidden), {
+                  now,
+                  deadlines: request.deadlines,
+                }),
           );
         }
       },
@@ -246,7 +357,7 @@ export function useDay(date?: string) {
           saveAccepted(back.plan.date, back.loaded.request.acceptedEventIds ?? []);
           setWhatIfState(back.whatIf);
         }
-        setError(message(e));
+        setError(errorText(e, { doing: "replan" }));
       },
     );
   }
@@ -290,17 +401,24 @@ export function useDay(date?: string) {
     );
   }
 
-  /** Removes an item from today's timeline in this browser, for example a study block. */
-  function hide(itemId: string) {
+  /**
+   * Removes an item from the timeline in this tab, for example a study block. Study time goes per assignment, so
+   * a re-plan that moves it keeps it removed. Returns the blocks that left the screen.
+   */
+  function hide(itemId: string): DayItem[] {
     const current = shown.current;
     const item = current?.plan.items.find((i) => i.id === itemId);
-    if (!current || !item || hiddenRef.current.includes(itemKey(item))) return;
-    hiddenRef.current = [...hiddenRef.current, itemKey(item)];
+    if (!current || !item) return [];
+    const key = itemKey(item);
+    if (hiddenRef.current.includes(key)) return [];
+    const gone = visible(current.plan, hiddenRef.current).items.filter((i) => itemKey(i) === key);
+    hiddenRef.current = [...hiddenRef.current, key];
     saveHidden(current.plan.date, hiddenRef.current);
     setHidden(hiddenRef.current);
+    return gone;
   }
 
-  /** Runs a spoken or typed command and returns what Sol says back. Failures are said and shown. */
+  /** Runs a spoken or typed question and returns what Sol says back. Failures are said in plain words. */
   async function command(text: string): Promise<string> {
     const current = shown.current;
     if (!current) return "Your day is still loading.";
@@ -308,7 +426,15 @@ export function useDay(date?: string) {
     // `now` is set for the sample day (it replays 8 am) and while "What if I oversleep?" is on; otherwise a real
     // day uses the server clock.
     const now = current.request.now;
-    const action = await postJson<CommandAction>("/api/command", { text, plan, now });
+    let action: CommandAction;
+    try {
+      action = await postJson<CommandAction>("/api/command", { text, plan, now });
+    } catch (e) {
+      // No Wi-Fi or Gemini out: what the plan on screen can answer, Sol still answers.
+      const local = offlineAnswer(text, plan, now ? Date.parse(now) : Date.now());
+      if (local && "remove" in local) return describeRemovedStudy(hide(local.remove.id));
+      return local?.reply ?? errorText(e, { doing: "command" });
+    }
     // "What's next?" and "When do I leave?" come back as a briefing with a short reply of their own.
     if (action.action === "briefing") return action.reply ?? plan.briefing;
     if (action.action === "unknown") return action.reply;
@@ -330,21 +456,26 @@ export function useDay(date?: string) {
       if (!next || next.items.some((i) => i.id === item.id)) {
         return `I could not remove ${item.title}. Try again in a moment.`;
       }
-    } else {
-      hide(item.id);
+      return `Removed ${item.title} from your day.`;
     }
-    return `Removed ${item.title} from your day.`;
+    const gone = hide(item.id);
+    return item.type === "study_block" ? describeRemovedStudy(gone.length ? gone : [item]) : `Removed ${item.title} from your day.`;
   }
 
   // A different day was picked and is still loading; the previous day stays on screen until it arrives.
-  const switching = Boolean(date) && day !== null && day.plan.date !== date;
+  // A day that failed to load is not loading any more.
+  const switching = Boolean(date) && day !== null && day.plan.date !== date && failed !== date;
 
   // The class the "What if … is cancelled?" pill names: while it is on, the one that was cancelled.
   const candidate = day ? skipCandidate(day.loaded.request, day.plan, baseNow(day.loaded.request, clockNow)) : null;
   const skipKey = whatIf.skipped ?? candidate;
 
+  // Same object until the day or the removed items change, so the sky's "Play my day" is not restarted by
+  // unrelated re-renders such as the clock tick.
+  const plan = useMemo(() => (day ? visible(day.plan, hidden) : null), [day, hidden]);
+
   return {
-    plan: day ? visible(day.plan, hidden) : null,
+    plan,
     request: day?.request ?? null, // what was actually planned, with the pills applied
     name: day?.loaded.name ?? "",
     isDemo: day?.loaded.isDemo ?? true,
@@ -363,5 +494,6 @@ export function useDay(date?: string) {
     unaccept,
     hide,
     command,
+    retry, // new: loads the day again after a failed first load
   };
 }

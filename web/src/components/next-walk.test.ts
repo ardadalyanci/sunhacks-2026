@@ -24,7 +24,7 @@ describe("places", () => {
   it("uses the names students say", () => {
     expect(placeLabel("BYENG 210")).toBe("Brickyard 210");
     expect(placeLabel("COOR 170")).toBe("Coor Hall 170");
-    expect(placeLabel("Memorial Union 230")).toBe("the MU 230");
+    expect(placeLabel("Memorial Union 230")).toBe("MU 230");
     expect(placeLabel("Hayden Library")).toBe("Hayden");
     expect(placeLabel("Somewhere new")).toBe("Somewhere new");
   });

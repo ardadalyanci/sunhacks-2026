@@ -117,6 +117,7 @@ function studyFacts(diff: PlanDiff, after: DayPlan, deadlines: DayItem[]): { tex
       const until = due ? ` before it's due at ${dueText(due.start, after.date)}` : " today";
       return { text: `there's no room left for ${studyName(group.title)}${until}`, group };
     });
+  let movedSaid = 0; // the first move reads "I moved …", any later one "… slides to", so the note never repeats itself
   const moved = groups
     .filter((g) => g.before.length > 0 && g.after.length > 0)
     .map((group) => {
@@ -130,7 +131,8 @@ function studyFacts(diff: PlanDiff, after: DayPlan, deadlines: DayItem[]): { tex
         const text = end < group.before[k].end ? `I stop ${name} at ${clock(end)}` : `I let ${name} run to ${clock(end)}`;
         return { text, group };
       }
-      return { text: `I moved ${name} to ${spans(group.after)}`, group };
+      const text = movedSaid++ === 0 ? `I moved ${name} to ${spans(group.after)}` : `${name} slides to ${spans(group.after)}`;
+      return { text, group };
     });
   const placed = groups
     .filter((g) => g.before.length === 0)
@@ -153,8 +155,7 @@ const isEmpty = (d: PlanDiff) => !d.added.length && !d.removed.length && !d.move
 
 /** Two sentences at most: a lead with its first detail, then one more detail if there is one. */
 function say(first: string, second?: string | null) {
-  const text = second ? `${first}. ${capital(second)}.` : `${first}.`;
-  return text.replace(/\b12 pm\b/g, "noon"); // the app says "noon", not "12 pm"
+  return second ? `${first}. ${capital(second)}.` : `${first}.`;
 }
 
 /**
@@ -203,9 +204,13 @@ export function describeChange(cause: Cause, before: DayPlan, after: DayPlan, co
         if (!gone) return say(lead, "nothing had to move");
         const freed: Range = { start: gone.start, end: gone.end ?? gone.start };
         const filler = study.find((f) => f.group.after.some((r) => overlaps(r, freed)));
-        const first = filler
-          ? `${lead}: that frees ${span(freed)}, and I put ${studyName(filler.group.title)} there`
-          : `${lead}: that frees ${span(freed)}`;
+        // "there" only when the study time sits wholly inside the freed time; otherwise say its real times.
+        const inside = filler?.group.after.every((r) => r.start >= freed.start && r.end <= freed.end);
+        const first = !filler
+          ? `${lead}: that frees ${span(freed)}`
+          : inside
+            ? `${lead}: that frees ${span(freed)}, and I put ${studyName(filler.group.title)} there`
+            : `${lead}: that frees ${span(freed)}, so I put ${studyName(filler.group.title)} at ${spans(filler.group.after)}`;
         const rest = study.filter((f) => f !== filler);
         // The next walk is worth a word only when the cancelled class changed it.
         return say(first, rest[0]?.text ?? (walk?.startsWith("you still") ? null : walk));
@@ -232,4 +237,59 @@ export function describeChange(cause: Cause, before: DayPlan, after: DayPlan, co
       return say(lead, detail ?? "nothing else moved");
     }
   }
+}
+
+/** The "What if…" pills that are on, as Sol names them. */
+export type Stack = {
+  hotF?: number; // "What if it's 104°?" is on
+  wakeAt?: string; // "What if I oversleep?" is on: the ISO time the day now starts
+  skipped?: string; // "What if … is cancelled?" is on: the class's title
+};
+
+const list = (parts: string[]) =>
+  parts.length <= 2 ? parts.join(" and ") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+
+/**
+ * Sol's note when two or three pills are on: the whole stack against the day with no pills (`base`), so it reads
+ * right whichever pill came last. "104° and up at 9 am: you leave at 10:16 am for Hayden, 2 minutes earlier for
+ * the heat. Lab 7 is now 9–10 am."
+ */
+export function describeStack(stack: Stack, base: DayPlan, after: DayPlan, context: Context = {}): string {
+  const names = [
+    stack.hotF !== undefined ? `${stack.hotF}°` : null,
+    stack.wakeAt ? `up at ${clock(stack.wakeAt)}` : null,
+    stack.skipped ? `no ${stack.skipped}` : null,
+  ].filter((n): n is string => n !== null);
+
+  const from = context.now ? Date.parse(context.now) : -Infinity;
+  const next = after.items.find((i) => i.leaveAt && Date.parse(i.leaveAt) >= from);
+  let walk = "no more walks today";
+  if (next?.leaveAt) {
+    const at = `${clock(next.leaveAt)} for ${where(next)}`;
+    const was = base.items.find((i) => i.type === next.type && i.title === next.title && i.start === next.start);
+    const shift = was?.leaveAt ? Math.round((Date.parse(was.leaveAt) - Date.parse(next.leaveAt)) / 60_000) : null;
+    // With a class cancelled the walk can start somewhere else, so the minutes would not be the heat's alone.
+    if (stack.skipped && shift !== null && shift !== 0) walk = `you leave at ${at}`;
+    else if (shift === null) walk = `your next walk is at ${at}`;
+    else if (shift === 0) walk = `you still leave at ${at}`;
+    else if (shift > 0) walk = `you leave at ${at}, ${minutes(shift)} earlier${stack.hotF !== undefined ? " for the heat" : ""}`;
+    else walk = `you leave at ${at}, ${minutes(-shift)} later`;
+  }
+
+  // Each study change once, against the day with no pills; two at most, so the note stays two sentences.
+  const study = diffPlans(base, after)
+    .moved.filter((m) => m.type === "study_block")
+    .map((g) => (g.after.length ? `${studyName(g.title)} is now ${spans(g.after)}` : `there's no room left for ${studyName(g.title)}`))
+    .slice(0, 2);
+  return say(`${capital(list(names))}: ${walk}`, study.length ? list(study) : "nothing else moved");
+}
+
+/** Sol's reply after study time is taken off the day: "Removed the Lab 7 study block, 8 to 10 am." */
+export function describeRemovedStudy(blocks: DayItem[]): string {
+  if (!blocks.length) return "Removed that from your day.";
+  const name = assignmentName(blocks[0].title.replace(/^Work on:\s*/, ""));
+  // Spoken aloud too, so "8 to 10 am" rather than a dash.
+  const times = list(blocks.map((b) => span({ start: b.start, end: b.end ?? b.start }).replace("–", " to ")));
+  const what = blocks.length === 1 ? "study block" : "study blocks";
+  return `Removed the ${name} ${what}, ${times}.`;
 }

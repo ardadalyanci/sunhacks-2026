@@ -1,6 +1,6 @@
 // Pure planning math for POST /api/plan: no network, no Gemini. Everything here is deterministic,
 // so the Today screen still works when Gemini is unavailable.
-import { spokenAssignment } from "./places";
+import { placeLabel, spokenAssignment, spokenStop } from "./places";
 import type { ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./types";
 
 export const MST = "-07:00"; // Arizona: no daylight saving
@@ -18,6 +18,22 @@ const ROUTE_FACTOR = 1.3; // campus paths are not straight lines
 const SLOWER_PACE_FACTOR = 1.35; // "Give me more time to walk" in Setup
 const HEAT_EXTRA_MIN = 2;
 const HEAT_EXTRA_SLOWER_MIN = 5;
+const SAME_BUILDING_BREAK_MIN = 60; // a longer break between two stops in one building gets a leave time again
+
+// A class is a course code and nothing else ("CSE 230", "BIO 181L"). "MAT 343 study group" or "Work shift" is a
+// commitment the student added, and Sol calls it by its own name.
+const COURSE_CODE = /^[A-Z]{2,4} \d{3}[A-Z]?$/;
+
+export function isCourse(title: string): boolean {
+  return COURSE_CODE.test(title.trim());
+}
+
+/** How Sol names a stop in a sentence: "CSE 230", "your work shift", "your MAT 343 study group", an event's title. */
+export function stopName(item: DayItem): string {
+  const name = spokenStop(item.title);
+  if (item.type !== "class" || isCourse(name)) return name;
+  return `your ${/^[A-Z][a-z]/.test(name) ? name[0].toLowerCase() + name.slice(1) : name}`;
+}
 
 export interface Building {
   id: string; // e.g. "BYENG"
@@ -75,6 +91,10 @@ export function hasPhrase(hay: string, needle: string): boolean {
  */
 export function findBuilding(buildings: Building[], ref?: string): Building | undefined {
   if (!ref?.trim() || isOnline(ref)) return undefined;
+  // A code in parentheses names the building: "Life Sciences Center E (LSE)" is the E wing, not "Life Sciences Center".
+  const code = /\(([A-Z]{2,6})\)/.exec(ref)?.[1];
+  const coded = code && buildings.find((b) => b.id === code);
+  if (coded) return coded;
   let best: { b: Building; len: number } | undefined;
   for (const b of buildings) {
     for (const needle of [b.id, b.name, ...(b.aliases ?? [])]) {
@@ -129,12 +149,22 @@ export function classItems(classes: ClassBlock[], date: string, buildings: Build
     }));
 }
 
+// Club titles that say nothing on their own: "Weekly Meeting", "General Body Meeting", "GBM".
+const GENERIC_TITLE = /^(?:(?:general|club|weekly|bi-?weekly|monthly|body|members?'?)\s+)*meetings?!?$|^gbm!?$/i;
+
+/** An event's title, named with its club when the title alone is generic ("Robotics club: Weekly Meeting"). */
+export function eventTitle(o: Pick<Opportunity, "title" | "organizer">): string {
+  const title = o.title.trim();
+  const club = o.organizer?.trim();
+  return GENERIC_TITLE.test(title) && club ? `${club}: ${title}` : title;
+}
+
 export function opportunityToItem(o: Opportunity, buildings: Building[]): DayItem | null {
   if (!o.startsAt) return null;
   return {
     id: `ev-${o.id}`,
     type: "event",
-    title: o.title,
+    title: eventTitle(o),
     start: o.startsAt,
     end: o.endsAt ?? toMstIso(new Date(new Date(o.startsAt).getTime() + 60 * MIN)),
     buildingId: findBuilding(buildings, o.location)?.id,
@@ -198,6 +228,9 @@ export function reserveTime(gaps: Gap[], start: number, end: number) {
 /**
  * Places study blocks for unfinished deadlines, earliest due first, into free gaps before each due time.
  * `minutesFor` gives the estimated work time per deadline id. Consumes the gaps it uses.
+ * Never places more than the estimate: a 45-minute reading is one 45-minute block, not a padded hour. A split
+ * leaves no piece shorter than MIN_STUDY_BLOCK_MIN; if the time before the due date runs out, a shorter total is
+ * better than made-up work.
  */
 export function placeStudyBlocks(
   deadlines: DayItem[],
@@ -209,18 +242,13 @@ export function placeStudyBlocks(
   const open = deadlines
     .filter((d) => !d.done && new Date(d.start).getTime() > now)
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  const shortest = MIN_STUDY_BLOCK_MIN * MIN;
 
   for (const d of open) {
     const due = new Date(d.start).getTime();
     const estimate = minutesFor(d.id);
     let need = (Number.isFinite(estimate) && estimate > 0 ? estimate : DEFAULT_STUDY_MIN) * MIN;
-    for (const g of gaps) {
-      if (need <= 0) break;
-      const from = Math.max(g.start, now);
-      const to = Math.min(g.end, due);
-      if (to - from < MIN_STUDY_BLOCK_MIN * MIN) continue;
-      // Never leave a tiny leftover block: the last piece is at least MIN_STUDY_BLOCK_MIN long.
-      const len = Math.min(Math.max(need, MIN_STUDY_BLOCK_MIN * MIN), to - from);
+    const place = (g: Gap, from: number, len: number) => {
       blocks.push({
         id: `study-${d.id}-${blocks.length}`,
         type: "study_block",
@@ -232,6 +260,32 @@ export function placeStudyBlocks(
       });
       g.start = from + len; // the rest of the gap stays free
       need -= len;
+    };
+    const roomIn = (g: Gap) => {
+      const from = Math.max(g.start, now);
+      return { from, room: Math.min(g.end, due) - from };
+    };
+
+    const sorted = [...gaps].sort((a, b) => a.start - b.start);
+    for (const g of sorted) {
+      if (need <= 0) break;
+      const { from, room } = roomIn(g);
+      if (room < shortest) continue;
+      // Saving a full block for later only makes sense when a later gap can hold one.
+      const laterRoom = sorted.some((h) => h !== g && h.start >= g.end && roomIn(h).room >= shortest);
+      if (need <= room) place(g, from, need); // the rest fits here
+      else if (need - room >= shortest) place(g, from, room); // fill the gap; a full block is still left for later
+      else if (need >= 2 * shortest && laterRoom) place(g, from, need - shortest); // leave exactly one full block for later
+      // else: too little to split, so look for a later gap that holds all of it (or fill the roomiest one below)
+    }
+    // Nothing later held what was left: the biggest piece that fits, in the roomiest gap. A shortfall, never padding.
+    if (need > 0) {
+      let best: { g: Gap; from: number; room: number } | undefined;
+      for (const g of gaps) {
+        const r = roomIn(g);
+        if (r.room >= shortest && (!best || r.room > best.room)) best = { g, ...r };
+      }
+      if (best) place(best.g, best.from, Math.min(need, best.room));
     }
   }
   return blocks;
@@ -240,6 +294,10 @@ export function placeStudyBlocks(
 /**
  * Sets `leaveAt` on classes and events, walking from the previous located stop (or the start building).
  * `slower` gives every walk the student's slower pace (see walkMinutes).
+ * Another room in the same building within an hour is no walk, so that stop gets no leave time; after a longer
+ * break it gets the leave time for a walk from an unknown place. When a walk has to start before
+ * the stop before it ends (a slower pace or the heat on a short break), the leave time stays honest and `why` says
+ * so, starting with "Tight:".
  */
 export function addLeaveTimes(
   items: DayItem[],
@@ -250,16 +308,37 @@ export function addLeaveTimes(
 ) {
   const hot = weather?.isHot ?? false;
   let here = findBuilding(buildings, startBuildingId);
+  let lastStop = here; // the building of the stop just before (undefined when that place is unknown)
+  let prev: DayItem | undefined;
   for (const item of items) {
     if (item.type !== "class" && item.type !== "event") continue;
+    if (item.why?.startsWith("Tight:")) delete item.why; // from an earlier plan of the same day
+    const before = prev;
+    prev = item;
     if (isOnline(item.location)) {
       delete item.leaveAt; // nothing to walk to; the student stays where they are
       continue;
     }
     const there = findBuilding(buildings, item.buildingId ?? item.location);
-    const minutes = walkMinutes(here, there, hot, slower);
-    item.leaveAt = toMstIso(new Date(new Date(item.start).getTime() - minutes * MIN));
+    const sameBuilding = Boolean(lastStop && there && lastStop.id === there.id);
+    lastStop = there;
+    // Down the hall right after the stop before is no walk. After a longer break the student has likely left
+    // (lunch, the library), so they get the leave time for a walk from a place we do not know.
+    const breakMs = before ? new Date(item.start).getTime() - new Date(before.end ?? before.start).getTime() : 0;
+    if (sameBuilding && breakMs <= SAME_BUILDING_BREAK_MIN * MIN) {
+      delete item.leaveAt;
+      continue;
+    }
+    const from = sameBuilding ? undefined : here;
+    const leave = new Date(item.start).getTime() - walkMinutes(from, there, hot, slower) * MIN;
+    item.leaveAt = toMstIso(new Date(leave));
     if (there) here = there;
+    // Only a real squeeze: a stop that starts before the one before it ends is a clash, not a tight walk.
+    const beforeEnd = before ? new Date(before.end ?? before.start).getTime() : Number.NaN;
+    if (before && leave < beforeEnd && new Date(item.start).getTime() >= beforeEnd) {
+      const short = Math.ceil((beforeEnd - leave) / MIN);
+      item.why = `Tight: that is ${short} minute${short === 1 ? "" : "s"} before ${stopName(before)} ends.`;
+    }
   }
 }
 
@@ -293,34 +372,56 @@ export function rankByOverlap(events: DayItem[], interests: string[]): { item: D
     })
     .filter((x) => x.hits.length > 0)
     .sort((a, b) => b.hits.length - a.hits.length)
-    .map((x) => ({ item: x.item, why: `Matches your interest in ${x.hits.slice(0, 2).join(" and ")}.` }));
+    .map((x) => ({ item: x.item, why: `You picked ${x.hits.slice(0, 2).join(" and ")}.` }));
 }
 
 export function defaultStudyMinutes(): number {
   return DEFAULT_STUDY_MIN;
 }
 
-/** Spoken briefing without Gemini. */
-/** `ahead` (e.g. "Tomorrow, Mon Nov 16") turns it into a look-ahead at a later day: no "today", no current temperature. */
-export function templateBriefing(items: DayItem[], suggestions: DayItem[], weather?: Weather, ahead?: string): string {
+const ORDINAL = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * Sol's spoken briefing when Gemini is out, in the same voice: the next time to leave first, then the work due
+ * soonest, then one pick. `ahead` (e.g. "Tomorrow, Mon Nov 16") makes it a look-ahead at a later day: no
+ * "today", no current temperature. `nowMs` leaves out classes that already started and work already past due.
+ */
+export function templateBriefing(items: DayItem[], suggestions: DayItem[], weather?: Weather, ahead?: string, nowMs = 0): string {
   const parts: string[] = [];
-  const shade = weather?.isHot ? ", so stay in the shade and bring water" : "";
-  if (ahead) parts.push(`${ahead}.`);
-  if (weather && ahead) parts.push(`The high is ${Math.round(weather.highF)} degrees${shade}.`);
-  else if (weather) parts.push(`It's ${Math.round(weather.tempF)} degrees in Tempe today, with a high of ${Math.round(weather.highF)}${shade}.`);
+  const bottle = weather?.isHot ? ", so fill your bottle before you go" : "";
+  if (weather && ahead) parts.push(`${ahead}, high of ${Math.round(weather.highF)}°F${bottle}.`);
+  else if (weather) parts.push(`It's ${Math.round(weather.tempF)}°F in Tempe now, with a high of ${Math.round(weather.highF)}°F${bottle}.`);
+  else if (ahead) parts.push(`${ahead}.`);
+
+  const day = ahead ? "that day" : "today";
   const classes = items.filter((i) => i.type === "class");
-  if (classes.length) {
-    const first = classes[0];
-    // A shift or a study group is not a class, so a day with one is counted as things planned.
-    const count = classes.every((c) => /^[A-Z]{2,4} \d{3}/.test(c.title))
-      ? `${classes.length} class${classes.length > 1 ? "es" : ""}`
-      : `${classes.length} thing${classes.length > 1 ? "s" : ""} planned`;
-    parts.push(`You have ${count}. First up is ${first.title} at ${clock(first.start)}${first.leaveAt ? `; leave by ${clock(first.leaveAt)}` : ""}.`);
+  // A shift or a study group is not a class, so a day with one counts things, not classes.
+  const allCourses = classes.every((c) => isCourse(c.title));
+  const first = classes.find((c) => Date.parse(c.start) > nowMs);
+  if (!classes.length) {
+    parts.push(`No classes ${day}.`);
+  } else if (!first) {
+    parts.push(allCourses ? "Your classes are done for today." : "That's everything on your list for today.");
   } else {
-    parts.push(ahead ? "You have no classes." : "You have no classes today.");
+    const n = classes.length;
+    const at = classes.indexOf(first);
+    const of = allCourses ? `your ${n} classes` : `${n} things ${day}`;
+    const rank = n === 1 ? "" : at === n - 1 ? `, the last of ${of}` : `, the ${ORDINAL[at] ?? "next"} of ${of}`;
+    const where = !first.location ? "" : isOnline(first.location) ? " online" : ` ${isCourse(first.title) ? "in" : "at"} ${placeLabel(first.location)}`;
+    const name = stopName(first);
+    parts.push(
+      first.leaveAt
+        ? `${Date.parse(first.leaveAt) <= nowMs ? "Leave now" : `Leave at ${clock(first.leaveAt)}`} for ${name}${where}${rank}.`
+        : `${capitalize(name)} starts at ${clock(first.start)}${where}${rank}.`,
+    );
   }
-  const due = items.filter((i) => i.type === "deadline" && !i.done);
-  if (due.length) parts.push(`${due.length} assignment${due.length > 1 ? "s are" : " is"} still open, starting with ${spokenAssignment(due[0].title)}, due ${clock(due[0].start)}.`);
-  if (suggestions.length) parts.push(`One event that fits you: ${suggestions[0].title} at ${clock(suggestions[0].start)}.`);
+
+  const due = items
+    .filter((i) => i.type === "deadline" && !i.done && Date.parse(i.start) > nowMs)
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  if (due.length === 1) parts.push(`${capitalize(spokenAssignment(due[0].title))} is due at ${clock(due[0].start)}.`);
+  else if (due.length > 1) parts.push(`${due.length} things are still open; ${spokenAssignment(due[0].title)} is due first, at ${clock(due[0].start)}.`);
+  if (suggestions.length) parts.push(`I'd check out ${suggestions[0].title} at ${clock(suggestions[0].start)}.`);
   return parts.join(" ");
 }

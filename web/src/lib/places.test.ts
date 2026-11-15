@@ -1,12 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { polishLine, spokenAssignment, spokenStop } from "./places";
+import { findPlace, placeLabel, polishLine, spokenAssignment, spokenStop } from "./places";
 
 describe("spokenStop", () => {
   it("turns a course-labeled commitment into what students say", () => {
     expect(spokenStop("Study group: MAT 343")).toBe("MAT 343 study group");
+    expect(spokenStop("MAT 343 study group")).toBe("MAT 343 study group");
     expect(spokenStop("Work shift")).toBe("Work shift");
     expect(spokenStop("CSE 230")).toBe("CSE 230");
     expect(spokenStop("Robotics club: build night")).toBe("Robotics club: build night");
+  });
+});
+
+describe("placeLabel", () => {
+  it("says a room the way students do: MU 202, but the MU on its own", () => {
+    expect(placeLabel("Memorial Union 202")).toBe("MU 202");
+    expect(placeLabel("MU 202")).toBe("MU 202");
+    expect(placeLabel("MU-242")).toBe("MU 242");
+    expect(placeLabel("Memorial Union")).toBe("the MU");
+    expect(placeLabel("BYENG 210")).toBe("Brickyard 210");
+    expect(placeLabel("Hayden Library")).toBe("Hayden");
+    expect(placeLabel("Somewhere new")).toBe("Somewhere new");
+  });
+
+  it("says the building once in ASU's own location labels, and trusts a code in parentheses", () => {
+    expect(placeLabel("Memorial Union - MU 085 Union Stage")).toBe("MU 085 Union Stage");
+    expect(placeLabel("Memorial Union - MU L1-45 Havasupai")).toBe("MU L1-45 Havasupai");
+    expect(placeLabel("Memorial Union MU 228 Cochise")).toBe("MU 228 Cochise");
+    expect(placeLabel("Memorial Union - MU 242 - La Paz")).toBe("MU 242 - La Paz");
+    expect(placeLabel("Memorial Union (MU) 202")).toBe("MU 202");
+    expect(placeLabel("Life Sciences Center E (LSE), Room 104")).toBe("LSE 104");
+    expect(placeLabel("Life Sciences Center A (LSA), Room 191")).toBe("LSA 191");
+    expect(placeLabel("Life Sciences Center C (LSC), Room 202")).toBe("Life Sciences Center C (LSC), Room 202"); // a wing we do not know
+    expect(placeLabel("Student Pavilion (STPV) - Senita Ballroom A")).toBe("Pavilion Senita Ballroom A");
+    expect(placeLabel("Durham Hall, Room 240")).toBe("LL 240");
+    expect(placeLabel("Memorial Union (Sparky's Den)")).toBe("MU (Sparky's Den)");
+    expect(placeLabel("Mustang Hall")).toBe("Mustang Hall");
+  });
+
+  it("matches a building name only as whole words", () => {
+    expect(findPlace("MU-242")).toMatchObject({ building: { id: "MU" }, room: "242" });
+    expect(findPlace("Mustang Hall").building).toBeUndefined();
   });
 });
 
@@ -36,5 +69,17 @@ describe("polishLine", () => {
     expect(polishLine("Leave for CSE 230 at BYENG 210 — it's a walk!")).toBe("Leave for CSE 230 at Brickyard 210, it's a walk.");
     expect(polishLine("Shift at MU, then COOR 170!!")).toBe("Shift at the MU, then Coor Hall 170.");
     expect(polishLine("a work shift at the the MU at 1:30 pm")).toBe("a work shift at the MU at 1:30 pm");
+    expect(polishLine("Robotics night at MU 230.")).toBe("Robotics night at MU 230.");
+  });
+
+  it("leaves course codes that are also building ids alone", () => {
+    expect(polishLine("Leave for PSY 101 at Coor 170")).toBe("Leave for PSY 101 at Coor 170");
+    expect(polishLine("You're free after ART 113 and BA 301.")).toBe("You're free after ART 113 and BA 301.");
+  });
+});
+
+describe("polishLine and noon", () => {
+  it("says noon for 12 pm and leaves the 12 in 4:12 pm alone", () => {
+    expect(polishLine("Lunch at 12 PM, then leave at 4:12 pm.")).toBe("Lunch at noon, then leave at 4:12 pm.");
   });
 });

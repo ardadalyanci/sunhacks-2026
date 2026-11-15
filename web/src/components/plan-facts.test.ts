@@ -40,10 +40,10 @@ function saturday(extra: Partial<DayPlan> = {}) {
     [
       item(SAT, { id: "study-lab7", type: "study_block", title: "Work on: CSE 230: Lab 7 (pipelining)" }, "08:00", "09:47"),
       item(SAT, { id: "class-0", type: "class", title: "Work shift", location: "Memorial Union" }, "10:00", "14:00", "09:52"),
-      item(SAT, { id: "class-1", type: "class", title: "Study group: CSE 230", location: "Hayden Library" }, "15:00", "16:00", "14:56"),
+      item(SAT, { id: "class-1", type: "class", title: "CSE 230 study group", location: "Hayden Library" }, "15:00", "16:00", "14:56"),
       ...(request.deadlines ?? []),
     ],
-    { suggestions: [suggestion(SAT, "You picked robotics, and you're free after your study group.")], ...extra },
+    { suggestions: [suggestion(SAT, "Robotics is your thing, and you're free after your study group.")], ...extra },
   );
   return { request, plan };
 }
@@ -65,7 +65,7 @@ describe("planFacts on the sample Saturday", () => {
   });
 
   it("names the day's commitments", () => {
-    expect(f.schedule).toBe("2 commitments on Saturday: Work shift and Study group: CSE 230.");
+    expect(f.schedule).toBe("2 things on Saturday: your work shift and your CSE 230 study group.");
   });
 
   it("says the assignments are samples, with what is turned in and what is still due", () => {
@@ -88,7 +88,7 @@ describe("planFacts on the sample Saturday", () => {
 
   it("counts the sample events and says Gemini ranked them against the interests", () => {
     expect(f.events).toBe(
-      "5 sample events, 5 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: robotics, coding and hackathons.",
+      "5 sample events, 5 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: robotics, software and hackathons.",
     );
   });
 
@@ -194,13 +194,72 @@ describe("planFacts on a real setup", () => {
     });
     // 11:30 pm Arizona on Saturday, written in UTC, still counts as Saturday.
     const events = [ev("a", "2026-11-15T06:30:00Z"), ev("b", at(SAT, "18:00")), ev("c", at(MON, "18:00"))];
-    const withEvents = facts({ ...request, events }, { ...plan, suggestions: [suggestion(SAT, "You picked coding.")] }, false);
+    const withEvents = facts({ ...request, events }, { ...plan, suggestions: [suggestion(SAT, "A coding night that fits your free evening.")] }, false);
     expect(withEvents.events).toBe(
-      "3 events this week from ASU Events and Sun Devil Central, 2 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: coding and music.",
+      "3 events this week from ASU Events and Sun Devil Central, 2 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: software and music.",
     );
     const elsewhere = facts({ ...request, events: events.slice(2) }, plan, false);
     expect(elsewhere.events).toBe(
       "1 event this week from ASU Events and Sun Devil Central, none on Saturday.",
+    );
+  });
+});
+
+describe("planFacts counts walks the way the map draws them", () => {
+  const source = `Each leave time comes from distances between ${buildings.length} ASU buildings from OpenStreetMap.`;
+  const request: PlanRequest = { date: MON, classes: [], startBuildingId: "TOOKR" };
+  const day = basePlan(MON, [
+    item(MON, { id: "c0", type: "class", title: "CSE 230", location: "BYENG 210" }, "10:30", "11:20", "10:20"),
+    item(MON, { id: "c1", type: "class", title: "MAT 343", location: "COOR 170" }, "13:30", "14:45", "13:19"),
+  ]);
+
+  it("with no start building, counts the walks between classes and names the first one apart", () => {
+    expect(facts({ ...request, startBuildingId: undefined }, day, false).walks).toBe(
+      `1 walk, 11 minutes on foot in all, plus the walk to your first class. ${source}`,
+    );
+  });
+
+  it("with a start building, counts every walk from there", () => {
+    expect(facts(request, day, false).walks).toMatch(/^2 walks, 21 minutes on foot in all, starting from Tooker\. /);
+  });
+
+  it("leaves out a walk to a building the map does not know", () => {
+    const unknown = { ...day, items: [...day.items, item(MON, { id: "c2", type: "class", title: "ENG 102", location: "Room 9" }, "16:00", "16:50", "15:50")] };
+    expect(facts(request, unknown, false).walks).toMatch(/^2 walks, 21 minutes on foot in all, starting from Tooker\. /);
+  });
+
+  it("does not count a walk between two stops in one building", () => {
+    const same = {
+      ...day,
+      items: [day.items[0], item(MON, { id: "c1", type: "class", title: "CSE 240", location: "BYENG 190" }, "11:30", "12:20", "11:27")],
+    };
+    expect(facts(request, same, false).walks).toMatch(/^1 walk, 10 minutes on foot in all, starting from Tooker\. /);
+  });
+
+  it("with only one stop and no start building, counts the plan's own walk", () => {
+    const one = { ...day, items: day.items.slice(0, 1) };
+    expect(facts({ ...request, startBuildingId: undefined }, one, false).walks).toBe(`1 walk, 10 minutes on foot in all. ${source}`);
+  });
+});
+
+describe("planFacts on schedules and sample events", () => {
+  it("calls a study group a thing, not a class, and keeps a course with a letter a class", () => {
+    const { request } = demoScenario(SAT, { today: SAT });
+    const day = basePlan(SAT, [
+      item(SAT, { id: "a", type: "class", title: "MAT 343 study group", location: "Hayden Library" }, "10:30", "11:45"),
+      item(SAT, { id: "b", type: "class", title: "Work shift", location: "Memorial Union" }, "13:30", "16:00"),
+    ]);
+    expect(facts(request, day).schedule).toBe("2 things on Saturday: your MAT 343 study group and your work shift.");
+    const mixed = { ...day, items: [item(SAT, { id: "c", type: "class", title: "BIO 181L", location: "LSE 104" }, "08:30", "09:20"), ...day.items] };
+    expect(facts(request, mixed).schedule).toBe("3 things on Saturday: BIO 181L, your MAT 343 study group and your work shift.");
+    expect(facts(request, { ...day, items: mixed.items.slice(0, 1) }).schedule).toBe("1 class on Saturday: BIO 181L.");
+  });
+
+  it("on a sample day with only live events, does not count zero sample events", () => {
+    const { request, plan } = saturday();
+    const live: Opportunity = { ...request.events![0], id: "asu-1", source: "asu_events", startsAt: at(MON, "18:00") };
+    expect(facts({ ...request, events: [live] }, plan).events).toMatch(
+      /^1 event this week from ASU Events and Sun Devil Central, none on Saturday\./,
     );
   });
 });
@@ -223,7 +282,7 @@ describe("planFacts on special days", () => {
   it("says plain rules did everything when Gemini was not reachable", () => {
     const { request, plan } = saturday({
       aiUsed: false,
-      suggestions: [suggestion(SAT, "Matches your interest in robotics.")],
+      suggestions: [suggestion(SAT, "You picked robotics.")],
     });
     const f = facts(request, plan);
     expect(f.who).toBe("Gemini was not reachable, so plain rules did everything, including my words.");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DayItem, DayPlan } from "@/lib/types";
-import { describeChange, diffPlans } from "./plan-diff";
+import { describeChange, describeRemovedStudy, describeStack, diffPlans } from "./plan-diff";
 
 const at = (hhmm: string) => `2026-11-16T${hhmm}:00-07:00`;
 const cls = (title: string, start: string, end: string, leave: string, location: string): DayItem => ({
@@ -120,7 +120,7 @@ describe("describeChange", () => {
   it("event added: its time and walk, and that nothing else moved", () => {
     const robotics: DayItem = { id: "ev-demo-robotics", type: "event", title: "Robotics club build night", start: at("16:15"), end: at("17:30"), leaveAt: at("16:10"), location: "Memorial Union 230", source: "asu_events" };
     expect(describeChange({ kind: "added", id: robotics.id }, plan(mu), plan(mu, robotics))).toBe(
-      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for the MU 230. Nothing else moved.",
+      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for MU 230. Nothing else moved.",
     );
     expect(describeChange({ kind: "removed", id: robotics.id }, plan(mu, robotics), plan(mu))).toBe(
       "Took Robotics club build night off your day. Nothing else moved.",
@@ -132,7 +132,7 @@ describe("describeChange", () => {
     const before = plan(mu, study("s0", LAB, "16:00", "17:00"));
     const after = plan(mu, robotics, study("s0", LAB, "17:30", "18:30"));
     expect(describeChange({ kind: "added", id: robotics.id }, before, after)).toBe(
-      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for the MU 230. I moved Lab 7 to 5:30–6:30 pm.",
+      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for MU 230. I moved Lab 7 to 5:30–6:30 pm.",
     );
   });
 
@@ -147,6 +147,23 @@ describe("describeChange", () => {
     );
   });
 
+  it("cancelled: gives the real times when the study block is not inside the freed time", () => {
+    const before = plan(cse240, study("s0", READING, "16:00", "16:45"));
+    const after = plan(study("s0", READING, "14:30", "15:15"));
+    expect(describeChange({ kind: "skip", on: true, course: "CSE 240" }, before, after, { now: at("08:00") })).toBe(
+      "No CSE 240 today: that frees 3–3:50 pm, so I put the Reading response at 2:30–3:15 pm.",
+    );
+  });
+
+  it("never says \"I moved\" twice in one note", () => {
+    const before = plan(mu, study("a", LAB, "08:00", "09:00"), study("b", READING, "09:00", "09:45"));
+    const after = plan(mu, study("a", LAB, "09:00", "09:40"), study("a2", LAB, "14:00", "14:30"), study("b", READING, "16:25", "17:10"));
+    const cause = { kind: "overslept", on: true, from: at("08:00"), to: at("09:00") } as const;
+    expect(describeChange(cause, before, after, { now: at("09:00") })).toBe(
+      "Up at 9 am instead of 8 am: I moved Lab 7 to 9–9:40 am and 2–2:30 pm. The Reading response slides to 4:25–5:10 pm.",
+    );
+  });
+
   it("keeps to two sentences", () => {
     const before = plan(mu, study("a", LAB, "08:00", "09:00"), study("b", READING, "16:00", "17:00"), study("c", PSET, "17:00", "18:00"));
     const after = plan(mu, study("a", LAB, "14:00", "15:00"), study("b", READING, "17:00", "18:00"));
@@ -154,5 +171,50 @@ describe("describeChange", () => {
     const text = describeChange(cause, before, after, { now: at("09:00") });
     expect(text.split(". ").length).toBeLessThanOrEqual(2);
     expect(text).not.toMatch(/[!—]/);
+  });
+});
+
+describe("describeStack", () => {
+  const GROUP = "MAT 343 study group";
+  const group = cls(GROUP, "10:30", "11:45", "10:20", "Memorial Union");
+  const psy = cls("PSY 101", "13:30", "14:45", "13:17", "Memorial Union");
+  const base = plan(group, psy, study("a", LAB, "08:00", "09:30"), study("b", READING, "16:00", "16:45"));
+  const hotPsy = { ...psy, leaveAt: at("13:15") };
+
+  it("names every pill that is on, the next walk and what moved against the day with no pills", () => {
+    const after = plan(hotPsy, study("a", LAB, "10:30", "11:45"), study("b", READING, "16:00", "16:45"));
+    const stack = { hotF: 104, wakeAt: at("09:00"), skipped: GROUP };
+    expect(describeStack(stack, base, after, { now: at("09:00") })).toBe(
+      "104°, up at 9 am and no MAT 343 study group: you leave at 1:15 pm for the MU. Lab 7 is now 10:30–11:45 am.",
+    );
+  });
+
+  it("reads right with two pills, whichever came last", () => {
+    const after = plan({ ...group, leaveAt: at("10:18") }, hotPsy, study("a", LAB, "09:00", "10:10"), study("b", READING, "16:00", "16:45"));
+    expect(describeStack({ hotF: 104, wakeAt: at("09:00") }, base, after, { now: at("09:00") })).toBe(
+      "104° and up at 9 am: you leave at 10:18 am for the MU, 2 minutes earlier for the heat. Lab 7 is now 9–10:10 am.",
+    );
+    const noGroup = plan(psy, study("a", LAB, "08:00", "09:30"), study("b", READING, "16:00", "16:45"));
+    expect(describeStack({ wakeAt: at("09:00"), skipped: GROUP }, base, noGroup, { now: at("09:00") })).toBe(
+      "Up at 9 am and no MAT 343 study group: you still leave at 1:17 pm for the MU. Nothing else moved.",
+    );
+  });
+
+  it("says what no longer fits, each thing once", () => {
+    const after = plan(hotPsy, study("a", LAB, "10:30", "11:45"));
+    const text = describeStack({ hotF: 104, skipped: GROUP }, base, after, { now: at("08:00") });
+    expect(text).toBe(
+      "104° and no MAT 343 study group: you leave at 1:15 pm for the MU. Lab 7 is now 10:30–11:45 am and there's no room left for the Reading response.",
+    );
+    expect(text.match(/Lab 7/g)).toHaveLength(1);
+  });
+});
+
+describe("describeRemovedStudy", () => {
+  it("names the assignment and the times, in words that read well aloud", () => {
+    expect(describeRemovedStudy([study("a", LAB, "08:00", "10:00")])).toBe("Removed the Lab 7 study block, 8 to 10 am.");
+    expect(describeRemovedStudy([study("a", READING, "09:00", "10:16"), study("b", READING, "13:50", "14:23")])).toBe(
+      "Removed the Reading response study blocks, 9 to 10:16 am and 1:50 to 2:23 pm.",
+    );
   });
 });

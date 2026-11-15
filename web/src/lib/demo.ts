@@ -1,8 +1,9 @@
 // Demo mode: one sample student and a believable week of sample data, built for any date.
 // Used by GET /api/demo and by POST /api/canvas when the token is "demo", so the expo demo works with
 // no Canvas token, no event feeds and no Wi-Fi (Gemini falls back to plain code when offline).
-// Every event here is invented for the demo (source "seed"); the UI labels them as sample events and mixes in
-// the live ASU feeds when they answer. Nothing here claims to be a real ASU listing.
+// Every event here is invented for the demo (source "seed"), and only the sample's real today gets them: a weekend
+// day, where the live feeds have little that fits. Any later day is planned from the live ASU feeds alone, so
+// Sol's picks there are real events. The UI labels sample events as such; nothing here claims to be a real listing.
 import { addDays, atTime, mstDate, toMstIso, weekdayOf } from "./planner";
 import type { ClassBlock, DayItem, Opportunity, PlanRequest, Weekday } from "./types";
 
@@ -25,7 +26,7 @@ const at = (date: string, hhmm: string) => toMstIso(atTime(date, hhmm));
 
 type Slot = { course: string; start: string; end: string; location: string };
 
-// Alex's week. Weekdays follow ASU meeting patterns (MWF 50 minutes, TTh 75 minutes). Weekends have a study
+// Diego's week. Weekdays follow ASU meeting patterns (MWF 50 minutes, TTh 75 minutes). Weekends have a study
 // group and a shift instead of classes, so the demo still has walks to plan on a Saturday or Sunday (judging day).
 const MWF: Slot[] = [
   { course: "CSE 230", start: "10:30", end: "11:20", location: "BYENG 210" },
@@ -44,15 +45,15 @@ const WEEK: Record<Weekday, Slot[]> = {
   Fri: MWF,
   Sat: [
     { course: "Work shift", start: "10:00", end: "14:00", location: "Memorial Union" },
-    { course: "Study group: CSE 230", start: "15:00", end: "16:00", location: "Hayden Library" },
+    { course: "CSE 230 study group", start: "15:00", end: "16:00", location: "Hayden Library" },
   ],
   Sun: [
-    { course: "Study group: MAT 343", start: "10:30", end: "11:45", location: "Hayden Library" },
+    { course: "MAT 343 study group", start: "10:30", end: "11:45", location: "Hayden Library" },
     { course: "Work shift", start: "13:30", end: "16:00", location: "Memorial Union" },
   ],
 };
 
-/** What Alex has on `date`'s weekday: classes on weekdays, a study group and a shift on weekends. */
+/** What Diego has on `date`'s weekday: classes on weekdays, a study group and a shift on weekends. */
 export function demoClasses(date: string): ClassBlock[] {
   const day = weekdayOf(date);
   return WEEK[day].map((s) => ({ ...s, days: [day] }));
@@ -108,8 +109,12 @@ export function demoEvents(date: string): Opportunity[] {
   ];
 }
 
-/** A complete PlanRequest for the demo student, as of 8:00 AM on `date`. */
+/**
+ * A complete PlanRequest for the demo student, as of 8:00 AM on `date`. The sample events come only on the real
+ * `today`; other days get no made-up events (the UI adds the live feeds).
+ */
 export function demoScenario(date: string, options: DemoOptions = {}): { persona: typeof DEMO_PERSONA; request: PlanRequest } {
+  const today = options.today ?? mstDate(new Date());
   return {
     persona: DEMO_PERSONA,
     request: {
@@ -117,7 +122,7 @@ export function demoScenario(date: string, options: DemoOptions = {}): { persona
       now: at(date, "08:00"),
       classes: demoClasses(date),
       deadlines: demoDeadlines(date, options.today),
-      events: demoEvents(date),
+      events: date === today ? demoEvents(date) : [],
       acceptedEventIds: [],
       interests: DEMO_PERSONA.interests,
       weather: options.hot ? { tempF: 104, highF: 109, isHot: true } : { tempF: 78, highF: 84, isHot: false },
