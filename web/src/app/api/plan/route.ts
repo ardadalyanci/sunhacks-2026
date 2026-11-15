@@ -45,7 +45,9 @@ export async function POST(request: Request) {
 
   const now = body.now ? new Date(body.now) : new Date();
   const date = body.date ?? mstDate(now);
-  const nowMs = now.getTime();
+  // A later day (look-ahead) is planned from its start: nothing due before it, the whole day free.
+  const ahead = date > mstDate(now) ? dayLabel(date, mstDate(now)) : null;
+  const nowMs = ahead ? atTime(date, "00:00").getTime() : now.getTime();
   const buildings = await loadBuildings();
   const interests = body.interests ?? [];
 
@@ -87,14 +89,14 @@ export async function POST(request: Request) {
   const items = sortByStart([...fixedStops, ...deadlinesToday, ...study]);
 
   // 5. Gemini call 2: the spoken briefing.
-  const aiBriefing = await writeBriefing(items, suggestions, openDeadlines, body, date);
+  const aiBriefing = await writeBriefing(items, suggestions, openDeadlines, body, date, ahead);
 
   const plan: DayPlan = {
     date,
     items,
     suggestions,
     weather: body.weather,
-    briefing: aiBriefing ?? templateBriefing(items, suggestions, body.weather),
+    briefing: aiBriefing ?? templateBriefing(items, suggestions, body.weather, ahead ? ahead[0].toUpperCase() + ahead.slice(1) : undefined),
     aiUsed: ranked !== null || aiBriefing !== null,
   };
   return Response.json(plan);
@@ -137,14 +139,26 @@ function isRankResult(v: unknown): v is RankResult {
 }
 
 /** "today", "tomorrow (Tue)" or "Thu Nov 19", in Arizona time, relative to the planned date. */
-function dueDay(iso: string, date: string): string {
-  const day = mstDate(new Date(iso));
-  if (day === date) return "today";
-  if (day === addDays(date, 1)) return `tomorrow (${weekdayOf(day)})`;
-  return `${weekdayOf(day)} ${new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Phoenix" })}`;
+/** "Mon Nov 16" for a YYYY-MM-DD day. */
+function shortDay(day: string): string {
+  return `${weekdayOf(day)} ${atTime(day, "12:00").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Phoenix" })}`;
 }
 
-async function writeBriefing(items: DayItem[], suggestions: DayItem[], openDeadlines: DayItem[], body: PlanRequest, date: string): Promise<string | null> {
+/** How to name a later day: "tomorrow, Mon Nov 16" or "Wed Nov 18". */
+function dayLabel(date: string, today: string): string {
+  return date === addDays(today, 1) ? `tomorrow, ${shortDay(date)}` : shortDay(date);
+}
+
+/** Due day relative to the planned date: "today" / "tomorrow (Tue)", or for a look-ahead "that day" / "the next day (Tue)". */
+function dueDay(iso: string, date: string, ahead: boolean): string {
+  const day = mstDate(new Date(iso));
+  if (day === date) return ahead ? "that day" : "today";
+  if (day === addDays(date, 1)) return `${ahead ? "the next day" : "tomorrow"} (${weekdayOf(day)})`;
+  return shortDay(day);
+}
+
+async function writeBriefing(items: DayItem[], suggestions: DayItem[], openDeadlines: DayItem[], body: PlanRequest, date: string, ahead: string | null): Promise<string | null> {
+  const day = ahead ? "that day" : "today";
   const lines = items.map((i) => {
     const leave = i.leaveAt ? ` (leave by ${clock(i.leaveAt)})` : "";
     const place = i.location ? ` at ${i.location}` : "";
@@ -153,15 +167,19 @@ async function writeBriefing(items: DayItem[], suggestions: DayItem[], openDeadl
   });
   const prompt = [
     "Write the day briefing a friendly assistant would say out loud to an ASU student in Tempe.",
-    `It is now ${clock(body.now ?? new Date().toISOString())}; greet for that time of day and talk only about what is still ahead.`,
+    ahead
+      ? `This is a look-ahead at ${ahead}. Do not greet for the time of day; start with "${ahead.startsWith("tomorrow") ? "Tomorrow" : `On ${weekdayOf(date)}`}" and cover the whole day.`
+      : `It is now ${clock(body.now ?? new Date().toISOString())}; greet for that time of day and talk only about what is still ahead.`,
     "3 to 5 short sentences, at most 90 words, plain text, no lists, no emoji. Use times like 1:12 PM.",
     "Mention the heat if it is hot, when to leave for the next class (name the course), unsubmitted deadlines and the planned study time, and at most one suggested event.",
-    "Use only the times, places, temperatures and due dates given below, exactly as written; never guess or change one. Call a deadline \"tonight\" only if it is due today. Mention things in time order. Write temperatures as digits, like 78°F.",
-    body.weather
+    `Use only the times, places, temperatures and due dates given below, exactly as written; never guess or change one. Call a deadline "tonight" only if it is due ${day}. Mention things in time order. Write temperatures as digits, like 78°F.`,
+    body.weather && ahead
+      ? `Forecast for that day: high ${Math.round(body.weather.highF)}°F. ${body.weather.isHot ? "It will be a hot day." : "It will not be a hot day."}`
+      : body.weather
       ? `Current temperature: ${Math.round(body.weather.tempF)}°F. Today's high: ${Math.round(body.weather.highF)}°F. ${body.weather.isHot ? "It is a hot day." : "It is not a hot day."}`
       : "Weather: unknown, do not mention it.",
-    `Schedule for today, in order:\n${lines.join("\n") || "nothing scheduled"}`,
-    `Open deadlines (not submitted yet):\n${openDeadlines.map((d) => `- ${d.title}: due ${dueDay(d.start, date)} at ${clock(d.start)}`).join("\n") || "none"}`,
+    `Schedule for ${day}, in order:\n${lines.join("\n") || "nothing scheduled"}`,
+    `Open deadlines (not submitted yet):\n${openDeadlines.map((d) => `- ${d.title}: due ${dueDay(d.start, date, ahead !== null)} at ${clock(d.start)}`).join("\n") || "none"}`,
     `Suggested events: ${suggestions.map((s) => `${s.title} at ${clock(s.start)}`).join("; ") || "none"}`,
   ].join("\n");
   const result = await generateJson<{ briefing: string }>(

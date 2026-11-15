@@ -151,6 +151,34 @@ describe("POST /api/plan with Gemini", () => {
     expect(prompt).not.toContain("ev-e4");
   });
 
+  it("plans a future day from its start and briefs it as a look-ahead", async () => {
+    // Sunday evening, looking at Monday: Lab 7 (due Mon 23:59) is open, Saturday's work is not.
+    const req = {
+      ...baseRequest,
+      date: "2026-11-16",
+      now: "2026-11-15T17:30:00-07:00",
+      deadlines: [
+        ...baseRequest.deadlines,
+        { id: "canvas-old", type: "deadline", title: "CSE 230: Lab 6", start: "2026-11-15T23:59:00-07:00", source: "canvas", done: false },
+      ],
+    };
+    const { status, json } = await plan(req);
+    expect(status).toBe(200);
+    const study = json.items.filter((i) => i.type === "study_block");
+    expect(study.length).toBeGreaterThan(0);
+    expect(study.every((b) => b.start.startsWith("2026-11-16"))).toBe(true);
+    expect(json.items.some((i) => i.title.includes("Lab 6"))).toBe(false); // due before Monday: not part of Monday
+    expect(json.briefing).toMatch(/^Tomorrow/); // code fallback
+    expect(json.briefing).not.toMatch(/today/i);
+
+    const prompt = String(generateJson.mock.calls.at(-1)![0]);
+    expect(prompt).toContain("look-ahead at tomorrow, Mon Nov 16");
+    expect(prompt).not.toContain("It is now");
+    expect(prompt).not.toContain("Current temperature");
+    expect(prompt).toContain("CSE 230: Lab 7: due that day at 11:59 PM");
+    expect(prompt).not.toContain("Lab 6");
+  });
+
   it("gives the briefing prompt exact due days, labeled temperatures and a facts-only rule", async () => {
     await plan(baseRequest);
     const prompt = String(generateJson.mock.calls.at(-1)![0]);

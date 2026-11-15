@@ -266,15 +266,19 @@ export function defaultStudyMinutes(): number {
 }
 
 /** Spoken briefing without Gemini. */
-export function templateBriefing(items: DayItem[], suggestions: DayItem[], weather?: Weather): string {
+/** `ahead` (e.g. "Tomorrow, Mon Nov 16") turns it into a look-ahead at a later day: no "today", no current temperature. */
+export function templateBriefing(items: DayItem[], suggestions: DayItem[], weather?: Weather, ahead?: string): string {
   const parts: string[] = [];
-  if (weather) parts.push(`It's ${Math.round(weather.tempF)} degrees in Tempe today, with a high of ${Math.round(weather.highF)}${weather.isHot ? ", so stay in the shade and bring water" : ""}.`);
+  const shade = weather?.isHot ? ", so stay in the shade and bring water" : "";
+  if (ahead) parts.push(`${ahead}.`);
+  if (weather && ahead) parts.push(`The high is ${Math.round(weather.highF)} degrees${shade}.`);
+  else if (weather) parts.push(`It's ${Math.round(weather.tempF)} degrees in Tempe today, with a high of ${Math.round(weather.highF)}${shade}.`);
   const classes = items.filter((i) => i.type === "class");
   if (classes.length) {
     const first = classes[0];
     parts.push(`You have ${classes.length} class${classes.length > 1 ? "es" : ""}. First up is ${first.title} at ${clock(first.start)}${first.leaveAt ? `; leave by ${clock(first.leaveAt)}` : ""}.`);
   } else {
-    parts.push("You have no classes today.");
+    parts.push(ahead ? "You have no classes." : "You have no classes today.");
   }
   const due = items.filter((i) => i.type === "deadline" && !i.done);
   if (due.length) parts.push(`${due.length} assignment${due.length > 1 ? "s are" : " is"} still open, starting with ${due[0].title}, due ${clock(due[0].start)}.`);
