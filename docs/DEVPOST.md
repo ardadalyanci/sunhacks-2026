@@ -22,26 +22,34 @@ Sundial turns an ASU student's day into one plan.
 
 - **When to leave.** Today opens on the next walk, like "Leave at 10:18 am, Diego.", with the walk minutes, a
   countdown and a "Walk me there" link to Google Maps. Leave times come from the distances between 52 ASU Tempe
-  buildings.
+  buildings. Two stops in the same building need no walk, and a leave time that falls before the last stop ends
+  says so plainly ("Tight: …").
 - **Plans around the heat.** Live Tempe weather from Open-Meteo. On a hot day every walk starts earlier and Sol
   shows a heat warning in °F and °C. Students who need more time to walk (a slower pace, a mobility aid, heat that
   hits hard) can say so in Setup, and every walk gets 35% longer.
 - **Fits homework in.** With the student's own Canvas access token, assignments due today and tomorrow show up as
-  turned in or not, and study blocks land in the free time before each one is due.
+  turned in or not, and study blocks land in the free time before each one is due. Gemini estimates how long each
+  one takes, and a block is never longer than that estimate.
 - **Finds events worth the walk.** Live events from ASU Events and Sun Devil Central for the next 7 days. Gemini
   ranks the ones that fit the student's free time against their interests and says why in one line, and a dashed
-  "+ Add" block puts Sol's pick on the day.
+  "+ Add" block puts Sol's pick on the day. Only that top pick holds its time; the others are alternatives. Even
+  for the sample student, every pick from tomorrow on is a real event from the live feeds.
 - **"What if…"** One tap previews a 104° day, oversleeping by an hour, or a cancelled class, in any mix. Sol
-  re-plans and says in one line what moved.
+  re-plans and says what moved. With two or three on, one note names them all and compares the leave time with the
+  day without them. A what-if day is only a preview: it is never saved to the calendar.
 - **Talks.** "Hear my day" reads Sol's three-sentence briefing out loud. "Ask Sol" takes "when should I leave?",
-  "what's next?", "add the robotics meeting" or "drop the study block" by voice or text.
+  "what's next?", "add the robotics meeting" or "drop the study block" by voice or text, and never asks a
+  question back.
 - **Shows the day as the Arizona sky.** The timeline's colors follow Tempe's real sunrise and sunset, and "Play my
   day" sends Sol across it. The same day is also a large plain list for zoom and screen readers. "Your walks" puts
-  every leg on a map.
+  every leg on a map. On a phone, tapping a block opens its details in a sheet from the bottom of the screen.
 - **Shows its work.** "How Sol planned this day" lists, with the day's real numbers, what came from Canvas, the
   feeds and the weather, what Gemini did and what plain code did.
 - **Reaches your calendar.** Subscribe once in Google or Apple Calendar and every planned day arrives with a
   reminder at each leave time, or download one day as an .ics file.
+- **Fails in plain words.** With no Wi-Fi, Sol says "No connection right now. Your day is still here" instead of
+  an error code, and still answers "what's next?" from the plan already on screen. A slow answer gives up after 30
+  seconds with "Sol took too long. Try again."
 - **Works without setup.** With nothing saved, Sundial shows a sample student, Diego, so anyone can try it in
   one click. It installs to a phone's home screen.
 
@@ -84,7 +92,11 @@ creates, the public ASU Events feed, the public Sun Devil Central calendar feed 
   Arizona time, not the server's.
 - **Keeping Sol honest.** Gemini sometimes slipped in stock assistant phrases or named the same assignment twice.
   We gave it only the facts it may use, one line per assignment, and a briefing that still uses a banned phrase is
-  thrown away for the plain-code one instead of being spoken.
+  thrown away for the plain-code one instead of being spoken. A short clean-up pass trims filler words, and the
+  reason under each pick has to lead with a concrete hook from the event (free lunch, pizza, no experience needed).
+- **Picks against study time.** Holding time for every suggested event pushed homework late into the evening for
+  events the student had not even chosen. Now only the top pick holds its time, study blocks go around it, and a
+  study block is never padded past Gemini's estimate.
 - **The free tier.** Answers are cached by prompt for an hour, in memory and in Atlas, and each Gemini call gives up
   after 12 seconds so a slow answer cannot stall the screen.
 - **Phone photos.** Vercel rejects request bodies over 4.5 MB and phone photos are often bigger, so the setup screen
@@ -97,7 +109,9 @@ creates, the public ASU Events feed, the public Sun Devil Central calendar feed 
 - The demo works with no Canvas token, no event feeds and no Gemini: the sample day and the plain-code fallbacks
   give a full day either way, and the screen says when Gemini was not used.
 - "What if…" re-plans the day and Sol's note is computed from the difference between the two plans, so it says
-  exactly what moved.
+  exactly what moved, even with all three on at once.
+- The failures we tested (no Wi-Fi, a slow server, Gemini out, a broken saved setup) each end in a plain sentence
+  and a day that still works, not a blank screen.
 - "How Sol planned this day" shows the real numbers behind every plan instead of asking students to trust a black
   box.
 - The Arizona sky timeline follows Tempe's real sunrise and sunset, and the same day reads as a large list for
