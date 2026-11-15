@@ -10,7 +10,7 @@ export const HOT_FEELS_LIKE_F = 95;
 const CACHE_MS = 30 * 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 
-export function openMeteoUrl(days = 7): string {
+export function openMeteoUrl(days = 8): string { // today + 7 days ahead
   const q = new URLSearchParams({
     latitude: String(TEMPE.latitude),
     longitude: String(TEMPE.longitude),
@@ -66,7 +66,7 @@ export function summarizeWeather(day: { hourly: HourlyTemp[]; highF: number }, h
 
 let cache: { json: unknown; fetchedAt: number } | null = null;
 
-/** Tempe weather for today, or for `date` up to 6 days ahead. Undefined when Open-Meteo is unreachable. */
+/** Tempe weather for today, or for `date` up to 7 days ahead. Undefined when Open-Meteo is unreachable. */
 export async function getWeather(date?: string, now = new Date()): Promise<Weather | undefined> {
   const today = arizonaDate(now);
   const day = date ?? today;

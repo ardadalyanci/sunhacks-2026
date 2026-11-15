@@ -54,6 +54,7 @@ describe("getWeather", () => {
     expect(url).toContain("latitude=33.42");
     expect(url).toContain("temperature_unit=fahrenheit");
     expect(url).toContain("timezone=America%2FPhoenix");
+    expect(url).toContain("forecast_days=8"); // today + 7 days, for the day picker
   });
 
   it("returns undefined when Open-Meteo is unreachable", async () => {
