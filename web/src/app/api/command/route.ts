@@ -7,6 +7,7 @@
 //   "Drop the study block"     → { action: "remove_item", itemId }
 // Gemini understands the sentence; simple keyword rules take over when Gemini is unavailable.
 import { generateJson } from "@/lib/gemini";
+import { placeLabel, polishLine } from "@/lib/places";
 import { clock, hasPhrase } from "@/lib/planner";
 import { sanitizePlanForCommand } from "@/lib/sanitize";
 import type { CommandAction, DayItem } from "@/lib/types";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
 
   const decision = (await understand(text, addable, removable)) ?? byRules(text, addable, removable);
   const action: CommandAction =
-    decision.action === "next_item" ? { action: "briefing", reply: nextReply(plan.items, nowMs, text) } : decision;
+    decision.action === "next_item" ? { action: "briefing", reply: polishLine(nextReply(plan.items, nowMs, text)) } : decision;
   return Response.json(action);
 }
 
@@ -54,7 +55,9 @@ function nextReply(items: DayItem[], nowMs: number, text: string): string {
   const next = upcoming[0];
   if (!next) return "Nothing else is planned today.";
   const walk = upcoming.find((i) => i.leaveAt); // the next stop the student walks to
-  const at = (i: DayItem) => `${i.title} at ${clock(i.start)}${i.location ? ` in ${i.location}` : ""}`;
+  // "CSE 230 at 10:30 AM in Brickyard 210", "Work shift at 10 AM at the MU": places as students say them.
+  const at = (i: DayItem) =>
+    `${i.title} at ${clock(i.start)}${i.location ? ` ${/^[A-Z]{2,4} \d{3}/.test(i.title) ? "in" : "at"} ${placeLabel(i.location)}` : ""}`;
   const leaveBy = (leaveAt: string) => (Date.parse(leaveAt) <= nowMs ? "Leave now" : `Leave by ${clock(leaveAt)}`);
 
   if (walk?.leaveAt && LEAVE_WORDS.test(text)) {

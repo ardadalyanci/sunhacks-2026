@@ -33,6 +33,7 @@ export default function TodayPage() {
   const clockNow = useNow();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const { plan, request } = day;
 
   if (!plan) {
@@ -160,7 +161,11 @@ export default function TodayPage() {
       )}
 
       <section aria-busy={day.switching} className={`mt-4 flex flex-col gap-4 sm:flex-row sm:items-start ${dim}`}>
-        <div className={`shrink-0 self-center sm:mt-2 sm:self-start ${listening ? "mascot-listening" : ""}`}>
+        <div
+          className={`shrink-0 self-center sm:mt-2 sm:self-start ${
+            listening ? "mascot-listening" : speaking ? "mascot-talking" : ""
+          }`}
+        >
           <Mascot size={112} mood={mood} animated />
         </div>
         {/* Sol's briefing is his speech bubble; the tail points at him. */}
@@ -182,6 +187,7 @@ export default function TodayPage() {
               briefing={plan.briefing}
               onCommand={day.command}
               onListeningChange={setListening}
+              onSpeakingChange={setSpeaking}
             />
           </div>
         </div>

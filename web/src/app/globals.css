@@ -123,10 +123,25 @@ body {
   animation: mascot-listen 1.2s ease-out infinite;
 }
 
+/* Sol bobs while he talks (Hear my day and his answers). */
+.mascot-talking {
+  animation: mascot-talk 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes mascot-talk {
+  from {
+    transform: translateY(0) scale(1);
+  }
+  to {
+    transform: translateY(-4px) scale(1.04);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mascot-float,
   .mascot-blink,
-  .mascot-listening {
+  .mascot-listening,
+  .mascot-talking {
     animation: none;
   }
 }
