@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DayItem, DayPlan } from "@/lib/engine-types";
+import type { DayItem, DayPlan } from "@/lib/types";
 
 vi.mock("@/lib/buildings", () => ({
   loadBuildings: async () => [

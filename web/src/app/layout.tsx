@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible_Next, Bricolage_Grotesque } from "next/font/google";
 import { PRODUCT } from "@/components/brand";
 import "./globals.css";
@@ -19,6 +19,11 @@ const body = Atkinson_Hyperlegible_Next({
 export const metadata: Metadata = {
   title: PRODUCT,
   description: `ASU Mobile shows you information. ${PRODUCT} plans your day.`,
+  appleWebApp: { capable: true, title: PRODUCT, statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#dcebff",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
