@@ -3,16 +3,21 @@
 import Link from "next/link";
 import { useState } from "react";
 import CalendarButton from "@/components/CalendarButton";
+import DayList from "@/components/DayList";
 import DayPicker from "@/components/DayPicker";
+import HowSolPlanned from "@/components/HowSolPlanned";
 import Mascot from "@/components/Mascot";
 import SkyDay from "@/components/SkyDay";
 import VoiceBar from "@/components/VoiceBar";
+import WalkMap from "@/components/WalkMap";
+import WhatIfBar from "@/components/WhatIfBar";
 import { MASCOT, PRODUCT } from "@/components/brand";
 import { nextWalk, placeLabel, toCelsius, untilText, walkLink } from "@/components/next-walk";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useChosenDay } from "@/components/useChosenDay";
 import { useDay } from "@/components/useDay";
 import { useNow } from "@/components/useNow";
+import { useView } from "@/components/useView";
 import type { DayItem } from "@/lib/types";
 
 const KIND: Record<DayItem["type"], string> = {
@@ -34,6 +39,7 @@ export default function TodayPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [view, setView] = useView();
   const { plan, request } = day;
 
   if (!plan) {
@@ -136,19 +142,8 @@ export default function TodayPage() {
         </div>
       )}
       <DayPicker days={chosen.days} date={chosen.date} />
-      {!later && (
-        <button
-          type="button"
-          aria-pressed={day.hot}
-          disabled={day.busy}
-          onClick={() => void day.setHotPreview(!day.hot)}
-          className={`mt-3 rounded-full border-2 px-4 py-2 font-bold disabled:opacity-50 ${
-            day.hot ? "border-[#F97316] bg-[#F97316] text-ink" : "border-ink/20 bg-cloud hover:border-ink"
-          }`}
-        >
-          What if it’s 104°?
-        </button>
-      )}
+      {/* "What if…" pills (heat, oversleeping, a cancelled class) and Sol's one-line note on what changed. */}
+      {!later && <WhatIfBar day={day} />}
 
       {/* The heat warning comes first, right under the switch that previews it. */}
       {heat && (
@@ -208,17 +203,32 @@ export default function TodayPage() {
 
       <div aria-busy={day.switching} className={`mt-6 grid gap-6 lg:grid-cols-[1fr_340px] ${dim}`}>
         <div className="min-w-0">
-          <SkyDay
-            date={plan.date}
-            items={plan.items}
-            hot={Boolean(heat)}
-            nowHour={nowHour}
-            suggestion={plan.suggestions[0]}
-            onAdd={(id) => void day.accept(id)}
-            busy={day.busy}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+          {/* The same day two ways: the sky, or a plain large list (easier with zoom or a screen reader). */}
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              aria-pressed={view === "list"}
+              onClick={() => setView(view === "list" ? "sky" : "list")}
+              className="rounded-full px-3 py-1.5 font-bold underline underline-offset-4 hover:bg-ink/10"
+            >
+              {view === "list" ? "Show the sky" : "Show as a list"}
+            </button>
+          </div>
+          {view === "list" ? (
+            <DayList date={plan.date} items={plan.items} nowMs={nowMs} selectedId={selectedId} onSelect={setSelectedId} />
+          ) : (
+            <SkyDay
+              date={plan.date}
+              items={plan.items}
+              hot={Boolean(heat)}
+              nowHour={nowHour}
+              suggestion={plan.suggestions[0]}
+              onAdd={(id) => void day.accept(id)}
+              busy={day.busy}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          )}
           <div className="mt-4">
             <CalendarButton plan={plan} name={firstName} />
           </div>
@@ -370,8 +380,21 @@ export default function TodayPage() {
               )}
             </>
           )}
+          {/* The day's walks on a map, with the minutes for each leg. */}
+          <WalkMap
+            date={plan.date}
+            items={plan.items}
+            startBuildingId={request?.startBuildingId}
+            hot={Boolean(heat)}
+            nextItemId={walk?.item.id ?? null}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
         </aside>
       </div>
+
+      {/* How this exact day was put together, with the real numbers. */}
+      <HowSolPlanned plan={plan} request={request} isDemo={day.isDemo} later={later} />
     </>
   );
 }

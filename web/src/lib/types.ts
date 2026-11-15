@@ -50,6 +50,7 @@ export interface PlanRequest {
   weather?: Weather; // from GET /api/weather
   startBuildingId?: string; // where the day starts, e.g. the dorm; used for the first leave time
   calendarId?: string; // a UUID the browser makes once (crypto.randomUUID) and keeps; saves the day for the calendar feed
+  pace?: "slower"; // the student asked for more walking time (slower pace, a mobility aid, heat-sensitive): longer walks, more again in heat
 }
 
 // Result of POST /api/command: what the voice command asked for.

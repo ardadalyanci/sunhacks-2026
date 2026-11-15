@@ -6,6 +6,7 @@ export interface SavedSetup {
   classes: ClassBlock[];
   interests: string[];
   startBuildingId?: string;
+  pace?: "slower"; // "Give me more time to walk": every leave time is earlier, and earlier again in heat
 }
 
 // The keys keep the working name (DayPilot), so setups saved before the rename to Sundial still load.

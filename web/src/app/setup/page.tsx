@@ -75,6 +75,7 @@ export default function SetupPage() {
   const [checked, setChecked] = useState(false); // mark rows that need a fix only after a save attempt
   const [saveError, setSaveError] = useState("");
   const [start, setStart] = useState(""); // where the first walk of the day starts (building id)
+  const [slower, setSlower] = useState(false); // "Give me more time to walk"
   const [tokenNote, setTokenNote] = useState("");
 
   const canRead = (method === "photo" && photo !== null) || (method === "paste" && pasted.trim().length > 0);
@@ -130,7 +131,16 @@ export default function SetupPage() {
     }
     const kept = rows.map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
     // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
-    saveSetup({ name: name.trim(), classes: kept, interests, startBuildingId: start || undefined }, token.trim());
+    saveSetup(
+      {
+        name: name.trim(),
+        classes: kept,
+        interests,
+        startBuildingId: start || undefined,
+        pace: slower ? "slower" : undefined,
+      },
+      token.trim(),
+    );
     router.push("/today");
   }
 
@@ -393,6 +403,22 @@ export default function SetupPage() {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="mt-6 flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={slower}
+              onChange={(e) => setSlower(e.target.checked)}
+              className="mt-1 h-5 w-5 shrink-0 accent-[#14324a]"
+            />
+            <span>
+              <span className="font-bold">Give me more time to walk</span>
+              <span className="block text-sm text-ink-soft">
+                For a slower pace, a mobility aid, or if heat hits you hard. {MASCOT} has you leave earlier for every
+                class, and earlier again on hot days.
+              </span>
+            </span>
           </label>
         </fieldset>
 

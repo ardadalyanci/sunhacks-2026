@@ -123,6 +123,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
       interests: setup.interests,
       weather: weather ?? undefined,
       startBuildingId: setup.startBuildingId,
+      pace: setup.pace,
       calendarId: loadCalendarId(), // /api/plan saves the day for the calendar feed (MongoDB) and sets calendarUrl
     },
     weather: weather ?? undefined,
