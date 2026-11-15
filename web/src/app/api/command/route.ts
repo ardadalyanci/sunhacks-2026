@@ -91,7 +91,9 @@ async function understand(text: string, addable: DayItem[], removable: DayItem[]
     '- "add_event": they want one of ADDABLE on their day. itemId must be an id from ADDABLE.',
     '- "remove_item": they want one of REMOVABLE off their day. itemId must be an id from REMOVABLE.',
     '- "unknown": anything else. Put a short reply (max 25 words) in "reply", speaking as the app\'s sun mascot Sol ("I"). Never ask a question back: the student cannot answer it. If they wanted to add something and nothing in ADDABLE matches, say you couldn\'t find it today and name what you can add, like "I couldn\'t find a robotics meeting today. I can add the hackathon team mixer or the lunch & learn."',
-    `ADDABLE: ${JSON.stringify(addable.map((a) => ({ id: a.id, title: a.title })))}`,
+    // "Should I go to the lunch talk?" is a question about one of Sol's picks: a straight answer, not "I'm not sure".
+    '  If they ask whether to go to something in ADDABLE, answer "Yes" first, then one reason from its "why", title or time, then how to add it, like "Yes: it\'s at noon and it\'s about software internships. Say add the lunch & learn." Never say you are not sure.',
+    `ADDABLE: ${JSON.stringify(addable.map((a) => ({ id: a.id, title: a.title, ...(a.start ? { time: clock(a.start) } : {}), ...(a.why ? { why: a.why } : {}) })))}`,
     `REMOVABLE: ${JSON.stringify(removable.map((r) => ({ id: r.id, title: r.title })))}`,
     `Student said: ${JSON.stringify(text)}`,
   ].join("\n");

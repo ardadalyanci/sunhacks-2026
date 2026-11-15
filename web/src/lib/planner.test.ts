@@ -6,6 +6,7 @@ import {
   atTime,
   classItems,
   clock,
+  eventTitle,
   findBuilding,
   fittingEvents,
   freeGaps,
@@ -59,6 +60,15 @@ describe("buildings", () => {
     expect(findBuilding(BUILDINGS, "Memorial Union 202")?.id).toBe("MU");
     expect(findBuilding(BUILDINGS, "manzanita")?.id).toBe("MANZ");
     expect(findBuilding(BUILDINGS, "MU")?.id).toBe("MU");
+  });
+
+  it("names a club event with its club when the title alone says nothing", () => {
+    const club = "Political Computer Science at ASU";
+    expect(eventTitle({ title: "Weekly Meeting", organizer: club })).toBe(`${club}: Weekly Meeting`);
+    expect(eventTitle({ title: "General Body Meeting", organizer: club })).toBe(`${club}: General Body Meeting`);
+    expect(eventTitle({ title: "Weekly Meeting!", organizer: club })).toBe(`${club}: Weekly Meeting!`);
+    expect(eventTitle({ title: "General Meeting", organizer: "" })).toBe("General Meeting");
+    expect(eventTitle({ title: "Sun Devil Quizbowl Weekly Meeting", organizer: club })).toBe("Sun Devil Quizbowl Weekly Meeting");
   });
 
   it("trusts a building code in parentheses over a longer name", () => {

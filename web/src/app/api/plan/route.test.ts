@@ -386,6 +386,10 @@ describe("POST /api/plan: Sol's picks keep their time", () => {
     expect(prompt).toContain('"about":"Résumés, the online assessment');
     expect(prompt).toContain("Lunch provided.");
     expect(prompt).toContain("after your work shift");
+    // "Right after" only for a short break: robotics at 4:15 pm is, the mixer at 5:45 pm is not.
+    expect(prompt).toMatch(/"Robotics club build night"[^}]*"fits":"right after your work shift"/);
+    expect(prompt).toMatch(/"Hackathon team mixer"[^}]*"fits":"after your work shift, which ends at 4:00\sPM"/);
+    expect(prompt).toMatch(/Say "right after" only when "fits" says "right after"/);
     expect(prompt).toMatch(/Never start with "You like" or "You picked"/);
     expect(prompt).toMatch(/No two reasons may start with the same three words/);
     expect(prompt).not.toContain("You picked robotics,");
@@ -396,6 +400,7 @@ describe("POST /api/plan: Sol's picks keep their time", () => {
     const prompt = String(generateJson.mock.calls.at(-1)![0]);
     expect(prompt).toMatch(/first person at least once/);
     expect(prompt).toMatch(/at most 5 words, never a colon/);
+    expect(prompt).toMatch(/A suggested event is not on their day yet: say "you might like" it, never "you have" or "you'll"/);
     expect(prompt).toContain('"Tackle"');
     expect(prompt).toMatch(/Lunch & learn: landing a software internship at 12:00 PM at the MU(;|\n|$)/);
     expect(prompt).toContain("commitment: MAT 343 study group"); // a study group is not a class

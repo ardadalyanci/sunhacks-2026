@@ -186,6 +186,15 @@ const BANNED =
 // is, and the answer is not cached), because Sol says it out loud.
 const STOCK_PHRASES = /\b(good (morning|afternoon|evening)|be sure to|make sure|don'?t forget|remember|stay hydrated|hey sun devil)\b/i;
 
+// An event this close to the end of the stop before it is "right after" it; later than that it is just "after".
+const RIGHT_AFTER_MIN = 30;
+
+/** "right after your work shift", or "after CSE 240, which ends at 3:50 PM" when there is a real break between. */
+function afterStop(before: DayItem, start: number): string {
+  const end = before.end ?? before.start;
+  return start - Date.parse(end) <= RIGHT_AFTER_MIN * 60_000 ? `right after ${spokenItem(before)}` : `after ${spokenItem(before)}, which ends at ${clock(end)}`;
+}
+
 /** Gemini ranks the events that fit (best first) and writes one fact-based reason per pick. */
 async function rankEvents(candidates: DayItem[], interests: string[], stops: DayItem[], about: Map<string, string>): Promise<Pick[] | null> {
   if (!candidates.length) return null;
@@ -205,14 +214,14 @@ async function rankEvents(candidates: DayItem[], interests: string[], stops: Day
       place: c.location ? placeLabel(c.location) : "",
       about: (about.get(c.id) ?? "").replace(/\s+/g, " ").trim().slice(0, 160),
       matches: (c.tags ?? []).filter((t) => wanted.has(t.toLowerCase())),
-      fits: [before ? `after ${spokenItem(before)}` : "", after ? `before ${spokenItem(after)}` : ""].filter(Boolean).join(", ") || "a free part of the day",
+      fits: [before ? afterStop(before, start) : "", after ? `before ${spokenItem(after)}` : ""].filter(Boolean).join(", ") || "a free part of the day",
     };
   });
   const prompt = [
     "You are Sol, the sun mascot of Sundial, a day planner for Arizona State University students in Tempe.",
     `The student's interests: ${interests.length ? interests.join(", ") : "not given; prefer free, social or career events"}.`,
     `Pick at most ${MAX_PICKS} events from EVENTS that fit them, best first. Use only ids from EVENTS; pick none if nothing fits.`,
-    `For each pick write "why": one plain sentence of at most 14 words, from the facts given. Lead with one concrete hook from "about" when it has one (free lunch, pizza, no experience needed, a demo), then say when it fits, like "Free lunch and internship tips, right before your work shift." No two reasons may start with the same three words. Never start with "You like" or "You picked". Use contractions. Don't repeat the event's title, time or place: the student sees them right next to your reason. Never use ${BANNED}.`,
+    `For each pick write "why": one plain sentence of at most 14 words, from the facts given. Lead with one concrete hook from "about" when it has one (free lunch, pizza, no experience needed, a demo), then say when it fits, like "Free lunch and internship tips, right before your work shift." Say "right after" only when "fits" says "right after"; otherwise say "after" or give the end time from "fits". No two reasons may start with the same three words. Never start with "You like" or "You picked". Use contractions. Don't repeat the event's title, time or place: the student sees them right next to your reason. Never use ${BANNED}.`,
     `EVENTS: ${JSON.stringify(facts)}`,
   ].join("\n");
   const schema = {
@@ -302,6 +311,7 @@ async function writeBriefing(items: DayItem[], suggestions: DayItem[], openDeadl
     "Sound like a friendly student, not an assistant: use contractions (you're, it's) and call places exactly as given. A commitment is not a class: call a work shift a shift.",
     `Speak as Sol, in the first person at least once, about something you planned, like "I saved 8 to 10 am for Lab 7." Labs and homework are worked on, not studied for. Never put "now" next to a clock time.`,
     "Say a suggested event's name the way a student says it to a friend: at most 5 words, never a colon, like \"the internship lunch & learn\".",
+    'A suggested event is not on their day yet: say "you might like" it, never "you have" or "you\'ll".',
     `Never use ${BANNED}.`,
     "Name each assignment once, exactly as written below (its short name and its course): its study time and when it's due go in the same sentence. Never repeat a fact, a time or a place.",
     ahead

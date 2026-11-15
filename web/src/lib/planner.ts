@@ -149,12 +149,22 @@ export function classItems(classes: ClassBlock[], date: string, buildings: Build
     }));
 }
 
+// Club titles that say nothing on their own: "Weekly Meeting", "General Body Meeting", "GBM".
+const GENERIC_TITLE = /^(?:(?:general|club|weekly|bi-?weekly|monthly|body|members?'?)\s+)*meetings?!?$|^gbm!?$/i;
+
+/** An event's title, named with its club when the title alone is generic ("Robotics club: Weekly Meeting"). */
+export function eventTitle(o: Pick<Opportunity, "title" | "organizer">): string {
+  const title = o.title.trim();
+  const club = o.organizer?.trim();
+  return GENERIC_TITLE.test(title) && club ? `${club}: ${title}` : title;
+}
+
 export function opportunityToItem(o: Opportunity, buildings: Building[]): DayItem | null {
   if (!o.startsAt) return null;
   return {
     id: `ev-${o.id}`,
     type: "event",
-    title: o.title,
+    title: eventTitle(o),
     start: o.startsAt,
     end: o.endsAt ?? toMstIso(new Date(new Date(o.startsAt).getTime() + 60 * MIN)),
     buildingId: findBuilding(buildings, o.location)?.id,

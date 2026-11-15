@@ -162,6 +162,10 @@ describe("POST /api/command with Gemini", () => {
     expect(json.reply).toMatch(/^I couldn't find a swimming meeting today\. I can add /);
     const prompt = String(generateJson.mock.calls[0][0]);
     expect(prompt).toMatch(/never ask a question back/i);
+    // "Should I go to …?" gets a yes, a reason and how to add it, from the pick's own time (and Sol's reason, when sent).
+    expect(prompt).toMatch(/answer "Yes" first/);
+    expect(prompt).toMatch(/Never say you are not sure/);
+    expect(prompt).toMatch(/"id":"ev-e2","title":"Poetry open mic","time":"3:00\sPM"/);
     const isValid = generateJson.mock.calls[0][2] as (v: unknown) => boolean;
     expect(isValid({ action: "unknown", reply: "I can add the poetry open mic." })).toBe(true);
   });
