@@ -81,7 +81,7 @@ describe("POST /api/plan without Gemini", () => {
     ]);
     expect(json.suggestions.map((s) => s.id)).toEqual(["ev-e1"]);
     expect(json.suggestions[0].why).toContain("robotics");
-    expect(json.briefing).toContain("leave by 10:14 AM");
+    expect(json.briefing).toContain("leave by 10:14 am");
   });
 
   it("never puts a study block on top of a class walk, a class or a suggestion", async () => {
@@ -122,25 +122,29 @@ describe("POST /api/plan without Gemini", () => {
 
 describe("POST /api/plan with Gemini", () => {
   it("uses Gemini's ranking and estimates, ignoring duplicate and unknown ids", async () => {
-    generateJson
-      .mockResolvedValueOnce({
-        picks: [
-          { id: "ev-e2", why: "You might enjoy a quiet break." },
-          { id: "ev-e2", why: "duplicate" },
-          { id: "ev-nope", why: "not offered" },
-          { id: "ev-e1", why: "Robots!" },
-        ],
-        estimates: [{ id: "canvas-assignment-1", minutes: 30 }],
-      })
-      .mockResolvedValueOnce({ briefing: "Good morning from Gemini." });
+    // Three calls: ranking, estimates (a call of its own) and the briefing; answer each by its prompt.
+    generateJson.mockImplementation(async (...args: unknown[]) =>
+      String(args[0]).includes("ASSIGNMENTS:")
+        ? { estimates: [{ id: "canvas-assignment-1", minutes: 30 }] }
+        : String(args[0]).includes("EVENTS:")
+          ? {
+              picks: [
+                { id: "ev-e2", why: "You might enjoy a quiet break." },
+                { id: "ev-e2", why: "duplicate" },
+                { id: "ev-nope", why: "not offered" },
+                { id: "ev-e1", why: "Robots!" },
+              ],
+            }
+          : { briefing: "Leave by 10:14 AM for CSE 230 at BYENG 210!" },
+    );
 
     const { json } = await plan(baseRequest);
 
     expect(json.aiUsed).toBe(true);
-    expect(json.briefing).toBe("Good morning from Gemini.");
+    expect(json.briefing).toBe("Leave by 10:14 am for CSE 230 at Brickyard 210."); // in the app's own style
     expect(json.suggestions.map((s) => [s.id, s.why])).toEqual([
       ["ev-e2", "You might enjoy a quiet break."],
-      ["ev-e1", "Robots!"],
+      ["ev-e1", "Robots."],
     ]);
     const labBlocks = json.items.filter((i) => i.type === "study_block" && i.title.includes("Lab 7"));
     const minutes = labBlocks.reduce((sum, b) => sum + (Date.parse(b.end!) - Date.parse(b.start)) / 60_000, 0);

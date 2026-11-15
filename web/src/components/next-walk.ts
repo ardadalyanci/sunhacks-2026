@@ -1,40 +1,8 @@
-// The walk the Today screen leads with, and building names the way students say them. No React here.
-import raw from "@/lib/buildings.json";
+// The walk the Today screen leads with. No React here. Building names come from lib/places (shared with the
+// server, which uses them in Sol's briefing).
 import type { DayItem } from "@/lib/types";
 
-type Building = { id: string; name: string; lat: number; lng: number; aliases?: string[] };
-const BUILDINGS = raw as Building[];
-
-/** The building a location like "BYENG 210" or "Hayden Library" is in, and the room if one was given. */
-export function findPlace(location: string | undefined): { building?: Building; room: string } {
-  if (!location) return { room: "" };
-  const [first, ...rest] = location.trim().split(/\s+/);
-  const byId = BUILDINGS.find((b) => b.id.toLowerCase() === first.toLowerCase());
-  if (byId) return { building: byId, room: rest.join(" ") };
-  const lower = location.toLowerCase();
-  const byName = BUILDINGS.find((b) => [b.name, ...(b.aliases ?? [])].some((n) => lower.startsWith(n.toLowerCase())));
-  if (!byName) return { room: "" };
-  const name = [byName.name, ...(byName.aliases ?? [])].find((n) => lower.startsWith(n.toLowerCase()))!;
-  return { building: byName, room: location.trim().slice(name.length).trim() };
-}
-
-// What students call a building when the official name is long: Brickyard, Coor Hall, the MU, Hayden.
-const SPOKEN: Record<string, string> = { MU: "the MU", LIB: "Hayden", MANZ: "Manzanita", TOOKR: "Tooker" };
-
-/** "Brickyard 210", "the MU 230", "Hayden": a location in the words a student would use. */
-export function placeLabel(location: string | undefined): string {
-  const { building, room } = findPlace(location);
-  if (!building) return location ?? "";
-  const word = SPOKEN[building.id] ?? (building.aliases?.[0] && building.aliases[0].length < building.name.length ? building.aliases[0] : building.name);
-  return room ? `${word} ${room}` : word;
-}
-
-/** Google Maps walking directions to the building (or to the place's name in Tempe). */
-export function walkLink(location: string | undefined): string {
-  const { building } = findPlace(location);
-  const destination = building ? `${building.lat},${building.lng}` : `${location ?? ""}, Tempe, AZ`;
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=walking`;
-}
+export { findPlace, placeLabel, walkLink } from "@/lib/places";
 
 export type Walk = { item: DayItem; leaveMs: number; minutes: number; now: boolean };
 
