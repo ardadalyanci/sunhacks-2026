@@ -3,8 +3,7 @@
 import type { DayItem } from "@/lib/types";
 import { formatTime, parseLocal } from "./time";
 
-export const DAY_START = 8; // the planner's working day (DAY_START and DAY_END in lib/planner.ts)
-export const DAY_END = 22;
+export const DAY_START = 8; // the planner's working day starts here (DAY_START in lib/planner.ts)
 export const PIN_HEIGHT = 28; // px, matches h-7 on the pin buttons
 const PIN_GAP = 4;
 
@@ -17,22 +16,23 @@ export function hourOn(iso: string, date: string): number {
 }
 
 /**
- * The whole hours the sky shows: the planner's 8 am to 10 pm, stretched to fit anything earlier or later.
- * Deadlines stretch only the end, because 11:59 pm is a common Canvas due time; one due before the first
- * hour sits at the top edge instead of adding hours of empty sky.
+ * The whole hours the sky shows. It starts at 8 am, or earlier for an early class and its walk. It ends an
+ * hour after the later of the last block and the sunset, rounded up, so an empty evening is not drawn; on a
+ * real today it also reaches the current hour, so Sol's "now" stays on the sky. Deadlines never stretch it:
+ * one due before the first hour or after the last sits as a pin at that edge, with its real time.
  */
-export function dayBounds(items: DayItem[], date: string): { first: number; last: number } {
+export function dayBounds(items: DayItem[], date: string, sun: Sun, nowHour?: number): { first: number; last: number } {
   let first = DAY_START;
-  let last = DAY_END;
+  let end = sun.sunset;
   for (const item of items) {
+    if (item.type === "deadline") continue;
     const start = hourOn(item.start, date);
-    if (item.type !== "deadline") {
-      first = Math.min(first, Math.floor(start));
-      if (item.leaveAt) first = Math.min(first, Math.floor(hourOn(item.leaveAt, date)));
-    }
-    const end = item.end ? hourOn(item.end, date) : item.type === "deadline" ? start : start + 0.5;
-    last = Math.max(last, Math.ceil(end));
+    first = Math.min(first, Math.floor(start));
+    if (item.leaveAt) first = Math.min(first, Math.floor(hourOn(item.leaveAt, date)));
+    end = Math.max(end, item.end ? hourOn(item.end, date) : start + 0.5);
   }
+  let last = Math.ceil(end + 1);
+  if (nowHour !== undefined && nowHour >= first) last = Math.max(last, Math.ceil(nowHour));
   return { first: Math.max(0, first), last: Math.min(24, last) };
 }
 
@@ -78,7 +78,9 @@ export function rangeLabel(start: number, end: number): string {
   return a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
 }
 
-export type Box = { id: string; top: number; bottom: number }; // a block's px range in the sky
+// A block's px range in the sky, and `pad`: the px at its top and bottom where no text sits (a block's text is
+// centered in it, so a tall work shift has a lot).
+export type Box = { id: string; top: number; bottom: number; pad?: number };
 
 /**
  * True when a pin centered at `center` would cover a block other than `ownId`, for example the short study
@@ -88,6 +90,65 @@ export function coversOtherBlock(center: number, boxes: Box[], ownId: string): b
   const top = center - PIN_HEIGHT / 2;
   const bottom = center + PIN_HEIGHT / 2;
   return boxes.some((b) => b.id !== ownId && Math.min(bottom, b.bottom) - Math.max(top, b.top) > 4);
+}
+
+export type PinSpot = { top: number; lane: boolean };
+
+/**
+ * Where each pin goes: stacked so none overlap (see stackPins), then any pin that lands on a block's text moves
+ * into the lane at the right edge with its short label. A pin may sit on its own block's edge (a leave pin just
+ * above its class), but not once stacking has pushed it away from its time and onto that block.
+ */
+export function layoutPins(pins: { center: number; ownId: string }[], height: number, boxes: Box[]): PinSpot[] {
+  const tops = stackPins(
+    pins.map((p) => p.center),
+    height,
+  );
+  return pins.map((pin, k) => {
+    const moved = Math.abs(tops[k] + PIN_HEIGHT / 2 - pin.center) > 1;
+    return { top: tops[k], lane: coversOtherBlock(tops[k] + PIN_HEIGHT / 2, boxes, moved ? "" : pin.ownId) };
+  });
+}
+
+/**
+ * The blocks that share their height with a lane pin: they narrow, so the pin sits beside their text. A pin that
+ * only reaches into a block's padding (`pad`, 8 px when not given) leaves it wide, like the long work shift whose
+ * centered text is far from the "Leave 1:27 pm" pin on its top edge.
+ */
+export function narrowedBlocks(spots: PinSpot[], boxes: Box[]): Set<string> {
+  const reach = (spot: PinSpot, b: Box) => Math.min(spot.top + PIN_HEIGHT, b.bottom) - Math.max(spot.top, b.top);
+  return new Set(spots.flatMap((spot) => (spot.lane ? boxes.filter((b) => reach(spot, b) > (b.pad ?? 8)).map((b) => b.id) : [])));
+}
+
+const CAPTION_HEIGHT = 28; // px, Sol's caption bubble (py-1 around 13 px text)
+
+/**
+ * Where Sol's caption goes so it keeps clear of the pins: above his line, else below it, else the same on the
+ * right side of the sky. Above needs room under the sky's top edge. `pins` are the drawn pins' tops and sides.
+ * With `blocks` (Sol at rest, where the caption stays put), a left spot must also keep clear of the blocks,
+ * whose text starts on the left; the right side of a block is usually empty.
+ */
+export function captionSpot(
+  solY: number,
+  pins: { top: number; right: boolean }[],
+  height: number,
+  blocks: Box[] = [],
+): { below: boolean; right: boolean } {
+  const span = (below: boolean): [number, number] => (below ? [solY + 6, solY + 6 + CAPTION_HEIGHT] : [solY - 4 - CAPTION_HEIGHT, solY - 4]);
+  const fits = (below: boolean) => (below ? solY + 6 + CAPTION_HEIGHT <= height : solY >= 44);
+  const options = [
+    { below: false, right: false },
+    { below: true, right: false },
+    { below: false, right: true },
+    { below: true, right: true },
+  ].filter((o) => fits(o.below));
+  const clear = options.find((o) => {
+    const [a, b] = span(o.below);
+    const onPin = pins.some((p) => p.right === o.right && Math.min(b, p.top + PIN_HEIGHT) - Math.max(a, p.top) > 0);
+    const onText = !o.right && blocks.some((x) => Math.min(b, x.bottom) - Math.max(a, x.top) > 4);
+    return !onPin && !onText;
+  });
+  return clear ?? options[0] ?? { below: solY < 44, right: false };
 }
 
 // Time of day is color. Each stop is an hour on the Arizona clock: night, sunrise, morning, noon, afternoon,
