@@ -77,7 +77,11 @@ export function diffPlans(before: DayPlan, after: DayPlan): PlanDiff {
 
 const clock = (iso: string) => formatTime(parseLocal(iso).hours);
 const span = (r: Range) => rangeLabel(parseLocal(r.start).hours, parseLocal(r.end).hours);
-const spans = (rs: Range[]) => rs.map(span).join(" and ");
+/** "9–9:47 am", "9–9:47 am and 2–2:55 pm", "9–9:47 am, 2–2:55 pm and 5:30–5:55 pm". */
+const spans = (rs: Range[]) => {
+  const parts = rs.map(span);
+  return parts.length <= 2 ? parts.join(" and ") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+};
 const where = (i: DayItem) => placeLabel(i.location) || i.title;
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const minutes = (n: number) => `${n} minute${n === 1 ? "" : "s"}`;

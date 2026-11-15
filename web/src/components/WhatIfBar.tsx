@@ -13,15 +13,20 @@ type PillProps = {
   disabled: boolean;
   onToggle: () => void;
   onClass: string; // the fill while the pill is on
+  label: string; // the whole question, for screen readers ("What if I oversleep?")
   children: ReactNode;
 };
 
+/** "What if " on wider screens; phones show it once before the pills, so three pills fit in two rows. */
+const WhatIf = () => <span className="hidden sm:inline">What if </span>;
+
 /** One on/off "What if…" pill. A check mark shows it is on, so the state never rests on color alone. */
-function Pill({ on, disabled, onToggle, onClass, children }: PillProps) {
+function Pill({ on, disabled, onToggle, onClass, label, children }: PillProps) {
   return (
     <button
       type="button"
       aria-pressed={on}
+      aria-label={label}
       disabled={disabled}
       onClick={onToggle}
       className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 px-4 py-2 text-left font-bold leading-tight disabled:opacity-50 ${
@@ -46,22 +51,28 @@ export default function WhatIfBar({ day }: Props) {
   const { whatIf, busy, skip, skipKey, change } = day;
   return (
     <div className="mt-3">
-      <div role="group" aria-label="What if…" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="What if…" className="flex flex-wrap items-center gap-2">
+        <span aria-hidden className="font-bold sm:hidden">
+          What if…
+        </span>
         <Pill
           on={whatIf.hot}
           disabled={busy}
           onToggle={() => void day.setWhatIf({ hot: !whatIf.hot })}
           onClass="border-[#F97316] bg-[#F97316] text-ink"
+          label="What if it’s 104°?"
         >
-          What if it’s 104°?
+          <WhatIf />
+          it’s 104°?
         </Pill>
         <Pill
           on={whatIf.overslept}
           disabled={busy}
           onToggle={() => void day.setWhatIf({ overslept: !whatIf.overslept })}
           onClass="border-ink bg-ink text-cloud"
+          label="What if I oversleep?"
         >
-          What if I oversleep?
+          <WhatIf />I oversleep?
         </Pill>
         {skip && skipKey && (
           <Pill
@@ -69,8 +80,10 @@ export default function WhatIfBar({ day }: Props) {
             disabled={busy}
             onToggle={() => void day.setWhatIf({ skipped: whatIf.skipped ? null : skipKey })}
             onClass="border-ink bg-ink text-cloud"
+            label={`What if ${skip} is cancelled?`}
           >
-            What if {skip} is cancelled?
+            <WhatIf />
+            {skip} is cancelled?
           </Pill>
         )}
       </div>

@@ -163,13 +163,16 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
     const free = !boxes.some((b) => Math.min(top + h, b.bottom) - Math.max(top, b.top) > 4);
     if (free && start >= first && end <= last) ghost = { item: suggestion, start, end, top, height: h };
   }
+  // Everything drawn as a block, Sol's pick included: deadline labels and the sunset label keep clear of these.
+  const GHOST_ID = "sols-pick";
+  const drawn = ghost ? [...boxes, { id: GHOST_ID, top: ghost.top, bottom: ghost.top + ghost.height }] : boxes;
 
   const pins: Pin[] = [];
   for (const item of today) {
     if (item.type === "deadline") {
       const due = hourOn(item.start, date);
       const at = Math.max(due, first); // a deadline before the first hour sits at the top edge
-      const inBlock = coversOtherBlock(y(at), boxes, ""); // inside a class or event: short label in the lane
+      const inBlock = coversOtherBlock(y(at), drawn, ""); // inside a class, an event or Sol's pick: short label in the lane
       const name = assignmentName(item.title);
       pins.push({
         key: item.id,
@@ -214,9 +217,14 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
   // Blocks that share their height with a lane label narrow, so the label sits beside their text.
   const narrowed = new Set(
     pins.flatMap((pin, k) =>
-      pin.lane ? boxes.filter((b) => coversOtherBlock(tops[k] + PIN_HEIGHT / 2, [b], "")).map((b) => b.id) : [],
+      pin.lane ? drawn.filter((b) => coversOtherBlock(tops[k] + PIN_HEIGHT / 2, [b], "")).map((b) => b.id) : [],
     ),
   );
+  // The "Sunset 5:26 pm" words sit just above their dashed line; leave them out when a block is there.
+  const sunsetY = y(sun.sunset);
+  const sunsetLabel = !drawn.some((b) => b.top < sunsetY && b.bottom > sunsetY - 18);
+  // Sol's caption goes above his line, or below it when he is at the very top of the sky (the sample's 8 am).
+  const captionBelow = solHour !== null && y(solHour) < 44;
 
   return (
     <div>
@@ -257,15 +265,20 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
       {sun.sunset > first && sun.sunset < last && (
         <div aria-hidden className="pointer-events-none absolute inset-x-0" style={{ top: y(sun.sunset) }}>
           <div className="ml-16 border-t-2 border-dashed border-[#FFC627]/80" />
-          <span className="absolute left-16 -translate-y-full pb-0.5 text-xs font-bold text-ink">
-            Sunset {formatTime(sun.sunset)}
-          </span>
+          {sunsetLabel && (
+            <span className="absolute left-16 -translate-y-full pb-0.5 text-xs font-bold text-ink">
+              Sunset {formatTime(sun.sunset)}
+            </span>
+          )}
         </div>
       )}
 
       <ol className="absolute inset-0">
         {ghost && onAdd && (
-          <li className="absolute left-16 right-3" style={{ top: ghost.top, height: ghost.height }}>
+          <li
+            className={`absolute left-16 ${narrowed.has(GHOST_ID) ? "right-[7.5rem]" : "right-3"}`}
+            style={{ top: ghost.top, height: ghost.height }}
+          >
             <button
               type="button"
               disabled={busy}
@@ -278,7 +291,7 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
                   {MASCOT}’s pick: {ghost.item.title}
                 </span>
                 {ghost.height >= 56 && (
-                  <span className="block text-sm text-ink-soft">
+                  <span className="block truncate text-sm text-ink-soft">
                     {rangeLabel(ghost.start, ghost.end)}
                     {ghost.item.location ? ` · ${placeLabel(ghost.item.location)}` : ""}
                   </span>
@@ -382,7 +395,11 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
             <Mascot size={40} mood={solMood} label="" />
           </div>
           {caption && (
-            <p className="absolute left-16 top-0 -translate-y-[calc(100%+4px)] whitespace-nowrap rounded-full bg-cloud px-3 py-1 text-[13px] font-bold text-ink shadow-[0_6px_16px_-8px_rgba(20,50,74,0.6)]">
+            <p
+              className={`absolute left-16 top-0 whitespace-nowrap rounded-full bg-cloud px-3 py-1 text-[13px] font-bold text-ink shadow-[0_6px_16px_-8px_rgba(20,50,74,0.6)] ${
+                captionBelow ? "translate-y-1.5" : "-translate-y-[calc(100%+4px)]"
+              }`}
+            >
               {caption}
             </p>
           )}
