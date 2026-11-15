@@ -56,6 +56,18 @@ export function stackPins(centers: number[], height: number): number[] {
   return tops;
 }
 
+export type Box = { id: string; top: number; bottom: number }; // a block's px range in the sky
+
+/**
+ * True when a pin centered at `center` would cover a block other than `ownId`, for example the short study
+ * block that often ends right where a leave pin sits. A few px of touching do not count.
+ */
+export function coversOtherBlock(center: number, boxes: Box[], ownId: string): boolean {
+  const top = center - PIN_HEIGHT / 2;
+  const bottom = center + PIN_HEIGHT / 2;
+  return boxes.some((b) => b.id !== ownId && Math.min(bottom, b.bottom) - Math.max(top, b.top) > 4);
+}
+
 // Time of day is color. Each stop is an hour on the Arizona clock: night, sunrise, morning, noon, afternoon,
 // sunset, dusk and night again. Between 8 am and 10 pm these match the .sky-day gradient in globals.css.
 const SKY: [number, string][] = [

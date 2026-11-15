@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DayItem } from "@/lib/types";
-import { PIN_HEIGHT, dayBounds, hourOn, skyBackground, stackPins } from "./sky-layout";
+import { PIN_HEIGHT, coversOtherBlock, dayBounds, hourOn, skyBackground, stackPins } from "./sky-layout";
 
 const DATE = "2026-11-14";
 const at = (hhmm: string, date = DATE) => `${date}T${hhmm}:00-07:00`;
@@ -57,6 +57,22 @@ describe("stackPins", () => {
   it("returns tops in the input order", () => {
     const tops = stackPins([500, 100], 800);
     expect(tops[0]).toBeGreaterThan(tops[1]);
+  });
+});
+
+describe("coversOtherBlock", () => {
+  const boxes = [
+    { id: "study", top: 100, bottom: 140 },
+    { id: "class", top: 150, bottom: 200 },
+  ];
+
+  it("is true when a leave pin lands on the study block before its class", () => {
+    expect(coversOtherBlock(140, boxes, "class")).toBe(true);
+  });
+
+  it("ignores the pin's own block and blocks it only touches", () => {
+    expect(coversOtherBlock(160, [{ id: "class", top: 150, bottom: 200 }], "class")).toBe(false);
+    expect(coversOtherBlock(100 - PIN_HEIGHT / 2 - 1, boxes, "class")).toBe(false);
   });
 });
 
