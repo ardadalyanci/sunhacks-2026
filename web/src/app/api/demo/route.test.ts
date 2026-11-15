@@ -48,6 +48,20 @@ describe("GET /api/demo", () => {
   });
 });
 
+describe("sample events", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("come only on the sample's today; a later day gets no made-up events", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T07:00:00-07:00"));
+    const today = (await demo("?date=2026-11-15")).json.request;
+    expect(today.events.length).toBeGreaterThan(0);
+    expect(today.events.every((e: { source: string }) => e.source === "seed")).toBe(true);
+    expect((await demo()).json.request.events.length).toBe(today.events.length);
+    expect((await demo("?date=2026-11-16")).json.request.events).toEqual([]);
+  });
+});
+
 describe("demo day through /api/plan", () => {
   afterEach(() => vi.useRealTimers());
 
@@ -61,7 +75,7 @@ describe("demo day through /api/plan", () => {
 
     // Sunday (judging day): no classes, but a study group and a shift, so there are still walks to plan.
     const classes = day.items.filter((i) => i.type === "class");
-    expect(classes.map((c) => c.title)).toEqual(["Study group: MAT 343", "Work shift"]);
+    expect(classes.map((c) => c.title)).toEqual(["MAT 343 study group", "Work shift"]);
     for (const c of classes) expect(Date.parse(c.leaveAt!)).toBeLessThan(Date.parse(c.start));
 
     const study = day.items.filter((i) => i.type === "study_block");
@@ -74,7 +88,7 @@ describe("demo day through /api/plan", () => {
     expect(day.suggestions.length).toBeGreaterThan(0);
     expect(day.suggestions.every((s) => s.why)).toBe(true);
     expect(day.suggestions.map((s) => s.id)).not.toContain("ev-demo-poetry"); // not one of Alex's interests
-    expect(day.briefing).toContain("stay in the shade");
+    expect(day.briefing).toContain("fill your bottle before you go");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -122,7 +136,7 @@ describe("GET /api/demo for a later day", () => {
     const ahead = (await demo("?date=2026-11-15")).json.request;
     expect(ahead.now).toBe("2026-11-14T17:40:00-07:00");
     const day = await planFor(ahead);
-    expect(day.briefing).toMatch(/^Tomorrow, Sun Nov 15\./);
+    expect(day.briefing).toMatch(/^Tomorrow, Sun Nov 15, high of 84°F\. /);
     expect(day.items.filter((i) => i.type === "class")).toHaveLength(2); // the whole Sunday, not just what is left of today
   });
 });

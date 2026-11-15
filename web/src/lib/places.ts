@@ -4,17 +4,25 @@ import raw from "./buildings.json";
 type Building = { id: string; name: string; lat: number; lng: number; aliases?: string[] };
 const BUILDINGS = raw as Building[];
 
-/** The building a location like "BYENG 210" or "Hayden Library" is in, and the room if one was given. */
+// What may sit between a building and its room: "MU 202", "MU-242", "MU #230", "Hayden Library, 2nd floor".
+const ROOM_GAP = /^[\s\-#,]+/;
+
+/** The building a location like "BYENG 210", "MU-242" or "Hayden Library" is in, and the room if one was given. */
 export function findPlace(location: string | undefined): { building?: Building; room: string } {
-  if (!location) return { room: "" };
-  const [first, ...rest] = location.trim().split(/\s+/);
-  const byId = BUILDINGS.find((b) => b.id.toLowerCase() === first.toLowerCase());
-  if (byId) return { building: byId, room: rest.join(" ") };
-  const lower = location.toLowerCase();
-  const byName = BUILDINGS.find((b) => [b.name, ...(b.aliases ?? [])].some((n) => lower.startsWith(n.toLowerCase())));
+  const text = location?.trim();
+  if (!text) return { room: "" };
+  const m = /^([A-Za-z]+\d*)(.*)$/.exec(text);
+  const first = m?.[1] ?? "";
+  const rest = m?.[2] ?? text;
+  const byId = (!rest || ROOM_GAP.test(rest)) && BUILDINGS.find((b) => b.id.toLowerCase() === first.toLowerCase());
+  if (byId) return { building: byId, room: rest.replace(ROOM_GAP, "").trim() };
+  // A name or alias counts only as whole words: "MU" starts "MU-242" but not "Mustang Hall".
+  const lower = text.toLowerCase();
+  const starts = (n: string) => lower.startsWith(n.toLowerCase()) && !/[a-z0-9]/.test(lower.charAt(n.length));
+  const byName = BUILDINGS.find((b) => [b.name, ...(b.aliases ?? [])].some(starts));
   if (!byName) return { room: "" };
-  const name = [byName.name, ...(byName.aliases ?? [])].find((n) => lower.startsWith(n.toLowerCase()))!;
-  return { building: byName, room: location.trim().slice(name.length).trim() };
+  const name = [byName.name, ...(byName.aliases ?? [])].find(starts)!;
+  return { building: byName, room: text.slice(name.length).replace(ROOM_GAP, "").trim() };
 }
 
 // What students call a building when the official name is long: Brickyard, Coor Hall, the MU, Hayden, and the
@@ -42,12 +50,16 @@ export function buildingWord(building: Building): string {
   return SPOKEN[building.id] ?? (alias && alias.length < building.name.length ? alias : building.name);
 }
 
-/** "Brickyard 210", "the MU 230", "Hayden": a location in the words a student would use. */
+/** "Brickyard 210", "MU 230", "the MU", "Hayden": a location in the words a student would use. */
 export function placeLabel(location: string | undefined): string {
   const { building, room } = findPlace(location);
   if (!building) return location ?? "";
-  const word = buildingWord(building);
-  return room ? `${word} ${room}` : word;
+  return room ? withRoom(buildingWord(building), room) : buildingWord(building);
+}
+
+/** Students say "the MU" but "MU 202": a room number drops the "the". */
+function withRoom(word: string, room: string): string {
+  return `${word.replace(/^the /, "")} ${room}`;
 }
 
 /** Google Maps walking directions to the building (or to the place's name in Tempe). */
@@ -79,8 +91,12 @@ export function spokenStop(title: string): string {
   return m ? `${m[2]} ${m[1].toLowerCase()}` : title.trim();
 }
 
+// Building ids that are also ASU course prefixes: "PSY 101" is a class, not the Psychology Building, so these are
+// never swapped (every place in Sol's prompts already goes through placeLabel, so nothing is lost).
+const COURSE_PREFIXES = new Set(["PSY", "ART", "BA", "ED", "SS", "MUSIC"]);
+
 // Building codes as whole words ("BYENG 210"), for swapping them for spoken names in Sol's lines.
-const CODE = new RegExp(`\\b(${BUILDINGS.map((b) => b.id).join("|")})\\b`, "g");
+const CODE = new RegExp(`\\b(${BUILDINGS.map((b) => b.id).filter((id) => !COURSE_PREFIXES.has(id)).join("|")})\\b`, "g");
 
 /**
  * Sol's written and spoken lines in the app's own style: "10:13 am" not "10:13 AM", "8 am" not "8:00 am",
@@ -93,9 +109,11 @@ export function polishLine(text: string): string {
     .replace(/\b(\d{1,2}:\d{2})\s?([AaPp])[Mm]\b/g, lower) // 10:13 AM → 10:13 am
     .replace(/\b(\d{1,2})(?::00)?\s?([AaPp])[Mm]\b/g, lower) // 8:00 am, 8 AM → 8 am
     .replace(/\b12 pm\b/g, "noon")
-    .replace(CODE, (code) => {
+    .replace(CODE, (code: string, _id: string, at: number, line: string) => {
       const building = BUILDINGS.find((b) => b.id === code);
-      return building ? buildingWord(building) : code;
+      if (!building) return code;
+      const word = buildingWord(building);
+      return /^\s*\d/.test(line.slice(at + code.length)) ? word.replace(/^the /, "") : word; // "MU 202", "the MU"
     })
     .replace(/\b(?:the\s+){2,}/gi, "the ") // "at the the MU" when the model adds its own "the"
     .replace(/\s*[—–]\s*/g, ", ")
