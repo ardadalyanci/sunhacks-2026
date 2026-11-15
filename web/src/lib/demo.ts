@@ -43,12 +43,12 @@ const WEEK: Record<Weekday, Slot[]> = {
   Thu: TTH,
   Fri: MWF,
   Sat: [
-    { course: "Shift at the MU", start: "10:00", end: "14:00", location: "Memorial Union" },
+    { course: "Work shift", start: "10:00", end: "14:00", location: "Memorial Union" },
     { course: "Study group: CSE 230", start: "15:00", end: "16:00", location: "Hayden Library" },
   ],
   Sun: [
     { course: "Study group: MAT 343", start: "10:30", end: "11:45", location: "Hayden Library" },
-    { course: "Shift at the MU", start: "13:30", end: "16:00", location: "Memorial Union" },
+    { course: "Work shift", start: "13:30", end: "16:00", location: "Memorial Union" },
   ],
 };
 

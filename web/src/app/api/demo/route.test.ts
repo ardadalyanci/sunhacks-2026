@@ -61,7 +61,7 @@ describe("demo day through /api/plan", () => {
 
     // Sunday (judging day): no classes, but a study group and a shift, so there are still walks to plan.
     const classes = day.items.filter((i) => i.type === "class");
-    expect(classes.map((c) => c.title)).toEqual(["Study group: MAT 343", "Shift at the MU"]);
+    expect(classes.map((c) => c.title)).toEqual(["Study group: MAT 343", "Work shift"]);
     for (const c of classes) expect(Date.parse(c.leaveAt!)).toBeLessThan(Date.parse(c.start));
 
     const study = day.items.filter((i) => i.type === "study_block");
