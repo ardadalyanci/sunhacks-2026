@@ -1,5 +1,13 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { findBuilding } from "./planner";
+
+describe("buildings.json copy", () => {
+  it("matches data/buildings.json (after changing that file, copy it to web/src/lib/buildings.json)", () => {
+    const read = (relative: string) => JSON.parse(readFileSync(new URL(relative, import.meta.url), "utf8")) as unknown;
+    expect(read("./buildings.json")).toEqual(read("../../../data/buildings.json"));
+  });
+});
 
 describe("loadBuildings", () => {
   it("serves the bundled data/buildings.json without reading the disk at runtime", async () => {
