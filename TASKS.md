@@ -11,10 +11,10 @@ The product changed from "Sunny" to **DayPilot** on Sat afternoon; see CLAUDE.md
 - [x] `POST /api/command`: voice text → `CommandAction` (Gemini, with keyword-rule fallback)
 - [x] Barış: test `/api/plan` and `/api/command` with a real Gemini key (PR #11: default model was missing on the v1 API, now `gemini-3.5-flash-lite`; time-aware briefing)
 - [x] Barış: voice answers "what's next / when do I leave?" from the plan (PR #12, `{ action: "briefing", reply }`; UI speaks `reply` once B adds one line)
-- [ ] Switch `lib/buildings.ts` to a static import once `data/buildings.json` exists (needed for deploys)
+- [x] Barış: `lib/buildings.ts` imports `data/buildings.json`, so Vercel bundles it (PR #19)
 - [x] Demo mode: `GET /api/demo` (sample student + full day for any date, `hot=1` for a heat day) and Canvas token `demo`; works with no Wi-Fi, token or Gemini
 - [ ] Deploy (Vercel or AWS Amplify) + custom domain
-- [ ] Stretch: MongoDB Atlas for profiles and event cache
+- [x] Barış: MongoDB Atlas: saved day plans + calendar subscribe URL (`GET /api/plan/<calendarId>/calendar`), Gemini answers cached in Atlas (branch `baris/mongo-atlas`). Profiles and the event cache were left out (no login; event cache is C's file)
 
 ## B: UI (Agent-2, Arda)
 - [x] Design plan with the `frontend-design` skill: "Arizona sky" (time of day is color), Bricolage Grotesque + Atkinson Hyperlegible Next, mascot Sol (moods), mobile-first

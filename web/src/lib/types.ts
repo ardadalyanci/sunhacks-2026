@@ -35,6 +35,7 @@ export interface DayPlan {
   weather?: Weather;
   briefing: string; // spoken summary written by Gemini (or a template when Gemini is unavailable)
   aiUsed: boolean; // false when every Gemini step fell back to plain code
+  calendarUrl?: string; // set when the request had a calendarId and the day was saved (MongoDB): subscribe to it in Google/Apple Calendar
 }
 
 // Body of POST /api/plan. Only `classes` is required.
@@ -48,6 +49,7 @@ export interface PlanRequest {
   interests?: string[];
   weather?: Weather; // from GET /api/weather
   startBuildingId?: string; // where the day starts, e.g. the dorm; used for the first leave time
+  calendarId?: string; // a UUID the browser makes once (crypto.randomUUID) and keeps; saves the day for the calendar feed
 }
 
 // Result of POST /api/command: what the voice command asked for.
