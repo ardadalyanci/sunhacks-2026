@@ -88,7 +88,7 @@ describe("planFacts on the sample Saturday", () => {
 
   it("counts the sample events and says Gemini ranked them against the interests", () => {
     expect(f.events).toBe(
-      "5 sample events, 5 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: robotics, coding and hackathons.",
+      "5 sample events, 5 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: robotics, software and hackathons.",
     );
   });
 
@@ -196,7 +196,7 @@ describe("planFacts on a real setup", () => {
     const events = [ev("a", "2026-11-15T06:30:00Z"), ev("b", at(SAT, "18:00")), ev("c", at(MON, "18:00"))];
     const withEvents = facts({ ...request, events }, { ...plan, suggestions: [suggestion(SAT, "A coding night that fits your free evening.")] }, false);
     expect(withEvents.events).toBe(
-      "3 events this week from ASU Events and Sun Devil Central, 2 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: coding and music.",
+      "3 events this week from ASU Events and Sun Devil Central, 2 on Saturday. I picked 1 for you. Gemini ranked the ones that fit your free time against your interests: software and music.",
     );
     const elsewhere = facts({ ...request, events: events.slice(2) }, plan, false);
     expect(elsewhere.events).toBe(

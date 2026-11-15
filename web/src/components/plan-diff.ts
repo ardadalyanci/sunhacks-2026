@@ -155,8 +155,7 @@ const isEmpty = (d: PlanDiff) => !d.added.length && !d.removed.length && !d.move
 
 /** Two sentences at most: a lead with its first detail, then one more detail if there is one. */
 function say(first: string, second?: string | null) {
-  const text = second ? `${first}. ${capital(second)}.` : `${first}.`;
-  return text.replace(/\b12 pm\b/g, "noon"); // the app says "noon", not "12 pm"
+  return second ? `${first}. ${capital(second)}.` : `${first}.`;
 }
 
 /**
@@ -292,5 +291,5 @@ export function describeRemovedStudy(blocks: DayItem[]): string {
   // Spoken aloud too, so "8 to 10 am" rather than a dash.
   const times = list(blocks.map((b) => span({ start: b.start, end: b.end ?? b.start }).replace("–", " to ")));
   const what = blocks.length === 1 ? "study block" : "study blocks";
-  return `Removed the ${name} ${what}, ${times}.`.replace(/\b12 pm\b/g, "noon");
+  return `Removed the ${name} ${what}, ${times}.`;
 }

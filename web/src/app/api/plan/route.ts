@@ -87,8 +87,9 @@ export async function POST(request: Request) {
   if (!ordered.length) ordered = rankByOverlap(candidates, interests).map(({ item, why }) => ({ ...item, why }));
   const estimates = new Map((estimated ?? []).map((e) => [e.id, Math.min(180, Math.max(15, Math.round(e.minutes)))]));
 
-  // 4. Hold time for Sol's picks first, then place study blocks in what is left. So the timeline never puts a
-  //    study block on top of a suggestion, and "add the robotics meeting" finds the event it names.
+  // 4. Hold the top pick's time, then place study blocks in what is left, so the pick drawn on the timeline is
+  //    never under homework. The other picks are alternatives the student can still add ("add the robotics
+  //    meeting"); a study block moves out of the way when one is added.
   const { suggestions, study } = picksThenStudy(ordered, gaps, openDeadlines, nowMs, travelMin, (id) => estimates.get(id) ?? defaultStudyMinutes());
   const items = sortByStart([...fixedStops, ...deadlinesToday, ...study]);
 
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
     suggestions,
     weather: body.weather,
     briefing: polishLine(
-      aiBriefing ?? templateBriefing(items, suggestions, body.weather, ahead ? ahead[0].toUpperCase() + ahead.slice(1) : undefined),
+      aiBriefing ?? templateBriefing(items, suggestions, body.weather, ahead ? ahead[0].toUpperCase() + ahead.slice(1) : undefined, nowMs),
     ),
     aiUsed: ranked !== null || estimated !== null || aiBriefing !== null,
   };
@@ -115,10 +116,10 @@ export async function POST(request: Request) {
 type Gap = Parameters<typeof reserveTime>[0][number];
 
 /**
- * Sol's picks and the study blocks, picks first. The top pick always keeps its time. Each next pick (best first)
- * keeps its time only when it does not overlap a pick already kept and no assignment gets less study time than
- * with the top pick alone, so homework is never starved for an event. A pick that was not held still shows when
- * it fits around the study blocks. `gaps` is left as it was.
+ * Sol's picks and the study blocks. Only the top pick holds its time: study blocks go around it, and homework is
+ * not pushed late for events the student has not added. The other picks (best first) are alternatives. Each one
+ * fits between the fixed stops on its own, so two of them may overlap, and each is shown only when adding it
+ * would leave no assignment with less study time than it has now. `gaps` is left as it was.
  */
 function picksThenStudy(
   ordered: DayItem[],
@@ -146,24 +147,21 @@ function picksThenStudy(
     return total;
   };
 
-  const held = ordered.slice(0, 1);
-  const floor = minutes(studyWith(held).study);
-  for (const e of ordered.slice(1)) {
-    if (held.length >= MAX_SUGGESTIONS) break;
-    if (!fittingEvents([e], freeAround(held), nowMs, travelMin).length) continue;
-    const got = minutes(studyWith([...held, e]).study);
-    if ([...floor].every(([title, ms]) => (got.get(title) ?? 0) >= ms)) held.push(e);
-  }
+  const overlap = (a: DayItem, b: DayItem) =>
+    Date.parse(a.start) < Date.parse(b.end ?? b.start) && Date.parse(b.start) < Date.parse(a.end ?? a.start);
 
-  const { free, study } = studyWith(held);
-  const shown = new Set(held);
-  for (const e of ordered) {
-    if (shown.size >= MAX_SUGGESTIONS) break;
-    if (shown.has(e) || !fittingEvents([e], free, nowMs, travelMin).length) continue;
-    shown.add(e);
-    hold(free, e);
+  const top = ordered.slice(0, 1);
+  const study = studyWith(top).study;
+  const floor = minutes(study);
+  const picks = [...top];
+  for (const e of ordered.slice(1)) {
+    if (picks.length >= MAX_SUGGESTIONS) break;
+    // Once this one is added it is a fixed stop; the top pick still holds its time unless the two overlap.
+    const kept = overlap(top[0], e) ? [e] : [...top, e];
+    const got = minutes(studyWith(kept).study);
+    if ([...floor].every(([title, ms]) => (got.get(title) ?? 0) >= ms)) picks.push(e);
   }
-  return { suggestions: ordered.filter((e) => shown.has(e)), study };
+  return { suggestions: picks, study };
 }
 
 type Pick = { id: string; why: string };

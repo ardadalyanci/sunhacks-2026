@@ -62,3 +62,9 @@ describe("polishLine", () => {
     expect(polishLine("You're free after ART 113 and BA 301.")).toBe("You're free after ART 113 and BA 301.");
   });
 });
+
+describe("polishLine and noon", () => {
+  it("says noon for 12 pm and leaves the 12 in 4:12 pm alone", () => {
+    expect(polishLine("Lunch at 12 PM, then leave at 4:12 pm.")).toBe("Lunch at noon, then leave at 4:12 pm.");
+  });
+});

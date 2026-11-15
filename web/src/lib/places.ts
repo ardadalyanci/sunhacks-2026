@@ -108,7 +108,7 @@ export function polishLine(text: string): string {
     .replace(/\b([AaPp])\.[Mm]\./g, "$1M") // a.m. → AM
     .replace(/\b(\d{1,2}:\d{2})\s?([AaPp])[Mm]\b/g, lower) // 10:13 AM → 10:13 am
     .replace(/\b(\d{1,2})(?::00)?\s?([AaPp])[Mm]\b/g, lower) // 8:00 am, 8 AM → 8 am
-    .replace(/\b12 pm\b/g, "noon")
+    .replace(/(^|[^:\d])12 pm\b/g, "$1noon") // "12 pm" is noon; the 12 in "4:12 pm" is not
     .replace(CODE, (code: string, _id: string, at: number, line: string) => {
       const building = BUILDINGS.find((b) => b.id === code);
       if (!building) return code;

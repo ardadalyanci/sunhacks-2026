@@ -113,7 +113,9 @@ export default function EventsPage() {
           <section className="mt-8">
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="font-display text-3xl font-bold">{MASCOT}’s picks for {formatDay(plan.date).split(",")[0]}</h2>
-              <p className="text-sm text-ink-soft">Ranked by Gemini for your interests and free time</p>
+              <p className="text-sm text-ink-soft">
+                {plan.aiUsed ? "Ranked by Gemini for your interests and free time" : "Matched to your interests and free time"}
+              </p>
             </div>
             <ul className={`mt-4 grid gap-4 ${pickGrid}`}>
               {plan.suggestions.map((s) => (

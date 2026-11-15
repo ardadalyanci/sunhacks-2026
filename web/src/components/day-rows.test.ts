@@ -43,7 +43,7 @@ describe("dayRows", () => {
       ["leave", "10:13 am", "Leave for Brickyard 210", "17-minute walk"],
       ["block", "10:30–11:20 am", "CSE 230", "Brickyard 210"],
       ["leave", "11:47 am", "Leave for the MU", "13-minute walk"],
-      ["block", "12–2 pm", "Work shift", "the MU"],
+      ["block", "noon–2 pm", "Work shift", "the MU"],
       ["deadline", "5 pm", "HW 9", "turned in"],
       ["leave", "5:45 pm", "Leave for Coor Hall 170", "15-minute walk"],
       ["block", "6–7:30 pm", "Robotics club build night", "Coor Hall 170"],

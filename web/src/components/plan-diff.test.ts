@@ -120,7 +120,7 @@ describe("describeChange", () => {
   it("event added: its time and walk, and that nothing else moved", () => {
     const robotics: DayItem = { id: "ev-demo-robotics", type: "event", title: "Robotics club build night", start: at("16:15"), end: at("17:30"), leaveAt: at("16:10"), location: "Memorial Union 230", source: "asu_events" };
     expect(describeChange({ kind: "added", id: robotics.id }, plan(mu), plan(mu, robotics))).toBe(
-      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for the MU 230. Nothing else moved.",
+      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for MU 230. Nothing else moved.",
     );
     expect(describeChange({ kind: "removed", id: robotics.id }, plan(mu, robotics), plan(mu))).toBe(
       "Took Robotics club build night off your day. Nothing else moved.",
@@ -132,7 +132,7 @@ describe("describeChange", () => {
     const before = plan(mu, study("s0", LAB, "16:00", "17:00"));
     const after = plan(mu, robotics, study("s0", LAB, "17:30", "18:30"));
     expect(describeChange({ kind: "added", id: robotics.id }, before, after)).toBe(
-      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for the MU 230. I moved Lab 7 to 5:30–6:30 pm.",
+      "Added Robotics club build night, 4:15–5:30 pm, so leave at 4:10 pm for MU 230. I moved Lab 7 to 5:30–6:30 pm.",
     );
   });
 

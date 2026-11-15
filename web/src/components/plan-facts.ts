@@ -55,7 +55,7 @@ function dueWhen(iso: string, date: string, later: boolean): string {
   return `${weekday(due)} ${at}`;
 }
 
-/** An interest in the words the chips use, lowercased mid-sentence ("coding" for "software"). */
+/** An interest in the words the chips use, lowercased mid-sentence ("cultural nights" for "cultural"). */
 function interestWord(key: string): string {
   const known = INTEREST_CHIPS.some((c) => c.key === key.toLowerCase());
   return known ? interestLabel(key).toLowerCase() : key;
