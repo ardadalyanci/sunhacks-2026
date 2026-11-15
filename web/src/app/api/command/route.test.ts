@@ -162,7 +162,44 @@ describe("POST /api/command with Gemini", () => {
     expect(json.reply).toMatch(/^I couldn't find a swimming meeting today\. I can add /);
     const prompt = String(generateJson.mock.calls[0][0]);
     expect(prompt).toMatch(/never ask a question back/i);
+    // "Should I go to …?" gets a yes, a reason and how to add it, from the pick's own time (and Sol's reason, when sent).
+    expect(prompt).toMatch(/answer "Yes" first/);
+    expect(prompt).toMatch(/Never say you are not sure/);
+    expect(prompt).toMatch(/"id":"ev-e2","title":"Poetry open mic","time":"3:00\sPM"/);
     const isValid = generateJson.mock.calls[0][2] as (v: unknown) => boolean;
     expect(isValid({ action: "unknown", reply: "I can add the poetry open mic." })).toBe(true);
+  });
+
+  it("drops a named study block by the keyword rule, without asking Gemini (its 'none here' answer got cached)", async () => {
+    generateJson.mockResolvedValue({ action: "unknown", reply: "I couldn't find a study block to drop today." });
+    expect((await command({ text: "drop the study block", plan })).json).toEqual({ action: "remove_item", itemId: "study-canvas-quiz-3-1" });
+    expect((await command({ text: "Study time at 11, skip it", plan })).json).toEqual({ action: "remove_item", itemId: "study-canvas-quiz-3-1" });
+    expect(generateJson).not.toHaveBeenCalled();
+  });
+
+  it("adds a pick the student clearly named even when Gemini says it can't find it, but answers questions", async () => {
+    generateJson.mockResolvedValue({ action: "unknown", reply: "I couldn't find a robotics meeting today." });
+    expect((await command({ text: "add the robotics meeting", plan })).json).toEqual({ action: "add_event", itemId: "ev-e1" });
+    generateJson.mockResolvedValue({ action: "unknown", reply: "Yes: it's at 3 pm and it's about poetry. Say add the open mic." });
+    expect((await command({ text: "should I go to the poetry open mic?", plan })).json).toEqual({
+      action: "unknown",
+      reply: "Yes: it's at 3 pm and it's about poetry. Say add the open mic.",
+    });
+    // Not for removals: "cancel the study group" must not remove a study block.
+    generateJson.mockResolvedValue({ action: "unknown", reply: "Your study group is a commitment, so I can't take it off." });
+    expect((await command({ text: "cancel the study group", plan })).json.action).toBe("unknown");
+  });
+
+  it("still asks Gemini about a study group, which is not a study block", async () => {
+    generateJson.mockResolvedValueOnce({ action: "unknown", reply: "Your MAT 343 study group is a commitment, so I can't take it off." });
+    const { json } = await command({ text: "cancel the study group", plan });
+    expect(generateJson).toHaveBeenCalledTimes(1);
+    expect(json.action).toBe("unknown");
+  });
+
+  it("asks Gemini when no study block is left to drop", async () => {
+    const noStudy = { ...plan, items: plan.items.filter((i) => i.type !== "study_block") };
+    await command({ text: "drop the study block", plan: noStudy });
+    expect(generateJson).toHaveBeenCalledTimes(1);
   });
 });

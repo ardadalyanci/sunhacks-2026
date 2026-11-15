@@ -22,6 +22,21 @@ describe("placeLabel", () => {
     expect(placeLabel("Somewhere new")).toBe("Somewhere new");
   });
 
+  it("says the building once in ASU's own location labels, and trusts a code in parentheses", () => {
+    expect(placeLabel("Memorial Union - MU 085 Union Stage")).toBe("MU 085 Union Stage");
+    expect(placeLabel("Memorial Union - MU L1-45 Havasupai")).toBe("MU L1-45 Havasupai");
+    expect(placeLabel("Memorial Union MU 228 Cochise")).toBe("MU 228 Cochise");
+    expect(placeLabel("Memorial Union - MU 242 - La Paz")).toBe("MU 242 - La Paz");
+    expect(placeLabel("Memorial Union (MU) 202")).toBe("MU 202");
+    expect(placeLabel("Life Sciences Center E (LSE), Room 104")).toBe("LSE 104");
+    expect(placeLabel("Life Sciences Center A (LSA), Room 191")).toBe("LSA 191");
+    expect(placeLabel("Life Sciences Center C (LSC), Room 202")).toBe("Life Sciences Center C (LSC), Room 202"); // a wing we do not know
+    expect(placeLabel("Student Pavilion (STPV) - Senita Ballroom A")).toBe("Pavilion Senita Ballroom A");
+    expect(placeLabel("Durham Hall, Room 240")).toBe("LL 240");
+    expect(placeLabel("Memorial Union (Sparky's Den)")).toBe("MU (Sparky's Den)");
+    expect(placeLabel("Mustang Hall")).toBe("Mustang Hall");
+  });
+
   it("matches a building name only as whole words", () => {
     expect(findPlace("MU-242")).toMatchObject({ building: { id: "MU" }, room: "242" });
     expect(findPlace("Mustang Hall").building).toBeUndefined();

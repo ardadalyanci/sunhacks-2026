@@ -70,6 +70,12 @@ export function dayOpener(iso: string, nowMs: number): string | null {
  */
 export function tidyBriefing(text: string): string {
   return text
+    // "10 a.m." → "10 am" first, so the capitalising below does not take its period for a sentence end. A
+    // "p.m." that ends a sentence (a capital or the end follows) keeps one period.
+    .replace(/\b([AaPp])\.[Mm]\./g, (m: string, l: string, at: number, all: string) => {
+      const ends = /^(\s+[A-Z]|\s*$)/.test(all.slice(at + m.length));
+      return `${l.toLowerCase()}m${ends ? "." : ""}`;
+    })
     .replace(/\s*\b(?:right\s+)?now,?\s+(?=(?:at|by)\s+\d|\d)/gi, " ")
     .replace(/\b(?:you can also|you'll want to|you will want to)\s+/gi, "")
     .replace(/\byou've got\b/gi, (m) => (m[0] === "Y" ? "You have" : "you have"))

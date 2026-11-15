@@ -13,6 +13,12 @@ import { sanitizePlanForCommand } from "@/lib/sanitize";
 import { dayOpener, spokenEvent, spokenItem, spokenWhere } from "@/lib/say";
 import type { CommandAction, DayItem } from "@/lib/types";
 
+/** "Drop the study block", "the study time, skip it": a removal that names a study block, in either order. */
+const isStudyRemoval = (text: string) => /\b(remove|drop|cancel|skip|delete)\b/i.test(text) && /\bstudy (block|time|session)s?\b/i.test(text);
+
+/** "Should I go to the lunch talk?", "is the mixer worth it": asking, not telling Sol to do something. */
+const isQuestion = (text: string) => /\?|^\s*(should|shall|can|could|would|will|is|are|do|does|what|why|how|when|where|which)\b/i.test(text);
+
 const STOPWORDS = new Set(["the", "a", "an", "to", "my", "me", "please", "add", "remove", "drop", "cancel", "skip", "join", "meeting", "event", "club", "from", "for", "and", "of", "on", "at", "in"]);
 
 export async function POST(request: Request) {
@@ -31,7 +37,16 @@ export async function POST(request: Request) {
 
   const nowMs = typeof body?.now === "string" && !Number.isNaN(Date.parse(body.now)) ? Date.parse(body.now) : Date.now();
 
-  const decision = (await understand(text, addable, removable)) ?? byRules(text, addable, removable);
+  // "Drop the study block" is answered by the keyword rule, with no Gemini call: Gemini sees study blocks only as
+  // "Work on: …" titles and sometimes answers that there is none (and that answer gets cached). Only when the
+  // student names a study block, time or session, so "cancel the study group" (a commitment) still goes to Gemini.
+  const quick = isStudyRemoval(text) ? byRules(text, addable, removable) : null;
+  const rules = byRules(text, addable, removable);
+  let decision = (quick?.action === "remove_item" ? quick : null) ?? (await understand(text, addable, removable)) ?? rules;
+  // "Add the robotics meeting" once came back as "I couldn't find a robotics meeting" while robotics night was a
+  // pick (Gemini does not always see "meeting" in "build night"). When the student asks to add something and a pick
+  // shares its words, add it. Not for questions: "should I go to the lunch talk?" gets Gemini's answer.
+  if (decision.action === "unknown" && rules.action === "add_event" && !isQuestion(text)) decision = rules;
   const action: CommandAction =
     decision.action === "next_item" ? { action: "briefing", reply: polishLine(nextReply(plan.items, nowMs, text)) } : decision;
   return Response.json(action);
@@ -83,7 +98,9 @@ async function understand(text: string, addable: DayItem[], removable: DayItem[]
     '- "add_event": they want one of ADDABLE on their day. itemId must be an id from ADDABLE.',
     '- "remove_item": they want one of REMOVABLE off their day. itemId must be an id from REMOVABLE.',
     '- "unknown": anything else. Put a short reply (max 25 words) in "reply", speaking as the app\'s sun mascot Sol ("I"). Never ask a question back: the student cannot answer it. If they wanted to add something and nothing in ADDABLE matches, say you couldn\'t find it today and name what you can add, like "I couldn\'t find a robotics meeting today. I can add the hackathon team mixer or the lunch & learn."',
-    `ADDABLE: ${JSON.stringify(addable.map((a) => ({ id: a.id, title: a.title })))}`,
+    // "Should I go to the lunch talk?" is a question about one of Sol's picks: a straight answer, not "I'm not sure".
+    '  If they ask whether to go to something in ADDABLE, answer "Yes" first, then one reason from its "why", title or time, then how to add it, like "Yes: it\'s at noon and it\'s about software internships. Say add the lunch & learn." Never say you are not sure.',
+    `ADDABLE: ${JSON.stringify(addable.map((a) => ({ id: a.id, title: a.title, ...(a.start ? { time: clock(a.start) } : {}), ...(a.why ? { why: a.why } : {}) })))}`,
     `REMOVABLE: ${JSON.stringify(removable.map((r) => ({ id: r.id, title: r.title })))}`,
     `Student said: ${JSON.stringify(text)}`,
   ].join("\n");

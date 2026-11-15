@@ -7,6 +7,21 @@ const BUILDINGS = raw as Building[];
 // What may sit between a building and its room: "MU 202", "MU-242", "MU #230", "Hayden Library, 2nd floor".
 const ROOM_GAP = /^[\s\-#,]+/;
 
+// An official building code in parentheses, as ASU's feeds write it: "Life Sciences Center E (LSE), Room 104".
+const PAREN_CODE = /\(([A-Z]{2,6})\)/;
+
+/**
+ * The room part, the way students say it: without the gap, without the building's code said a second time
+ * ("Memorial Union - MU 085 Union Stage" → "085 Union Stage") and without the word "Room" ("Room 104" → "104").
+ */
+function roomPart(building: Building, rest: string): string {
+  return rest
+    .replace(ROOM_GAP, "")
+    .replace(new RegExp(`^${building.id}(?![a-z0-9])[\\s\\-#,]*`, "i"), "")
+    .replace(/^room\s+(?=\S)/i, "")
+    .trim();
+}
+
 /** The building a location like "BYENG 210", "MU-242" or "Hayden Library" is in, and the room if one was given. */
 export function findPlace(location: string | undefined): { building?: Building; room: string } {
   const text = location?.trim();
@@ -15,14 +30,25 @@ export function findPlace(location: string | undefined): { building?: Building; 
   const first = m?.[1] ?? "";
   const rest = m?.[2] ?? text;
   const byId = (!rest || ROOM_GAP.test(rest)) && BUILDINGS.find((b) => b.id.toLowerCase() === first.toLowerCase());
-  if (byId) return { building: byId, room: rest.replace(ROOM_GAP, "").trim() };
+  if (byId) return { building: byId, room: roomPart(byId, rest) };
+  // A code in parentheses names the building better than the words before it: "Life Sciences Center" alone is
+  // the A wing, but "Life Sciences Center E (LSE)" is the E wing.
+  const paren = PAREN_CODE.exec(text);
+  const coded = paren && BUILDINGS.find((b) => b.id === paren[1]);
+  if (paren && coded) return { building: coded, room: roomPart(coded, text.slice(paren.index + paren[0].length)) };
   // A name or alias counts only as whole words: "MU" starts "MU-242" but not "Mustang Hall".
   const lower = text.toLowerCase();
   const starts = (n: string) => lower.startsWith(n.toLowerCase()) && !/[a-z0-9]/.test(lower.charAt(n.length));
   const byName = BUILDINGS.find((b) => [b.name, ...(b.aliases ?? [])].some(starts));
   if (!byName) return { room: "" };
   const name = [byName.name, ...(byName.aliases ?? [])].find(starts)!;
-  return { building: byName, room: text.slice(name.length).replace(ROOM_GAP, "").trim() };
+  if (paren) {
+    // An unknown code right after the name is another code for the same building ("Student Pavilion (STPV)");
+    // after more words it names a wing we do not know ("Life Sciences Center C (LSC)"), so the place stays as given.
+    if (text.slice(name.length, paren.index).replace(ROOM_GAP, "").trim()) return { room: "" };
+    return { building: byName, room: roomPart(byName, text.slice(paren.index + paren[0].length)) };
+  }
+  return { building: byName, room: roomPart(byName, text.slice(name.length)) };
 }
 
 // What students call a building when the official name is long: Brickyard, Coor Hall, the MU, Hayden, and the
