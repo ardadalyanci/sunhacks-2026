@@ -70,6 +70,7 @@ export interface PlanRequest {
   pace?: "slower"; // the student asked for more walking time (slower pace, a mobility aid, heat-sensitive): longer walks, more again in heat
   homeCampus?: CampusId; // where the day starts (with startBuildingId); absent = Tempe
   commute?: Commute; // the student lives off campus, near homeCampus: the first stop of the day is this trip, not a walk
+  studyFrom?: string; // "15:50": no study blocks before this time on the day (the student asked Sol to move study time)
 }
 
 // Result of POST /api/command: what the voice command asked for.
@@ -77,7 +78,12 @@ export type CommandAction =
   | { action: "add_event"; itemId: string }
   | { action: "remove_item"; itemId: string }
   | { action: "briefing"; reply?: string } // reply set → speak it ("Next: CSE 230 at 10:30 AM…"); else speak plan.briefing
-  | { action: "unknown"; reply: string };
+  | { action: "unknown"; reply: string }
+  // Edits to this one day, kept in the browser and sent with the next plan (see components/day-edits.ts):
+  | { action: "add_block"; title: string; start: string; minutes: number; location?: string } // start "17:00"
+  | { action: "skip_class"; course: string } // a class (or a block the student added) is off today
+  | { action: "restore_class"; course: string } // a skipped class is back on
+  | { action: "study_from"; time: string }; // study time starts at "15:50" or later today
 
 export type OpportunityKind =
   | "club_event"

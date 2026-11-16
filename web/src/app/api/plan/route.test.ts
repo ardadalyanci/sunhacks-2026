@@ -228,6 +228,16 @@ describe("POST /api/plan with Gemini", () => {
     expect(jmc.via).toMatch(/^Two shuttles, changing at Forest Avenue and Lemon Street in Tempe\. Gold shuttle .* Then: Maroon shuttle /);
   });
 
+  it("keeps study time after studyFrom when the student moved it", async () => {
+    const { json: before } = await plan(baseRequest);
+    expect(before.items.some((i) => i.type === "study_block" && i.start < "2026-11-16T14:45:00-07:00")).toBe(true);
+    const { status, json } = await plan({ ...baseRequest, studyFrom: "14:45" });
+    expect(status).toBe(200);
+    const study = json.items.filter((i) => i.type === "study_block");
+    expect(study.length).toBeGreaterThan(0);
+    for (const block of study) expect(block.start >= "2026-11-16T14:45:00-07:00").toBe(true);
+  });
+
   it("plans a future day from its start and briefs it as a look-ahead", async () => {
     // Sunday evening, looking at Monday: Lab 7 (due Mon 23:59) is open, Saturday's work is not.
     const req = {

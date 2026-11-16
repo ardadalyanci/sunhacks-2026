@@ -17,6 +17,7 @@ import { clock, hasPhrase, mstDate } from "@/lib/planner";
 import { sanitizeCommandContext, sanitizePlanForCommand } from "@/lib/sanitize";
 import { dayOpener, spokenEvent, spokenItem, spokenWhere } from "@/lib/say";
 import type { CommandAction, DayItem } from "@/lib/types";
+import { type EditAnswer, ruleEdit, toEdit } from "./edits";
 import { type CommandDay, dayFacts, dueReply, freeReply, relativeReply, timesIn, weatherReply, withoutHeatTips } from "./facts";
 
 type Turn = { from: "you" | "sol"; text: string };
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
   const context = sanitizeCommandContext(body);
   const addable = plan.suggestions;
   const removable = plan.items.filter((i) => i.type === "event" || i.type === "study_block");
+  const classes = plan.items.filter((i) => i.type === "class");
+  const edits = { classes, skipped: context.skipped };
 
   const nowMs = typeof body?.now === "string" && !Number.isNaN(Date.parse(body.now)) ? Date.parse(body.now) : Date.now();
   const firstStart = plan.items.find((i) => i.start)?.start;
@@ -64,10 +67,14 @@ export async function POST(request: Request) {
   // "Drop the study block" is answered by the keyword rule, with no Gemini call: Gemini sees study blocks only as
   // "Work on: …" titles and sometimes answers that there is none (and that answer gets cached). Only when the
   // student names a study block, time or session, so "cancel the study group" (a commitment) still goes to Gemini.
-  const quick = isStudyRemoval(text) ? byRules(text, addable, removable, day, nowMs) : null;
-  const rules = byRules(text, addable, removable, day, nowMs);
+  const quick = isStudyRemoval(text) ? byRules(text, addable, removable, day, nowMs, edits) : null;
+  const rules = byRules(text, addable, removable, day, nowMs, edits);
   let decision =
-    (quick?.action === "remove_item" ? quick : null) ?? (await understand(text, addable, removable, day, nowMs, context.history)) ?? rules;
+    (quick?.action === "remove_item" ? quick : null) ??
+    (await understand(text, addable, removable, day, nowMs, context.history, edits)) ??
+    rules;
+  // A clear edit the rules understood ("skip MAT 343") beats Gemini saying it can't help.
+  if (decision.action === "unknown" && ["add_block", "skip_class", "restore_class", "study_from"].includes(rules.action)) decision = rules;
   // "Add the robotics meeting" once came back as "I couldn't find a robotics meeting" while robotics night was a
   // pick (Gemini does not always see "meeting" in "build night"). When the student asks to add something and a pick
   // shares its words, add it. Not for questions: "should I go to the lunch talk?" gets Gemini's answer.
@@ -136,6 +143,7 @@ async function understand(
   day: CommandDay,
   nowMs: number,
   history: Turn[],
+  edits: { classes: DayItem[]; skipped: string[] },
 ): Promise<Decision | null> {
   const facts = dayFacts(day, nowMs);
   const prompt = [
@@ -145,6 +153,10 @@ async function understand(
     '- "add_event": they want one of ADDABLE on their day. itemId must be an id from ADDABLE.',
     '- "remove_item": they want one of REMOVABLE off their day. itemId must be an id from REMOVABLE.',
     '- "answer": any other question about their day, deadlines, free time, weather, trips, classes or events. Put the answer in "reply": at most 45 words, as Sol ("I"), warm and plain, no lists. Use ONLY the FACTS below; never invent a time, place, class or deadline. If the FACTS do not say, say you don\'t know that from their day. Add a tip only when it helps with what they asked (starting an assignment in a free stretch); mention water or heat only when WEATHER says it is a hot day.',
+    '- "add_block": they want something of their own on today\'s plan ("add gym at 5 for an hour"). Give "title" (short, like "Gym"), "start" as 24-hour "HH:MM", "minutes" (default 60) and "location" if they said one.',
+    '- "skip_class": they are skipping one of CLASSES today, or want a block they added taken off. itemId must be an id from CLASSES.',
+    '- "restore_class": they want one of SKIPPED back on today. "course" must be from SKIPPED.',
+    '- "study_from": they want study time later ("move my study time to after CSE 240", "no studying before 2"). Give itemId from CLASSES when they name one (study starts when it ends), else "time" as 24-hour "HH:MM".',
     '- "unknown": not about their day at all. Put a short reply (max 25 words) in "reply" saying what you can help with.',
     "Never ask a question back. Use CONVERSATION to understand follow-ups: \"and after that?\" means after the thing just talked about, so answer from the SCHEDULE after it.",
     // "Should I go to the lunch talk?" is a question about one of Sol's picks: a straight answer, not "I'm not sure".
@@ -153,10 +165,12 @@ async function understand(
     `FACTS:\n${facts}`,
     `ADDABLE: ${JSON.stringify(addable.map((a) => ({ id: a.id, title: a.title, ...(a.start ? { time: clock(a.start) } : {}), ...(a.why ? { why: a.why } : {}) })))}`,
     `REMOVABLE: ${JSON.stringify(removable.map((r) => ({ id: r.id, title: r.title })))}`,
+    `CLASSES: ${JSON.stringify(edits.classes.map((c) => ({ id: c.id, title: c.title, time: clock(c.start) })))}`,
+    `SKIPPED: ${JSON.stringify(edits.skipped)}`,
     `CONVERSATION (oldest first): ${history.length ? JSON.stringify(history.map((h) => `${h.from === "you" ? "Student" : "Sol"}: ${h.text}`)) : "none"}`,
     `Student said: ${JSON.stringify(text)}`,
   ].join("\n");
-  type Answer = { action: string; itemId?: string; reply?: string };
+  type Answer = EditAnswer & { reply?: string };
   // Only answers that name an action and, for add/remove, an id we actually offered count (and get cached).
   // A reply that asks a question back is a dead end, and an answer with a clock time the facts do not have is made
   // up: the keyword rules answer instead.
@@ -168,6 +182,7 @@ async function understand(
     }
     if (a?.action === "unknown") return typeof a.reply !== "string" || !a.reply.includes("?");
     if (a?.action === "briefing" || a?.action === "next_item") return true;
+    if (["add_block", "skip_class", "restore_class", "study_from"].includes(a?.action)) return toEdit(a, edits.classes, edits.skipped) !== null;
     if (a?.action === "add_event") return addable.some((x) => x.id === a.itemId);
     if (a?.action === "remove_item") return removable.some((x) => x.id === a.itemId);
     return false;
@@ -177,9 +192,18 @@ async function understand(
     {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["briefing", "next_item", "add_event", "remove_item", "answer", "unknown"] },
+        action: {
+          type: "string",
+          enum: ["briefing", "next_item", "add_event", "remove_item", "answer", "add_block", "skip_class", "restore_class", "study_from", "unknown"],
+        },
         itemId: { type: "string" },
         reply: { type: "string" },
+        title: { type: "string" },
+        start: { type: "string" },
+        minutes: { type: "integer" },
+        location: { type: "string" },
+        course: { type: "string" },
+        time: { type: "string" },
       },
       required: ["action"],
     },
@@ -190,15 +214,26 @@ async function understand(
   if (result.action === "next_item") return NEXT;
   if (result.action === "add_event") return { action: "add_event", itemId: result.itemId! };
   if (result.action === "remove_item") return { action: "remove_item", itemId: result.itemId! };
+  const edit = toEdit(result, edits.classes, edits.skipped);
+  if (edit) return edit;
   if (result.action === "answer") return { action: "briefing", reply: polishLine(withoutHeatTips(result.reply!.trim(), day.weather).slice(0, 400)) };
   return { action: "unknown", reply: (typeof result.reply === "string" && result.reply.trim().slice(0, 300)) || help(addable) };
 }
 
 const ADD_WORDS = /\b(add|join|go to|sign me up(?: for)?|put|attend)\b/;
 
-function byRules(text: string, addable: DayItem[], removable: DayItem[], day: CommandDay, nowMs: number): Decision {
+function byRules(
+  text: string,
+  addable: DayItem[],
+  removable: DayItem[],
+  day: CommandDay,
+  nowMs: number,
+  edits: { classes: DayItem[]; skipped: string[] },
+): Decision {
   // Phones type curly apostrophes ("How’s my day?"); the rules below expect straight ones.
   const t = text.toLowerCase().replace(/[‘’ʼ]/g, "'");
+  const edit = ruleEdit(text.replace(/[‘’ʼ]/g, "'"), edits.classes, edits.skipped); // keeps the student's capitals for a title
+  if (edit) return edit;
   if (/\b(next|what now|where (do|should) i (go|be)|when (do|should) i (leave|go|head out)|head out|am i late|my walk)\b/.test(t)) return NEXT;
   if (/(how'?s|how is|what'?s|what is).*(day|today|schedule|next)|brief/.test(t)) return { action: "briefing" };
   if (/\b(remove|drop|cancel|skip|delete)\b/.test(t)) {

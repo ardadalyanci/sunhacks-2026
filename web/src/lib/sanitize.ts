@@ -30,6 +30,9 @@ export function isCalendarDate(v: unknown): v is string {
 }
 
 /** "9:05" or "13:30" → minutes after midnight, or null. */
+/** 930 → "15:30"; null → undefined. */
+const hhmm = (m: number | null) => (m === null ? undefined : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+
 function minutesOf(v: unknown): number | null {
   if (typeof v !== "string") return null;
   const m = v.match(/^(\d{1,2}):(\d{2})$/);
@@ -127,6 +130,7 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
       pace: raw.pace === "slower" ? "slower" : undefined,
       homeCampus: isCampus(raw.homeCampus) ? raw.homeCampus : undefined,
       commute: cleanCommute(raw.commute),
+      studyFrom: hhmm(minutesOf(raw.studyFrom)),
     },
   };
 }
@@ -140,6 +144,7 @@ export function sanitizeCommandContext(raw: unknown): {
   deadlines: DayItem[];
   weather?: Weather;
   history: { from: "you" | "sol"; text: string }[];
+  skipped: string[];
 } {
   const body = isObj(raw) ? raw : {};
   const turn = (v: unknown) => {
@@ -154,6 +159,7 @@ export function sanitizeCommandContext(raw: unknown): {
     history: (Array.isArray(body.history) ? body.history.slice(-8) : [])
       .map(turn)
       .filter((t): t is { from: "you" | "sol"; text: string } => t !== null),
+    skipped: list(body.skipped, 10).map((c) => str(c, 60)).filter((c): c is string => Boolean(c)),
   };
 }
 
