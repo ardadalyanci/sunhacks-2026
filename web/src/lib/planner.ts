@@ -2,7 +2,8 @@
 // so the Today screen still works when Gemini is unavailable.
 import { placeLabel, spokenAssignment, spokenStop } from "./places";
 import { CAMPUS_INFO } from "./campuses";
-import type { CampusId, ClassBlock, Commute, CommuteBy, DayItem, Opportunity, Weather, Weekday } from "./types";
+import { COMMUTE_WORDS, MAX_COMMUTE_MIN, campusPoint, commuteMinutes, milesText, nearestCampus, roadMiles } from "./commute";
+import type { CampusId, ClassBlock, Commute, DayItem, Opportunity, Weather, Weekday } from "./types";
 
 export const MST = "-07:00"; // Arizona: no daylight saving
 const MST_MS = 7 * 60 * 60 * 1000;
@@ -20,13 +21,6 @@ const SLOWER_PACE_FACTOR = 1.35; // "Give me more time to walk" in Setup
 const HEAT_EXTRA_MIN = 2;
 const HEAT_EXTRA_SLOWER_MIN = 5;
 const SAME_BUILDING_BREAK_MIN = 60; // a longer break between two stops in one building gets a leave time again
-const COMMUTE_WORDS: Record<CommuteBy, string> = {
-  walk: "on foot",
-  bike: "by bike",
-  scooter: "by scooter",
-  drive: "by car",
-  bus: "by bus or light rail",
-};
 
 // A class is a course code and nothing else ("CSE 230", "BIO 181L"). "MAT 343 study group" or "Work shift" is a
 // commitment the student added, and Sol calls it by its own name.
@@ -331,9 +325,10 @@ export function placeStudyBlocks(
  * so, starting with "Tight:".
  * A stop on another campus (`item.campus`; the day starts on `home`, default Tempe) is reached by ASU shuttle:
  * walk to the stop, be there when `shuttle` says, walk from the stop; `via` names the shuttle, or says none fits.
- * A student who lives off campus (`commute`, near `home`) starts with that trip instead of a walk: the first stop
- * is `commute.minutes` away (their own estimate, door to class, so no heat or pace minutes are added). When that
- * stop is on another campus they ride to `home` first, then take the shuttle. `via` says so.
+ * A student who lives off campus (`commute`) starts with that trip instead of a walk. With their own minutes, the
+ * first stop is that far away (door to class, so no heat or pace minutes are added), and a stop on another campus
+ * means riding to `home` first, then the shuttle. With their home point, the trip goes straight to the first stop
+ * (lib/commute.ts) when that takes at most two hours, else to the campus nearest home and the shuttle. `via` says so.
  */
 export function addLeaveTimes(
   items: DayItem[],
@@ -370,10 +365,30 @@ export function addLeaveTimes(
     const itemCampus: CampusId = item.campus ?? "tempe";
     const there = findBuilding(buildings, item.buildingId ?? item.location, itemCampus);
     if (commute) {
-      const { minutes, by } = commute;
-      const ride = minutes * MIN;
-      const trip = (to: string) => `From home ${COMMUTE_WORDS[by]}${to}: about ${minutes} minutes, your own estimate.`;
+      const { by, home, minutes: typed } = commute;
       commute = undefined;
+      const opts = { hot, slower };
+      // From a home point on the map: straight to this stop when that takes at most two hours, on any campus.
+      const target = there ?? campusPoint(itemCampus);
+      const direct = home && typed === undefined ? commuteMinutes(home, target, by, opts) : undefined;
+      if (home && direct !== undefined && direct <= MAX_COMMUTE_MIN) {
+        const leave = new Date(item.start).getTime() - direct * MIN;
+        item.leaveAt = toMstIso(new Date(leave));
+        item.via = `From home ${COMMUTE_WORDS[by]}: about ${milesText(roadMiles(home, target))}, ${direct} minutes.`;
+        markTight(item, before, leave);
+        hereCampus = itemCampus;
+        here = there;
+        lastStop = there;
+        continue;
+      }
+      // Otherwise to the campus nearest home (or the home campus, with the student's own minutes), then the shuttle.
+      if (home && typed === undefined) hereCampus = nearestCampus(home);
+      const minutes = typed ?? commuteMinutes(home!, campusPoint(hereCampus), by, opts);
+      const ride = minutes * MIN;
+      const trip = (to: string) =>
+        typed !== undefined
+          ? `From home ${COMMUTE_WORDS[by]}${to}: about ${minutes} minutes, your own estimate.`
+          : `From home ${COMMUTE_WORDS[by]}${to}: about ${milesText(roadMiles(home!, campusPoint(hereCampus)))}, ${minutes} minutes.`;
       if (itemCampus === hereCampus) {
         const leave = new Date(item.start).getTime() - ride;
         item.leaveAt = toMstIso(new Date(leave));

@@ -137,6 +137,21 @@ export function project(lat: number, lng: number, bounds: Bounds, size: Size): P
   return { x: (w.x - v.cx) * v.scale + size.width / 2, y: (w.y - v.cy) * v.scale + size.height / 2 };
 }
 
+/** The place under a point of the map (the inverse of project): where a tap on the map lands. */
+export function unproject(p: Point, bounds: Bounds, size: Size): { lat: number; lng: number } {
+  const v = view(bounds, size);
+  const x = (p.x - size.width / 2) / v.scale + v.cx;
+  const y = (p.y - size.height / 2) / v.scale + v.cy;
+  return { lat: (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI, lng: x * 360 - 180 };
+}
+
+/** A square area `halfSpanM` meters each way around a point: a street-level map centered on it. */
+export function boundsAround(lat: number, lng: number, halfSpanM: number): Bounds {
+  const dLat = halfSpanM / M_PER_DEG_LAT;
+  const dLng = halfSpanM / (M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180));
+  return { south: lat - dLat, north: lat + dLat, west: lng - dLng, east: lng + dLng };
+}
+
 /**
  * The OpenStreetMap tiles under the map: the zoom whose tiles come closest to their natural 256 px, and each
  * tile's place and size in map units (between about 181 and 362, so at most 3 by 3 tiles on a 340 by 250 map).

@@ -1,5 +1,6 @@
 // What the setup screen saves in the browser. Nothing here is sent to our server except per request.
 import { isCampus } from "@/lib/campuses";
+import { inPhoenixArea, roundPoint, type Point } from "@/lib/commute";
 import type { CampusId, ClassBlock, Commute, CommuteBy, DayItem, Weekday } from "@/lib/types";
 import { WEEKDAYS } from "./time";
 
@@ -9,7 +10,8 @@ export interface SavedSetup {
   interests: string[];
   startBuildingId?: string;
   homeCampus?: CampusId; // the campus the day starts on (or the one nearest an off-campus home); absent = Tempe
-  commute?: Commute; // the student lives off campus: their own minutes from home to class, and how they travel
+  commute?: Commute; // the student lives off campus: how they travel, and their home point and/or their own minutes
+  homeLabel?: string; // the address picked in Setup, shown back there only; never sent to the server
   pace?: "slower"; // "Give me more time to walk": every leave time is earlier, and earlier again in heat
 }
 
@@ -40,12 +42,18 @@ const isWeekday = (d: unknown): d is Weekday => typeof d === "string" && (WEEKDA
 
 export const COMMUTE_BY: CommuteBy[] = ["walk", "bike", "scooter", "drive", "bus"];
 
-/** A saved commute, or undefined when either field is off (the same limits as the server: 1 to 120 minutes). */
+/**
+ * A saved commute, or undefined when it is off: a known way to travel, and whole minutes from 1 to 120 and/or a home
+ * point in the Phoenix area (the same limits as the server).
+ */
 function asCommute(value: unknown): Commute | undefined {
   const c = value as Partial<Record<keyof Commute, unknown>> | null;
-  if (!c || typeof c !== "object" || typeof c.minutes !== "number" || !Number.isInteger(c.minutes)) return undefined;
-  if (c.minutes < 1 || c.minutes > 120 || !COMMUTE_BY.includes(c.by as CommuteBy)) return undefined;
-  return { minutes: c.minutes, by: c.by as CommuteBy };
+  if (!c || typeof c !== "object" || !COMMUTE_BY.includes(c.by as CommuteBy)) return undefined;
+  const minutes = typeof c.minutes === "number" && Number.isInteger(c.minutes) && c.minutes >= 1 && c.minutes <= 120 ? c.minutes : undefined;
+  const h = c.home as Partial<Point> | null | undefined;
+  const home = h && typeof h.lat === "number" && typeof h.lng === "number" && inPhoenixArea(h as Point) ? roundPoint(h as Point) : undefined;
+  if (minutes === undefined && !home) return undefined;
+  return { by: c.by as CommuteBy, ...(minutes !== undefined ? { minutes } : {}), ...(home ? { home } : {}) };
 }
 
 /** One saved class, or null when a field has the wrong type (an old or hand-edited setup). */
@@ -83,6 +91,7 @@ export function loadSetup(): SavedSetup | null {
     if (isCampus(saved.homeCampus) && saved.homeCampus !== "tempe") setup.homeCampus = saved.homeCampus;
     const commute = asCommute(saved.commute);
     if (commute) setup.commute = commute;
+    if (commute?.home && typeof saved.homeLabel === "string" && saved.homeLabel) setup.homeLabel = saved.homeLabel.slice(0, 200);
     if (saved.pace === "slower") setup.pace = "slower";
     return setup;
   } catch {
