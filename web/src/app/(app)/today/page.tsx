@@ -68,7 +68,7 @@ function HeatCard({ title, wide }: { title: string; wide: boolean }) {
   return (
     <section
       aria-labelledby={id}
-      className={`rounded-3xl bg-gradient-to-r from-[#FFC627] to-[#F97316] text-ink ${
+      className={`rounded-2xl bg-gradient-to-r from-[#FFC627] to-[#F97316] text-ink ${
         wide ? "mt-4 hidden p-5 lg:block" : "mt-4 flex items-center gap-4 p-5 sm:p-6 lg:hidden"
       }`}
     >
@@ -173,12 +173,12 @@ export default function TodayPage() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+              className="rounded-lg bg-ink px-5 py-3 font-semibold text-cloud hover:bg-ink/90"
             >
               Try again
             </button>
             {hasSetup && (
-              <Link href="/setup" className="rounded-full border-2 border-ink px-5 py-3 font-bold hover:bg-ink/10">
+              <Link href="/setup" className="rounded-lg border border-line bg-surface px-5 py-3 font-semibold hover:border-ink/40">
                 Check your setup
               </Link>
             )}
@@ -356,7 +356,7 @@ export default function TodayPage() {
             type="button"
             aria-pressed={view === "list"}
             onClick={() => setView(view === "list" ? "sky" : "list")}
-            className="min-h-10 rounded-full px-3 py-2 font-bold underline underline-offset-4 hover:bg-ink/10"
+            className="min-h-10 rounded-lg px-3 py-2 font-semibold underline underline-offset-4 hover:bg-ink/10"
           >
             {view === "list" ? "Show the sky" : "Show as a list"}
           </button>
@@ -394,7 +394,7 @@ export default function TodayPage() {
             <section
               ref={sheet}
               aria-labelledby="selected-title"
-              className="fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto overscroll-contain rounded-t-3xl bg-cloud px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-10px_40px_rgba(20,50,74,0.28)] motion-safe:transition-[translate,opacity] motion-safe:duration-200 max-lg:starting:translate-y-8 max-lg:starting:opacity-0 lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-3xl lg:p-5 lg:shadow-none"
+              className="fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto overscroll-contain rounded-t-2xl bg-surface px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-10px_40px_rgba(20,50,74,0.28)] motion-safe:transition-[translate,opacity] motion-safe:duration-200 max-lg:starting:translate-y-8 max-lg:starting:opacity-0 lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-2xl lg:border lg:border-line lg:p-5 lg:shadow-none"
             >
               <span aria-hidden className="mx-auto mb-3 block h-1.5 w-12 rounded-full bg-ink/20 lg:hidden" />
               <p className="font-bold text-ink-soft">
@@ -408,7 +408,7 @@ export default function TodayPage() {
                 id="selected-title"
                 ref={cardTitle}
                 tabIndex={-1}
-                className="mt-1 font-display text-2xl font-bold leading-tight outline-none"
+                className="mt-1 font-display text-xl font-bold leading-tight outline-none"
               >
                 {selected.title}
               </h2>
@@ -447,7 +447,7 @@ export default function TodayPage() {
                     type="button"
                     disabled={day.busy}
                     onClick={() => void day.accept(selected.id)}
-                    className="rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50"
+                    className="rounded-lg bg-ink px-4 py-2 font-semibold text-cloud hover:bg-ink/90 disabled:opacity-50"
                   >
                     Add to my day
                   </button>
@@ -457,7 +457,7 @@ export default function TodayPage() {
                     href={selected.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                    className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
                   >
                     {selected.type === "deadline" ? "Open in Canvas" : "Open event page"}
                   </a>
@@ -470,7 +470,7 @@ export default function TodayPage() {
                       void day.unaccept(selected.id);
                       setSelectedId(null);
                     }}
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10 disabled:opacity-50"
+                    className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40 disabled:opacity-50"
                   >
                     Remove from my day
                   </button>
@@ -482,7 +482,7 @@ export default function TodayPage() {
                       day.hide(selected.id);
                       setSelectedId(null);
                     }}
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                    className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
                   >
                     Remove this block
                   </button>
@@ -490,7 +490,7 @@ export default function TodayPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedId(null)}
-                  className="rounded-full px-4 py-2 font-bold hover:bg-ink/10"
+                  className="rounded-lg px-4 py-2 font-semibold hover:bg-ink/10"
                 >
                   Close
                 </button>
@@ -499,8 +499,8 @@ export default function TodayPage() {
           )}
         </div>
 
-        <section className={`rounded-3xl bg-cloud p-5 ${underCard}`}>
-          <h2 className="font-display text-2xl font-bold">Due soon</h2>
+        <section className={`rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
+          <h2 className="font-display text-xl font-bold">Due soon</h2>
           {deadlines.length === 0 && (
             <p className="mt-2 text-ink-soft">Nothing due. Add your Canvas token in Setup to see assignments.</p>
           )}
@@ -509,7 +509,7 @@ export default function TodayPage() {
               const date = parseLocal(d.start).date;
               return (
                 <li key={d.id} className="border-t border-ink/10 py-3 first:border-t-0">
-                  <p className="font-bold leading-snug">{d.title}</p>
+                  <p className="font-semibold leading-snug">{d.title}</p>
                   <p className="text-ink-soft">
                     Due {dueDay(date)} at {clock(d.start)}
                   </p>
@@ -523,12 +523,12 @@ export default function TodayPage() {
         </section>
 
         {plan.suggestions.length > 0 && (
-          <section className={`mt-4 rounded-3xl bg-sun-soft p-5 ${underCard}`}>
-            <h2 className="font-display text-2xl font-bold">Fits your day</h2>
+          <section className={`mt-4 rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
+            <h2 className="font-display text-xl font-bold">Fits your day</h2>
             <ul className="mt-2">
               {plan.suggestions.map((s) => (
                 <li key={s.id} className="border-t border-ink/15 py-3 first:border-t-0">
-                  <p className="font-bold leading-snug">{s.title}</p>
+                  <p className="font-semibold leading-snug">{s.title}</p>
                   <p className="text-ink-soft">
                     {clock(s.start)}
                     {s.location ? `, ${placeLabel(s.location)}` : ""}
@@ -538,7 +538,7 @@ export default function TodayPage() {
                     type="button"
                     disabled={day.busy}
                     onClick={() => void day.accept(s.id)}
-                    className="mt-2 rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50"
+                    className="mt-2 rounded-lg bg-ink px-4 py-2 font-semibold text-cloud hover:bg-ink/90 disabled:opacity-50"
                   >
                     Add to my day
                   </button>

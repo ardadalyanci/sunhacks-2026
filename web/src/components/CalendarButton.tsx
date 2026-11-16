@@ -9,8 +9,8 @@ type Props = {
   name: string;
 };
 
-const primary = "rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50";
-const secondary = "rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10";
+const primary = "inline-flex min-h-10 items-center rounded-lg bg-ink px-4 py-2 font-semibold text-cloud hover:bg-ink/90 disabled:opacity-50";
+const secondary = "inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40";
 
 /**
  * Puts the day in the student's calendar, with a reminder at each leave time.
@@ -67,7 +67,7 @@ export default function CalendarButton({ plan, name }: Props) {
         Add to my calendar
       </button>
       {open && (
-        <div className="mt-3 max-w-lg rounded-3xl bg-cloud p-4">
+        <div className="mt-3 max-w-lg rounded-2xl border border-line bg-surface p-4">
           {feed && webcal ? (
             <>
               <p>
@@ -96,7 +96,7 @@ export default function CalendarButton({ plan, name }: Props) {
                 type="button"
                 onClick={download}
                 disabled={working}
-                className="mt-1 inline-flex min-h-10 items-center font-bold underline underline-offset-4 disabled:opacity-50"
+                className="mt-1 inline-flex min-h-10 items-center font-semibold underline underline-offset-4 disabled:opacity-50"
               >
                 {working ? "Making the file…" : "Or download just this day (.ics)"}
               </button>

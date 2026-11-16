@@ -34,7 +34,7 @@ function whereText(e: Opportunity) {
 /** Sol's reason line: his face, then why this fits, in bold. */
 function Reason({ text }: { text: string }) {
   return (
-    <p className="flex items-start gap-2 font-bold leading-snug">
+    <p className="flex items-start gap-2 font-semibold leading-snug">
       <Mascot size={22} label="" className="mt-0.5 shrink-0" />
       <span>{text}</span>
     </p>
@@ -115,8 +115,8 @@ export default function EventsPage() {
         disabled={day.busy}
         aria-pressed={added}
         onClick={() => void (added ? day.unaccept(itemId) : day.accept(itemId))}
-        className={`whitespace-nowrap rounded-full px-4 py-2 font-bold disabled:opacity-50 ${
-          added ? "border-2 border-ink hover:bg-ink/10" : "bg-ink text-cloud hover:bg-ink/90"
+        className={`whitespace-nowrap rounded-lg px-4 py-2 font-semibold disabled:opacity-50 ${
+          added ? "border border-line bg-surface hover:border-ink/40" : "bg-ink text-cloud hover:bg-ink/90"
         }`}
       >
         {added ? "On your day" : "Add to my day"}
@@ -142,9 +142,9 @@ export default function EventsPage() {
             </div>
             <ul className={`mt-4 grid gap-4 ${pickGrid}`}>
               {pickItems.map((s) => (
-                <li key={s.id} className="flex flex-col rounded-3xl bg-sun-soft p-5 xl:px-4">
+                <li key={s.id} className="flex flex-col rounded-2xl border border-line bg-surface p-5 xl:px-4">
                   {s.why && <Reason text={s.why} />}
-                  <h3 className="mt-3 text-xl font-bold leading-snug">{s.title}</h3>
+                  <h3 className="mt-3 text-xl font-semibold leading-snug">{s.title}</h3>
                   <p className="text-ink-soft">
                     {s.end ? rangeLabel(parseLocal(s.start).hours, parseLocal(s.end).hours) : clock(s.start)}
                     {s.location ? `, ${placeLabel(s.location)}` : ""}
@@ -156,7 +156,7 @@ export default function EventsPage() {
                         href={s.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="whitespace-nowrap rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                        className="whitespace-nowrap rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
                       >
                         RSVP
                       </a>
@@ -177,8 +177,8 @@ export default function EventsPage() {
                 type="button"
                 aria-pressed={tag === value}
                 onClick={() => setTag(value)}
-                className={`rounded-full border-2 px-4 py-1.5 font-bold ${
-                  tag === value ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
+                className={`min-h-10 rounded-full border px-3.5 py-1.5 text-[15px] font-semibold ${
+                  tag === value ? "border-ink bg-ink text-cloud" : "border-line bg-surface hover:border-ink/40"
                 }`}
               >
                 {value === FOR_YOU || value === ALL ? value : interestLabel(value)}
@@ -201,7 +201,7 @@ export default function EventsPage() {
           )}
           {[...byDay.entries()].map(([date, list]) => (
             <section key={date} className="mb-8">
-              <h3 className="font-display text-2xl font-bold">{formatDay(date)}</h3>
+              <h3 className="font-display text-xl font-bold">{formatDay(date)}</h3>
               <ul>
                 {list.map((e) => {
                   const itemId = `ev-${e.id}`;
@@ -214,7 +214,7 @@ export default function EventsPage() {
                       {/* A clashing event is not dimmed: fading the text broke contrast. The chip below says it clashes. */}
                       <div>
                         {reason && <Reason text={reason} />}
-                        <h4 className={`text-xl font-bold leading-snug ${reason ? "mt-2" : ""}`}>{eventTitle(e)}</h4>
+                        <h4 className={`text-xl font-semibold leading-snug ${reason ? "mt-2" : ""}`}>{eventTitle(e)}</h4>
                         <p className="text-ink-soft">
                           {whereText(e)}
                           {SOURCE[e.source] ? `, ${SOURCE[e.source]}` : ""}
@@ -239,7 +239,7 @@ export default function EventsPage() {
                             href={e.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                            className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
                           >
                             RSVP
                           </a>
@@ -257,7 +257,7 @@ export default function EventsPage() {
       {/* On wide screens Sol keeps you company beside the list. */}
       <aside className="hidden lg:block">
         <div className="sticky top-24 flex flex-col items-center text-center">
-          <p className="relative rounded-3xl bg-cloud px-5 py-4 font-bold leading-snug shadow-[0_24px_60px_-28px_rgba(20,50,74,0.55)]">
+          <p className="relative rounded-2xl border border-line bg-surface px-5 py-4 font-semibold leading-snug shadow-[0_24px_60px_-28px_rgba(20,50,74,0.55)]">
             {filter === FOR_YOU ? `${events.length} match what you picked this week.` : summary}
             <span aria-hidden className="absolute -bottom-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 bg-cloud" />
           </p>

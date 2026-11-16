@@ -22,7 +22,7 @@ export default function AppError({ error, retry }: { error: unknown; retry: () =
         <button
           type="button"
           onClick={() => retry()}
-          className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+          className="rounded-lg bg-ink px-5 py-3 font-semibold text-cloud hover:bg-ink/90"
         >
           Try again
         </button>
@@ -33,7 +33,7 @@ export default function AppError({ error, retry }: { error: unknown; retry: () =
             // A full load on purpose: it drops the error and every in-memory cache along with the old setup.
             window.location.assign(new URL("/today", window.location.origin).href);
           }}
-          className="rounded-full border-2 border-ink px-5 py-3 font-bold hover:bg-ink/10"
+          className="rounded-lg border border-line bg-surface px-5 py-3 font-semibold hover:border-ink/40"
         >
           Start over
         </button>
