@@ -1,17 +1,25 @@
-// POST /api/command  { text: string, plan: DayPlan, now?: ISO }  →  CommandAction
+// POST /api/command  { text, plan: DayPlan, now?: ISO, date?, deadlines?, weather?, history? }  →  CommandAction
 // Turns what the student said into one action on the current plan:
 //   "How's my day?"            → { action: "briefing" }            (UI speaks plan.briefing)
 //   "What's next?" / "When do I leave?" → { action: "briefing", reply: "Next up: CSE 230 at 10:30 am in Brickyard 210. Leave at 10:20 am." }
 //                                (code finds the next stop after `now`, default the server clock; UI speaks reply)
 //   "Add the robotics meeting" → { action: "add_event", itemId }   (UI re-calls /api/plan with the id in acceptedEventIds)
 //   "Drop the study block"     → { action: "remove_item", itemId }
-// Gemini understands the sentence; simple keyword rules take over when Gemini is unavailable.
+//   Any other question about the day ("Do I have time for lunch before CSE 240?") → { action: "briefing", reply }:
+//                                Gemini answers from the day's facts, worked out by code (facts.ts), with the last
+//                                few chat turns (`history`) so a follow-up ("and after that?") makes sense.
+// The chips under the chat ("What's due?", …) are answered by code. Gemini understands everything else; simple
+// keyword rules take over when Gemini is unavailable.
+import { chipTopic } from "@/lib/chips";
 import { generateJson } from "@/lib/gemini";
 import { polishLine } from "@/lib/places";
-import { clock, hasPhrase } from "@/lib/planner";
-import { sanitizePlanForCommand } from "@/lib/sanitize";
+import { clock, hasPhrase, mstDate } from "@/lib/planner";
+import { sanitizeCommandContext, sanitizePlanForCommand } from "@/lib/sanitize";
 import { dayOpener, spokenEvent, spokenItem, spokenWhere } from "@/lib/say";
 import type { CommandAction, DayItem } from "@/lib/types";
+import { type CommandDay, dayFacts, dueReply, freeReply, relativeReply, timesIn, weatherReply, withoutHeatTips } from "./facts";
+
+type Turn = { from: "you" | "sol"; text: string };
 
 /** "Drop the study block", "the study time, skip it": a removal that names a study block, in either order. */
 const isStudyRemoval = (text: string) => /\b(remove|drop|cancel|skip|delete)\b/i.test(text) && /\bstudy (block|time|session)s?\b/i.test(text);
@@ -32,17 +40,34 @@ export async function POST(request: Request) {
   if (!text) return Response.json({ error: "`text` is required." }, { status: 400 });
 
   const plan = sanitizePlanForCommand(body?.plan);
+  const context = sanitizeCommandContext(body);
   const addable = plan.suggestions;
   const removable = plan.items.filter((i) => i.type === "event" || i.type === "study_block");
 
   const nowMs = typeof body?.now === "string" && !Number.isNaN(Date.parse(body.now)) ? Date.parse(body.now) : Date.now();
+  const firstStart = plan.items.find((i) => i.start)?.start;
+  const day: CommandDay = {
+    date: context.date ?? (firstStart ? mstDate(new Date(firstStart)) : mstDate(new Date(nowMs))),
+    items: plan.items,
+    suggestions: plan.suggestions,
+    deadlines: context.deadlines,
+    weather: context.weather,
+  };
+
+  // The chips under the chat are answered by code: no Gemini call, and they work when Gemini is out.
+  const chip = chipTopic(text);
+  if (chip) return Response.json(chipAction(chip, day, plan.items, nowMs, text));
+  // "And after that?" right after talking about CSE 240: what comes after it, worked out in code.
+  const relative = relativeReply(text, context.history, day);
+  if (relative) return Response.json({ action: "briefing", reply: polishLine(relative) } satisfies CommandAction);
 
   // "Drop the study block" is answered by the keyword rule, with no Gemini call: Gemini sees study blocks only as
   // "Work on: …" titles and sometimes answers that there is none (and that answer gets cached). Only when the
   // student names a study block, time or session, so "cancel the study group" (a commitment) still goes to Gemini.
-  const quick = isStudyRemoval(text) ? byRules(text, addable, removable) : null;
-  const rules = byRules(text, addable, removable);
-  let decision = (quick?.action === "remove_item" ? quick : null) ?? (await understand(text, addable, removable)) ?? rules;
+  const quick = isStudyRemoval(text) ? byRules(text, addable, removable, day, nowMs) : null;
+  const rules = byRules(text, addable, removable, day, nowMs);
+  let decision =
+    (quick?.action === "remove_item" ? quick : null) ?? (await understand(text, addable, removable, day, nowMs, context.history)) ?? rules;
   // "Add the robotics meeting" once came back as "I couldn't find a robotics meeting" while robotics night was a
   // pick (Gemini does not always see "meeting" in "build night"). When the student asks to add something and a pick
   // shares its words, add it. Not for questions: "should I go to the lunch talk?" gets Gemini's answer.
@@ -50,6 +75,13 @@ export async function POST(request: Request) {
   const action: CommandAction =
     decision.action === "next_item" ? { action: "briefing", reply: polishLine(nextReply(plan.items, nowMs, text)) } : decision;
   return Response.json(action);
+}
+
+/** A chip's answer, in code. */
+function chipAction(topic: ReturnType<typeof chipTopic>, day: CommandDay, items: DayItem[], nowMs: number, text: string): CommandAction {
+  const reply =
+    topic === "due" ? dueReply(day, nowMs) : topic === "free" ? freeReply(day, nowMs) : topic === "weather" ? weatherReply(day) : nextReply(items, nowMs, text);
+  return { action: "briefing", reply: polishLine(reply) };
 }
 
 /** Marker for "what's next / when do I leave": answered from the plan by code, not by Gemini. */
@@ -97,25 +129,43 @@ function nextReply(items: DayItem[], nowMs: number, text: string): string {
   return `${head} Then ${leave(walk.leaveAt)} for ${spokenItem(walk)}${spokenWhere(walk)}.`;
 }
 
-async function understand(text: string, addable: DayItem[], removable: DayItem[]): Promise<Decision | null> {
+async function understand(
+  text: string,
+  addable: DayItem[],
+  removable: DayItem[],
+  day: CommandDay,
+  nowMs: number,
+  history: Turn[],
+): Promise<Decision | null> {
+  const facts = dayFacts(day, nowMs);
   const prompt = [
-    "A student talks to their day-planner app. Map what they said to exactly one action.",
-    '- "briefing": they ask about their whole day or schedule.',
-    '- "next_item": they ask what is next, where to go now, or when to leave.',
+    "A student talks to their day-planner app. You are its sun mascot, Sol. Map what they said to exactly one action.",
+    '- "briefing": they ask for a summary of their whole day.',
+    '- "next_item": they ask what is next from now, where to go now, or when to leave. Not when they mean "after" or "before" something named earlier in CONVERSATION: that is "answer".',
     '- "add_event": they want one of ADDABLE on their day. itemId must be an id from ADDABLE.',
     '- "remove_item": they want one of REMOVABLE off their day. itemId must be an id from REMOVABLE.',
-    '- "unknown": anything else. Put a short reply (max 25 words) in "reply", speaking as the app\'s sun mascot Sol ("I"). Never ask a question back: the student cannot answer it. If they wanted to add something and nothing in ADDABLE matches, say you couldn\'t find it today and name what you can add, like "I couldn\'t find a robotics meeting today. I can add the hackathon team mixer or the lunch & learn."',
+    '- "answer": any other question about their day, deadlines, free time, weather, trips, classes or events. Put the answer in "reply": at most 45 words, as Sol ("I"), warm and plain, no lists. Use ONLY the FACTS below; never invent a time, place, class or deadline. If the FACTS do not say, say you don\'t know that from their day. Add a tip only when it helps with what they asked (starting an assignment in a free stretch); mention water or heat only when WEATHER says it is a hot day.',
+    '- "unknown": not about their day at all. Put a short reply (max 25 words) in "reply" saying what you can help with.',
+    "Never ask a question back. Use CONVERSATION to understand follow-ups: \"and after that?\" means after the thing just talked about, so answer from the SCHEDULE after it.",
     // "Should I go to the lunch talk?" is a question about one of Sol's picks: a straight answer, not "I'm not sure".
-    '  If they ask whether to go to something in ADDABLE, answer "Yes" first, then one reason from its "why", title or time, then how to add it, like "Yes: it\'s at noon and it\'s about software internships. Say add the lunch & learn." Never say you are not sure.',
+    'If they ask whether to go to something in ADDABLE, answer "Yes" first, then one reason from its "why", title or time, then how to add it, like "Yes: it\'s at noon and it\'s about software internships. Say add the lunch & learn." Never say you are not sure.',
+    'If they wanted to add something and nothing in ADDABLE matches, use "unknown": say you couldn\'t find it today and name what you can add.',
+    `FACTS:\n${facts}`,
     `ADDABLE: ${JSON.stringify(addable.map((a) => ({ id: a.id, title: a.title, ...(a.start ? { time: clock(a.start) } : {}), ...(a.why ? { why: a.why } : {}) })))}`,
     `REMOVABLE: ${JSON.stringify(removable.map((r) => ({ id: r.id, title: r.title })))}`,
+    `CONVERSATION (oldest first): ${history.length ? JSON.stringify(history.map((h) => `${h.from === "you" ? "Student" : "Sol"}: ${h.text}`)) : "none"}`,
     `Student said: ${JSON.stringify(text)}`,
   ].join("\n");
   type Answer = { action: string; itemId?: string; reply?: string };
   // Only answers that name an action and, for add/remove, an id we actually offered count (and get cached).
-  // A reply that asks a question back is a dead end (nothing can answer it), so the keyword rules answer instead.
+  // A reply that asks a question back is a dead end, and an answer with a clock time the facts do not have is made
+  // up: the keyword rules answer instead.
+  const known = new Set(timesIn(facts));
   const isValid = (v: unknown): boolean => {
     const a = v as Answer;
+    if (a?.action === "answer") {
+      return typeof a.reply === "string" && a.reply.trim().length > 0 && !a.reply.includes("?") && timesIn(a.reply).every((x) => known.has(x));
+    }
     if (a?.action === "unknown") return typeof a.reply !== "string" || !a.reply.includes("?");
     if (a?.action === "briefing" || a?.action === "next_item") return true;
     if (a?.action === "add_event") return addable.some((x) => x.id === a.itemId);
@@ -127,7 +177,7 @@ async function understand(text: string, addable: DayItem[], removable: DayItem[]
     {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["briefing", "next_item", "add_event", "remove_item", "unknown"] },
+        action: { type: "string", enum: ["briefing", "next_item", "add_event", "remove_item", "answer", "unknown"] },
         itemId: { type: "string" },
         reply: { type: "string" },
       },
@@ -140,12 +190,13 @@ async function understand(text: string, addable: DayItem[], removable: DayItem[]
   if (result.action === "next_item") return NEXT;
   if (result.action === "add_event") return { action: "add_event", itemId: result.itemId! };
   if (result.action === "remove_item") return { action: "remove_item", itemId: result.itemId! };
-  return { action: "unknown", reply: (typeof result.reply === "string" && result.reply.trim().slice(0, 200)) || help(addable) };
+  if (result.action === "answer") return { action: "briefing", reply: polishLine(withoutHeatTips(result.reply!.trim(), day.weather).slice(0, 400)) };
+  return { action: "unknown", reply: (typeof result.reply === "string" && result.reply.trim().slice(0, 300)) || help(addable) };
 }
 
 const ADD_WORDS = /\b(add|join|go to|sign me up(?: for)?|put|attend)\b/;
 
-function byRules(text: string, addable: DayItem[], removable: DayItem[]): Decision {
+function byRules(text: string, addable: DayItem[], removable: DayItem[], day: CommandDay, nowMs: number): Decision {
   // Phones type curly apostrophes ("How’s my day?"); the rules below expect straight ones.
   const t = text.toLowerCase().replace(/[‘’ʼ]/g, "'");
   if (/\b(next|what now|where (do|should) i (go|be)|when (do|should) i (leave|go|head out)|head out|am i late|my walk)\b/.test(t)) return NEXT;
@@ -159,6 +210,10 @@ function byRules(text: string, addable: DayItem[], removable: DayItem[]): Decisi
     if (hit) return { action: "add_event", itemId: hit.id };
     return { action: "unknown", reply: notFound(t, addable) };
   }
+  // Without Gemini, the common questions still get the code's answer.
+  if (/\b(due|deadlines?|assignments?|homework|turned in)\b/.test(t)) return { action: "briefing", reply: polishLine(dueReply(day, nowMs)) };
+  if (/\b(free|break|gap|lunch)\b/.test(t)) return { action: "briefing", reply: polishLine(freeReply(day, nowMs)) };
+  if (/\b(hot|heat|weather|temperature|degrees)\b/.test(t)) return { action: "briefing", reply: polishLine(weatherReply(day)) };
   return { action: "unknown", reply: help(addable) };
 }
 

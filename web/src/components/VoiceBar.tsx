@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { CHIPS } from "@/lib/chips";
 import { polishLine } from "@/lib/places";
 import Mascot from "./Mascot";
 import { MASCOT } from "./brand";
+import type { ChatTurn } from "./useDay";
 
 // Minimal typing for the Web Speech API (not in TypeScript's DOM lib).
 type Recognition = {
@@ -75,19 +77,25 @@ export function speak(text: string, onDone?: () => void) {
 
 type Props = {
   briefing: string;
-  onCommand: (text: string) => Promise<string>; // returns what to say back
+  onCommand: (text: string, history: ChatTurn[]) => Promise<string>; // returns what to say back
   onListeningChange?: (listening: boolean) => void;
   onSpeakingChange?: (speaking: boolean) => void;
 };
 
-/** "Hear my day" reads the briefing; the mic or the text box asks Sol, and his answer shows as a chat bubble. */
+const MAX_TURNS = 20; // what the chat keeps on screen; the last 8 go to Sol as context
+
+/**
+ * "Hear my day" reads the briefing; the mic, the text box or a ready-made question asks Sol. The chat keeps the
+ * conversation for this day, and Sol gets the last few turns, so "and after that?" makes sense.
+ */
 export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpeakingChange }: Props) {
   const [listening, setListeningState] = useState(false);
   const [working, setWorking] = useState(false);
-  const [heard, setHeard] = useState("");
-  const [reply, setReply] = useState("");
+  const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [typed, setTyped] = useState("");
   const recognition = useRef<Recognition | null>(null);
+  const chat = useRef<HTMLDivElement | null>(null);
+  const history = useRef<ChatTurn[]>([]); // the same turns, readable inside an answer that lands later
 
   const alive = useRef(false); // false once the bar is gone: an answer that lands later is not said
   const talking = useRef<((speaking: boolean) => void) | null>(null); // set while Sol speaks, to reset on leave
@@ -104,10 +112,21 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
       stopSpeaking();
       talking.current?.(false);
       talking.current = null;
-      setHeard("");
-      setReply("");
+      history.current = [];
+      setMessages([]);
     };
   }, []);
+
+  // The newest message stays in view.
+  useEffect(() => {
+    const box = chat.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [messages, working]);
+
+  function add(turn: ChatTurn) {
+    history.current = [...history.current, turn].slice(-MAX_TURNS);
+    setMessages(history.current);
+  }
 
   function setListening(value: boolean) {
     setListeningState(value);
@@ -117,7 +136,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   function say(text: string) {
     if (!alive.current) return;
     const line = polishLine(text);
-    setReply(line);
+    add({ from: "sol", text: line });
     talking.current = onSpeakingChange ?? null;
     onSpeakingChange?.(true);
     speak(line, () => {
@@ -127,11 +146,12 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   }
 
   async function handle(text: string) {
-    setHeard(text);
-    setReply("");
+    if (working) return;
+    const before = history.current;
+    add({ from: "you", text });
     setWorking(true);
     try {
-      say(await onCommand(text));
+      say(await onCommand(text, before));
     } catch {
       say("I couldn't do that right now. Try again in a moment.");
     } finally {
@@ -142,7 +162,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   function listen() {
     const Ctor = recognitionCtor();
     if (!Ctor) {
-      setReply("Voice needs Chrome or Edge. Type your question instead.");
+      add({ from: "sol", text: "Voice needs Chrome or Edge. Type your question instead." });
       return;
     }
     if (listening) {
@@ -155,7 +175,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
     r.maxAlternatives = 1;
     r.onresult = (event) => void handle(event.results[0][0].transcript);
     r.onerror = (event) =>
-      setReply(event.error === "not-allowed" ? `Allow the microphone to talk to ${MASCOT}.` : "I didn't catch that. Try again.");
+      add({ from: "sol", text: event.error === "not-allowed" ? `Allow the microphone to talk to ${MASCOT}.` : "I didn't catch that. Try again." });
     r.onend = () => setListening(false);
     recognition.current = r;
     setListening(true);
@@ -174,10 +194,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => {
-            setHeard("");
-            say(briefing);
-          }}
+          onClick={() => say(briefing)}
           className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
         >
           Hear my day
@@ -194,15 +211,66 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
         </button>
       </div>
 
+      {/* The conversation for this day: the student's questions on the right, Sol's answers on the left. */}
+      {(messages.length > 0 || working) && (
+        <div
+          ref={chat}
+          aria-live="polite"
+          className="mt-3 max-h-80 space-y-2 overflow-y-auto overscroll-contain rounded-3xl bg-cloud/70 p-3 ring-1 ring-ink/10"
+        >
+          {messages.map((m, i) =>
+            m.from === "you" ? (
+              <p key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2 text-cloud">
+                <span className="sr-only">You asked: </span>
+                {m.text}
+              </p>
+            ) : (
+              <div key={i} className="flex items-end gap-2">
+                <Mascot size={28} label="" className="shrink-0" />
+                <p className="w-fit max-w-[85%] rounded-2xl rounded-bl-md bg-sun-soft px-4 py-2 font-bold">
+                  <span className="sr-only">{MASCOT}: </span>
+                  {m.text}
+                </p>
+              </div>
+            ),
+          )}
+          {working && (
+            <div className="flex items-end gap-2">
+              <Mascot size={28} label="" className="shrink-0" />
+              <p className="rounded-2xl rounded-bl-md bg-sun-soft px-4 py-2 font-bold">
+                <span className="sr-only">{MASCOT} is thinking</span>
+                <span aria-hidden="true">…</span>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ready-made questions: answered by code, so they work even when the AI is out. */}
+      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Quick questions for ${MASCOT}`}>
+        {CHIPS.map((c) => (
+          <button
+            key={c.text}
+            type="button"
+            disabled={working}
+            onClick={() => void handle(c.text)}
+            className="min-h-10 rounded-full border-2 border-ink/20 bg-cloud px-3 py-1.5 text-sm font-bold hover:border-ink disabled:opacity-50"
+          >
+            {c.text}
+          </button>
+        ))}
+      </div>
+
       <form onSubmit={submit} className="mt-3 flex gap-2">
         <label className="sr-only" htmlFor="command">
-          Ask {MASCOT}, like “when should I leave?”
+          Ask {MASCOT} anything about your day
         </label>
         <input
           id="command"
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
-          placeholder="Or type: when should I leave?"
+          placeholder="Ask anything: do I have time for lunch?"
+          autoComplete="off"
           className="min-w-0 flex-1 rounded-full border-2 border-ink/20 bg-cloud px-4 py-2 focus:border-ink"
         />
         <button
@@ -213,25 +281,6 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
           {working ? "…" : "Send"}
         </button>
       </form>
-
-      {/* The question and Sol's answer, as a two-line chat. */}
-      <div aria-live="polite" className="mt-3 space-y-2">
-        {heard && (
-          <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2 text-cloud">
-            <span className="sr-only">You asked: </span>
-            {heard}
-          </p>
-        )}
-        {(reply || working) && (
-          <div className="flex items-end gap-2">
-            <Mascot size={28} label="" className="shrink-0" />
-            <p className="w-fit max-w-[85%] rounded-2xl rounded-bl-md bg-sun-soft px-4 py-2 font-bold">
-              <span className="sr-only">{MASCOT}: </span>
-              {reply || "…"}
-            </p>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

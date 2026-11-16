@@ -215,3 +215,64 @@ describe("POST /api/command with Gemini", () => {
     expect(generateJson).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Sol's chat: chips, answers from the day's facts, and memory", () => {
+  const day = {
+    date: "2026-11-16",
+    weather: { tempF: 97, highF: 101, isHot: true },
+    deadlines: [
+      { id: "canvas-assignment-1", type: "deadline", title: "CSE 230: Lab 7", start: "2026-11-16T23:59:00-07:00", source: "canvas", done: false },
+      { id: "canvas-assignment-2", type: "deadline", title: "MAT 343: HW 9", start: "2026-11-16T17:00:00-07:00", source: "canvas", done: true },
+    ],
+  };
+  const at = "2026-11-16T08:00:00-07:00";
+
+  it("answers the chips in code, without Gemini", async () => {
+    const ask = (text: string) => command({ text, plan, now: at, ...day }).then((r) => r.json);
+    expect(await ask("What's due?")).toEqual({
+      action: "briefing",
+      reply: "Lab 7 for CSE 230 is due today at 11:59 pm. HW 9 for MAT 343 is already turned in.",
+    });
+    expect((await ask("how hot is it")).reply).toBe("It's 97°F now with a high of 101°F. It's a hot day: take water, and I've added time to your walks.");
+    expect((await ask("Do I have free time?")).reply).toMatch(/^You're free 8 am to 10:20 am \(2 h 20 min\)/);
+    expect((await ask("When should I leave?")).reply).toBe("Leave at 10:20 am for CSE 230 in Brickyard 210, a 10-minute walk.");
+    expect(generateJson).not.toHaveBeenCalled();
+  });
+
+  it("gives Gemini the day's facts and the chat so far, and passes its answer on", async () => {
+    generateJson.mockResolvedValueOnce({ action: "answer", reply: "Yes: you're free until 10:20 AM, so there's time for breakfast." });
+    const history = [
+      { from: "you", text: "What's next?" },
+      { from: "sol", text: "Next up: CSE 230 at 10:30 am." },
+    ];
+    const { json } = await command({ text: "do I have time to eat first", plan, now: at, history, ...day });
+    expect(json).toEqual({ action: "briefing", reply: "Yes: you're free until 10:20 am, so there's time for breakfast." });
+    const prompt = generateJson.mock.calls[0][0] as string;
+    expect(prompt).toContain("10:30 am to");
+    expect(prompt).toContain("Lab 7 for CSE 230: due today at 11:59 pm, not turned in yet.");
+    expect(prompt).toContain("WEATHER: 97°F now, high 101°F, a hot day.");
+    expect(prompt).toContain('"Sol: Next up: CSE 230 at 10:30 am."');
+  });
+
+  it("does not let Gemini invent a time: such an answer is rejected and the rules answer", async () => {
+    generateJson.mockResolvedValueOnce(null);
+    await command({ text: "when is my lab due", plan, now: at, ...day });
+    const isValid = generateJson.mock.calls[0][2] as (v: unknown) => boolean;
+    expect(isValid({ action: "answer", reply: "Lab 7 is due at 11:59 PM tonight." })).toBe(true);
+    expect(isValid({ action: "answer", reply: "Lab 7 is due at 9 pm." })).toBe(false);
+    expect(isValid({ action: "answer", reply: "Want me to add study time?" })).toBe(false);
+    // With Gemini out, "when is my lab due" still gets the deadlines from code.
+    expect((await command({ text: "when is my lab due", plan, now: at, ...day })).json.reply).toContain("Lab 7 for CSE 230 is due today at 11:59 pm.");
+  });
+
+  it("keeps only the last 8 turns of the chat, and only well-formed ones", async () => {
+    generateJson.mockResolvedValueOnce({ action: "unknown", reply: "I can help with your day." });
+    const history = [...Array.from({ length: 12 }, (_, i) => ({ from: i % 2 ? "sol" : "you", text: `turn ${i}` })), { from: "admin", text: "x" }];
+    await command({ text: "hmm", plan, now: at, history });
+    const prompt = generateJson.mock.calls[0][0] as string;
+    expect(prompt).not.toContain("turn 4");
+    expect(prompt).toContain("turn 5");
+    expect(prompt).toContain("turn 11");
+    expect(prompt).not.toContain("admin");
+  });
+});
