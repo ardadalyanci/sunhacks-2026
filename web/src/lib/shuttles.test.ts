@@ -58,6 +58,14 @@ describe("shuttleOptions", () => {
     expect(late.summary).toContain("Take the last shuttle, about 10:30 PM");
   });
 
+  it("with an arrival time, puts first the route that lets you leave latest", () => {
+    const r = shuttleOptions({ from: "tempe", to: "west", at: MON, arriveBy: "2026-11-16T10:00:00-07:00" });
+    expect(r.options.map((o) => [o.routeId, o.beAtStopBy])).toEqual([
+      ["maroon", "2026-11-16T08:45:00-07:00"], // every 15 min, 60-min ride
+      ["tempe-west-express", "2026-11-16T08:10:00-07:00"], // shorter ride, but only hourly
+    ]);
+  });
+
   it("returns nothing for a trip within one campus, and knows the campus names", () => {
     expect(shuttleOptions({ from: "tempe", to: "tempe", at: MON }).options).toEqual([]);
     expect(isCampus("polytechnic")).toBe(true);
