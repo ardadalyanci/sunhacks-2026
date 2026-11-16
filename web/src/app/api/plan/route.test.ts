@@ -183,6 +183,22 @@ describe("POST /api/plan with Gemini", () => {
     expect(savePlan).not.toHaveBeenCalled();
   });
 
+  it("reaches a class on another campus by ASU shuttle, from the real timetable", async () => {
+    const req = {
+      ...baseRequest,
+      classes: [...baseRequest.classes, { course: "EGR 104", days: ["Mon"], start: "16:30", end: "17:20", location: "Santan Hall 120", campus: "polytechnic" }],
+      events: [],
+    };
+    const { status, json } = await plan(req);
+    expect(status).toBe(200);
+    const poly = json.items.find((i) => i.title === "EGR 104")!;
+    // Hot day: 12-minute walks. Arrive at the Poly stop by 4:18 PM; Gold every 15 min, 50-min ride → stop by 3:13 PM.
+    expect(poly.campus).toBe("polytechnic");
+    expect(poly.leaveAt).toBe("2026-11-16T15:01:00-07:00");
+    expect(poly.via).toContain("Gold shuttle from Forest Avenue and Lemon Street to SIM Building");
+    expect(json.items.find((i) => i.title === "MAT 343")!.via).toBeUndefined(); // Tempe classes are untouched
+  });
+
   it("plans a future day from its start and briefs it as a look-ahead", async () => {
     // Sunday evening, looking at Monday: Lab 7 (due Mon 23:59) is open, Saturday's work is not.
     const req = {

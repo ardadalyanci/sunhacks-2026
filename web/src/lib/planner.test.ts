@@ -362,6 +362,69 @@ describe("leave times", () => {
   });
 });
 
+describe("other campuses", () => {
+  const POLY: Building[] = [
+    { id: "polytechnic-administration-building", name: "Administration Building", lat: 33.30714, lng: -111.67937, campus: "polytechnic" },
+    { id: "polytechnic-santan-hall", name: "Santan Hall", lat: 33.30612, lng: -111.67812, campus: "polytechnic" },
+    { id: "polytechnic-peralta-hall", name: "Peralta Hall", lat: 33.30612, lng: -111.67913, campus: "polytechnic" },
+  ];
+  const ALL = [...BUILDINGS, ...POLY];
+
+  it("looks a building up on one campus only, Tempe by default", () => {
+    expect(findBuilding(ALL, "Administration Building 101")).toBeUndefined(); // a Tempe class never lands at Poly
+    expect(findBuilding(ALL, "Administration Building 101", "polytechnic")?.id).toBe("polytechnic-administration-building");
+    expect(findBuilding(ALL, "BYENG 210")?.id).toBe("BYENG");
+    expect(findBuilding(ALL, "BYENG 210", "polytechnic")).toBeUndefined();
+  });
+
+  it("takes the shuttle between campuses: walk to the stop, be there in time, walk from the stop", () => {
+    const stops = [
+      item({ id: "c1", type: "class", start: "2026-11-16T09:00:00-07:00", end: "2026-11-16T09:50:00-07:00", buildingId: "BYENG" }),
+      item({ id: "c2", type: "class", start: "2026-11-16T11:30:00-07:00", end: "2026-11-16T12:20:00-07:00", location: "Santan Hall 120", campus: "polytechnic" }),
+      item({ id: "c3", type: "class", start: "2026-11-16T13:30:00-07:00", location: "Peralta Hall 101", campus: "polytechnic" }),
+    ];
+    const asked: string[] = [];
+    const shuttle = (from: string, to: string, arriveBy: string) => {
+      asked.push(`${from}>${to} by ${arriveBy}`);
+      return { beAtStopBy: "2026-11-16T10:15:00-07:00", via: "Gold shuttle from Forest Avenue and Lemon Street to SIM Building" };
+    };
+    addLeaveTimes(stops, ALL, "Manzanita", undefined, false, { shuttle });
+    expect(asked).toEqual(["tempe>polytechnic by 2026-11-16T11:20:00-07:00"]); // 10-minute walk from the stop
+    expect(stops[1].leaveAt).toBe("2026-11-16T10:05:00-07:00"); // 10-minute walk to the stop
+    expect(stops[1].via).toBe("Gold shuttle from Forest Avenue and Lemon Street to SIM Building");
+    // The next stop is a walk on Poly, from Santan Hall to Peralta Hall.
+    expect(stops[2].via).toBeUndefined();
+    expect(stops[2].leaveAt).toBe(toMstIso(new Date(ms(stops[2].start) - walkMinutes(POLY[1], POLY[2], false) * MIN)));
+  });
+
+  it("starts the day on the home campus, and says so when no shuttle fits", () => {
+    const stops = [item({ id: "c1", type: "class", start: "2026-11-15T08:30:00-07:00", location: "Santan Hall 120", campus: "polytechnic" })];
+    addLeaveTimes(stops, ALL, undefined, undefined, false, { home: "polytechnic", shuttle: () => undefined });
+    expect(stops[0].via).toBeUndefined(); // already on Poly: a walk, no shuttle
+    const away = [item({ id: "c1", type: "class", start: "2026-11-15T08:30:00-07:00", location: "Santan Hall 120", campus: "polytechnic" })];
+    addLeaveTimes(away, ALL, "Manzanita", undefined, false, { shuttle: () => ({ via: "Polytechnic-Tempe (Gold): no shuttle in time." }) });
+    expect(away[0].leaveAt).toBeUndefined();
+    expect(away[0].via).toBe("Polytechnic-Tempe (Gold): no shuttle in time.");
+  });
+
+  it("says so when the shuttle leaves before the class before it ends", () => {
+    const stops = [
+      item({ id: "c1", type: "class", title: "CSE 240", start: "2026-11-16T15:00:00-07:00", end: "2026-11-16T15:50:00-07:00", buildingId: "BYENG" }),
+      item({ id: "c2", type: "class", start: "2026-11-16T16:30:00-07:00", location: "Santan Hall 120", campus: "polytechnic" }),
+    ];
+    addLeaveTimes(stops, ALL, "Manzanita", undefined, false, { shuttle: () => ({ beAtStopBy: "2026-11-16T15:15:00-07:00", via: "Gold shuttle" }) });
+    expect(stops[1].leaveAt).toBe("2026-11-16T15:05:00-07:00");
+    expect(stops[1].why).toBe("Tight: that is 45 minutes before CSE 240 ends.");
+  });
+
+  it("puts a class's campus on its timeline item", () => {
+    const [poly] = classItems([{ course: "EGR 104", days: ["Mon"], start: "11:30", end: "12:20", location: "Santan Hall 120", campus: "polytechnic" }], "2026-11-16", ALL);
+    expect(poly).toMatchObject({ campus: "polytechnic", buildingId: "polytechnic-santan-hall" });
+    const [tempe] = classItems([{ course: "CSE 230", days: ["Mon"], start: "10:30", end: "11:20", location: "BYENG 210" }], "2026-11-16", ALL);
+    expect(tempe).not.toHaveProperty("campus");
+  });
+});
+
 describe("fallbacks without Gemini", () => {
   it("ranks events by whole-word interest matches", () => {
     const events = [
