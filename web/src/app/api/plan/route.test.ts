@@ -211,6 +211,23 @@ describe("POST /api/plan with Gemini", () => {
     }
   });
 
+  it("gets a Polytechnic student to a Downtown class with two shuttles through Tempe", async () => {
+    const req = {
+      ...baseRequest,
+      startBuildingId: undefined,
+      homeCampus: "polytechnic",
+      weather: { tempF: 70, highF: 75, isHot: false },
+      classes: [{ course: "JMC 201", days: ["Mon"], start: "11:30", end: "12:20", location: "Cronkite 101", campus: "downtown" }],
+      events: [],
+    };
+    const { status, json } = await plan(req);
+    expect(status).toBe(200);
+    const jmc = json.items.find((i) => i.title === "JMC 201")!;
+    // 10-minute walks: at the Downtown stop by 11:20 → Maroon from Tempe by 10:35 → Gold from SIM by 9:30 → leave 9:20.
+    expect(jmc.leaveAt).toBe("2026-11-16T09:20:00-07:00");
+    expect(jmc.via).toMatch(/^Two shuttles, changing at Forest Avenue and Lemon Street in Tempe\. Gold shuttle .* Then: Maroon shuttle /);
+  });
+
   it("plans a future day from its start and briefs it as a look-ahead", async () => {
     // Sunday evening, looking at Monday: Lab 7 (due Mon 23:59) is open, Saturday's work is not.
     const req = {

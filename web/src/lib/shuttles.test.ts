@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCampus, shuttleOptions } from "./shuttles";
+import { isCampus, shuttleLeg, shuttleOptions } from "./shuttles";
 
 // Fixed clock: the expo is on Sunday Nov 15 2026; Monday Nov 16 is a school day.
 const SUN = new Date("2026-11-15T12:30:00-07:00");
@@ -70,5 +70,53 @@ describe("shuttleOptions", () => {
     expect(shuttleOptions({ from: "tempe", to: "tempe", at: MON }).options).toEqual([]);
     expect(isCampus("polytechnic")).toBe(true);
     expect(isCampus("mesa")).toBe(false);
+  });
+});
+
+describe("shuttleLeg: two shuttles through Tempe", () => {
+  it("plans Polytechnic to Downtown backward: Maroon sets the Tempe stop time, Gold gets there by it", () => {
+    const leg = shuttleLeg("polytechnic", "downtown", "2026-11-16T11:20:00-07:00")!;
+    // Maroon: 30-minute ride, every 15 → at Forest & Lemon by 10:35. Gold: 50-minute ride, every 15 → at SIM by 9:30.
+    expect(leg.beAtStopBy).toBe("2026-11-16T09:30:00-07:00");
+    expect(leg.via).toBe(
+      "Two shuttles, changing at Forest Avenue and Lemon Street in Tempe. " +
+        "Gold shuttle from SIM Building to Forest Avenue and Lemon Street: about every 15 minutes, about a 50-minute ride. To arrive by 10:35 AM, be at the stop by 9:30 AM. " +
+        "Then: Maroon shuttle from Forest Avenue and Lemon Street to Central Avenue, north of Polk Street: about every 15 minutes, about a 30-minute ride. To arrive by 11:20 AM, be at the stop by 10:35 AM.",
+    );
+  });
+
+  it("uses weekend service, every 2 hours, on a Sunday", () => {
+    const leg = shuttleLeg("polytechnic", "downtown", "2026-11-15T14:00:00-07:00")!;
+    expect(leg.beAtStopBy).toBe("2026-11-15T08:40:00-07:00"); // Maroon 14:00 − 30 − 120 = 11:30; Gold 11:30 − 50 − 120
+    expect(leg.via).toContain("To arrive by 11:30 AM, be at the stop by 8:40 AM.");
+  });
+
+  it("goes the other way too, and on to West Valley", () => {
+    const back = shuttleLeg("downtown", "polytechnic", "2026-11-16T16:00:00-07:00")!;
+    expect(back.via).toMatch(/^Two shuttles, changing at Forest Avenue and Lemon Street in Tempe\. (Maroon|Mercado)/);
+    expect(back.via).toContain("Then: Gold shuttle from Forest Avenue and Lemon Street to SIM Building");
+    expect(back.beAtStopBy).toBeDefined();
+    const west = shuttleLeg("polytechnic", "west", "2026-11-16T12:00:00-07:00")!;
+    expect(west.via).toContain("Then: Maroon shuttle from Forest Avenue and Lemon Street to");
+    expect(Date.parse(west.beAtStopBy!)).toBeLessThan(Date.parse("2026-11-16T12:00:00-07:00") - 115 * 60_000);
+  });
+
+  it("says which shuttle does not fit, without a time to be at the stop", () => {
+    // Downtown by 7:30: Maroon from Tempe by 6:45, but Gold's first shuttle leaves SIM at 6:00 AM and needs 50 minutes.
+    const early = shuttleLeg("polytechnic", "downtown", "2026-11-16T07:30:00-07:00")!;
+    expect(early.beAtStopBy).toBeUndefined();
+    expect(early.via).toContain("The first shuttle leaves SIM Building about 6:00 AM, too late to arrive by 6:45 AM.");
+    expect(early.via).toContain("Then: Maroon shuttle");
+    // Downtown by 6:10: not even Maroon can make it.
+    const earlier = shuttleLeg("polytechnic", "downtown", "2026-11-16T06:10:00-07:00")!;
+    expect(earlier.beAtStopBy).toBeUndefined();
+    expect(earlier.via).toMatch(/^Two shuttles, changing at Forest Avenue and Lemon Street in Tempe\. Maroon shuttle .* too late to arrive by 6:10 AM\.$/);
+  });
+
+  it("still takes one shuttle when a route goes straight there", () => {
+    expect(shuttleLeg("tempe", "polytechnic", "2026-11-16T10:10:00-07:00")).toEqual({
+      beAtStopBy: "2026-11-16T09:05:00-07:00",
+      via: "Gold shuttle from Forest Avenue and Lemon Street to SIM Building: about every 15 minutes, about a 50-minute ride. To arrive by 10:10 AM, be at the stop by 9:05 AM.",
+    });
   });
 });
