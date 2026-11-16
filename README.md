@@ -51,4 +51,5 @@ Demo mode needs no keys or network: `GET /api/demo` returns a sample student's d
   - [ASU Events feed](https://asuevents.asu.edu/) (`/feed-json/students`)
   - [SunDevilCentral public calendar feed](https://sundevilcentral.eoss.asu.edu/ical/arizonau/ical_arizonau.ics)
   - [Open-Meteo](https://open-meteo.com/) weather API (CC BY 4.0)
+  - ASU Parking and Transit Services intercampus shuttle pages ([cfo.asu.edu/shuttles](https://cfo.asu.edu/shuttles)): published frequencies, stop service windows and ride times, hand-entered in `web/src/lib/shuttles.json` for `GET /api/shuttles` (no departure times; live times stay on ASU's tracker)
   - [OpenStreetMap](https://www.openstreetmap.org/copyright) building data via Overpass (ODbL), and OpenStreetMap map tiles under the "Your walks" map (© OpenStreetMap contributors); the map itself is plain SVG, no map library
