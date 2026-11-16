@@ -1,0 +1,68 @@
+{
+  "source": "ASU Parking and Transit Services route pages (cfo.asu.edu/gold-route, maroon-route, mercado-route, tempe-west-express), read Sun Nov 15 2026. ASU publishes frequencies and each stop's first/last service time, not a departure list. Times are approximate (traffic); no service on university holidays.",
+  "trackerUrl": "https://asu-shuttles.rider.peaktransit.com/",
+  "routes": [
+    {
+      "id": "gold",
+      "name": "Polytechnic-Tempe (Gold)",
+      "url": "https://cfo.asu.edu/gold-route",
+      "stops": [
+        { "id": "forest-lemon", "name": "Forest Avenue and Lemon Street", "campus": "tempe" },
+        { "id": "rural-university", "name": "Light Rail Station at Rural Road and University Drive", "campus": "tempe" },
+        { "id": "sim", "name": "SIM Building", "campus": "polytechnic" },
+        { "id": "lot-37", "name": "Lot 37 on Innovation Way South", "campus": "polytechnic" }
+      ],
+      "rideMinutes": [{ "between": ["tempe", "polytechnic"], "minutes": 50 }],
+      "service": {
+        "weekday": { "everyMinutes": 15, "windows": { "forest-lemon": ["06:00", "22:30"], "rural-university": ["06:10", "22:40"], "sim": ["06:00", "22:30"], "lot-37": ["06:10", "22:40"] } },
+        "weekend": { "everyMinutes": 120, "windows": { "forest-lemon": ["09:00", "19:00"], "rural-university": ["09:10", "19:10"], "sim": ["08:00", "18:00"], "lot-37": ["08:10", "18:10"] } }
+      }
+    },
+    {
+      "id": "maroon",
+      "name": "Tempe-Downtown Phoenix-West Valley (Maroon)",
+      "url": "https://cfo.asu.edu/maroon-route",
+      "stops": [
+        { "id": "university-way-north", "name": "University Way North", "campus": "west" },
+        { "id": "central-polk", "name": "Central Avenue, north of Polk Street", "campus": "downtown" },
+        { "id": "forest-lemon", "name": "Forest Avenue and Lemon Street", "campus": "tempe" }
+      ],
+      "rideMinutes": [
+        { "between": ["west", "downtown"], "minutes": 30 },
+        { "between": ["downtown", "tempe"], "minutes": 30 },
+        { "between": ["west", "tempe"], "minutes": 60 }
+      ],
+      "service": {
+        "weekday": { "everyMinutes": 15, "windows": { "university-way-north": ["06:00", "22:30"], "central-polk": ["06:30", "23:00"], "forest-lemon": ["06:00", "22:30"] } },
+        "weekend": { "everyMinutes": 120, "windows": { "university-way-north": ["08:00", "18:00"], "central-polk": ["08:30", "19:30"], "forest-lemon": ["09:00", "19:00"] } }
+      }
+    },
+    {
+      "id": "mercado",
+      "name": "Mercado (Downtown Phoenix-Tempe)",
+      "url": "https://cfo.asu.edu/mercado-route",
+      "stops": [
+        { "id": "forest-lemon", "name": "Forest Avenue and Lemon Street", "campus": "tempe" },
+        { "id": "fifth-mercado", "name": "Fifth Street at Mercado", "campus": "downtown" },
+        { "id": "central-polk", "name": "Central Avenue, north of Polk Street", "campus": "downtown" }
+      ],
+      "rideMinutes": [],
+      "service": {
+        "weekday": { "everyMinutes": 60, "windows": { "forest-lemon": ["06:30", "19:35"], "fifth-mercado": ["07:00", "20:08"], "central-polk": ["07:04", "20:04"] } }
+      }
+    },
+    {
+      "id": "tempe-west-express",
+      "name": "Tempe-West Valley Express",
+      "url": "https://cfo.asu.edu/tempe-west-express",
+      "stops": [
+        { "id": "university-way-north", "name": "University Way North", "campus": "west" },
+        { "id": "forest-lemon", "name": "Forest Avenue and Lemon Street", "campus": "tempe" }
+      ],
+      "rideMinutes": [{ "between": ["west", "tempe"], "minutes": 50 }],
+      "service": {
+        "weekday": { "everyMinutes": 60, "windows": { "university-way-north": ["06:50", "16:50"], "forest-lemon": ["06:50", "16:50"] } }
+      }
+    }
+  ]
+}
