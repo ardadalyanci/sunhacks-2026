@@ -44,7 +44,7 @@ function Icon({ row }: { row: DayRow }) {
 /** The day as a plain, large, chronological list: the same facts as the sky timeline. */
 export default function DayList({ date, items, nowMs, selectedId, onSelect }: Props) {
   const rows = dayRows(items, date, nowMs);
-  if (rows.length === 0) return <p className="rounded-3xl bg-cloud p-5 text-lg">Nothing on this day yet.</p>;
+  if (rows.length === 0) return <p className="rounded-2xl border border-line bg-surface p-5 text-lg">Nothing on this day yet.</p>;
 
   return (
     <ol aria-label="Your day as a list" className="space-y-2">

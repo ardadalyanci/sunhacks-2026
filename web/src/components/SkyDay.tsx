@@ -312,7 +312,7 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
           type="button"
           onClick={togglePlay}
           aria-pressed={playing}
-          className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90"
+          className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 font-semibold text-cloud hover:bg-ink/90"
         >
           <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
             {playing ? <rect x="3" y="3" width="10" height="10" rx="1.5" /> : <path d="M4 2.5v11l9.5-5.5z" />}
@@ -326,7 +326,7 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
 
       <div
         ref={sky}
-        className="relative overflow-hidden rounded-3xl border border-ink/15"
+        className="relative overflow-hidden rounded-2xl border border-line"
         style={{ height, background: skyBackground(y, hot, sun) }}
       >
       {hours.map((h) => (

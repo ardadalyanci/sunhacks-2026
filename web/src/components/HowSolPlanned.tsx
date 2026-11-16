@@ -15,7 +15,7 @@ export default function HowSolPlanned({ plan, request, isDemo, later }: Props) {
   const facts = planFacts(request, plan, { isDemo, later });
   const sources = planSources(plan);
   return (
-    <details className="mt-8 rounded-3xl bg-cloud/70 p-5">
+    <details className="mt-8 rounded-2xl border border-line bg-surface/70 p-5">
       <summary className="cursor-pointer py-2 font-display text-xl font-bold">How {MASCOT} planned this day</summary>
       <ol className="mt-3 max-w-prose list-decimal space-y-3 pl-6 leading-relaxed marker:font-bold">
         {facts.map((f) => (

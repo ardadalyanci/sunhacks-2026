@@ -68,7 +68,7 @@ function HeatCard({ title, wide }: { title: string; wide: boolean }) {
   return (
     <section
       aria-labelledby={id}
-      className={`rounded-3xl bg-gradient-to-r from-[#FFC627] to-[#F97316] text-ink ${
+      className={`rounded-2xl bg-gradient-to-r from-[#FFC627] to-[#F97316] text-ink ${
         wide ? "mt-4 hidden p-5 lg:block" : "mt-4 flex items-center gap-4 p-5 sm:p-6 lg:hidden"
       }`}
     >
@@ -173,12 +173,12 @@ export default function TodayPage() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+              className="rounded-lg bg-ink px-5 py-3 font-semibold text-cloud hover:bg-ink/90"
             >
               Try again
             </button>
             {hasSetup && (
-              <Link href="/setup" className="rounded-full border-2 border-ink px-5 py-3 font-bold hover:bg-ink/10">
+              <Link href="/setup" className="rounded-lg border border-line bg-surface px-5 py-3 font-semibold hover:border-ink/40">
                 Check your setup
               </Link>
             )}
@@ -251,32 +251,34 @@ export default function TodayPage() {
   return (
     <div ref={grid} className="lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-10">
       {day.isDemo && (
-        <p className={`mb-6 rounded-2xl bg-cloud/70 px-4 py-3 ${AT.full}`}>
+        <p className={`mb-6 rounded-xl border border-line bg-surface px-4 py-3 text-[15px] ${AT.full}`}>
           This is a sample day for {firstName || "a student"}, a CS sophomore.{" "}
-          <Link href="/setup" className="font-bold underline underline-offset-4">
+          <Link href="/setup" className="font-semibold underline underline-offset-4">
             Set up yours
           </Link>{" "}
           in two minutes.
         </p>
       )}
-      {!day.isDemo && day.notice && <p className={`mb-6 rounded-2xl bg-sun-soft px-4 py-3 ${AT.full}`}>{day.notice}</p>}
+      {!day.isDemo && day.notice && (
+        <p className={`mb-6 rounded-xl border border-sun/40 bg-sun-soft/60 px-4 py-3 text-[15px] ${AT.full}`}>{day.notice}</p>
+      )}
 
       <div ref={hero} className={`min-w-0 ${AT.hero}`}>
         {/* Only the switch to another day is spoken; a pill press is told once, by Sol's note under the pills. */}
         <span aria-live="polite" className="sr-only">
           {day.switching ? `Planning ${formatDay(chosen.date)}…` : ""}
         </span>
-        <p className="text-lg text-ink-soft">
+        <p className="text-[15px] font-medium text-ink-soft">
           {day.switching
             ? `Planning ${formatDay(chosen.date)}…`
             : `${later ? "Preview of " : ""}${formatDay(plan.date)}${weatherLine}`}
         </p>
-        <h1 className="font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{headline}</h1>
+        <h1 className="mt-1 font-display text-[2rem] font-bold leading-tight tracking-tight sm:text-[2.75rem]">{headline}</h1>
         {walk && (
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <p className="text-lg">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-[17px]">
               {walk.item.title} {isCourse(walk.item.title) ? "in" : "at"}{" "}
-              <span className="font-bold">{placeLabel(walk.item.location)}</span> ·{" "}
+              <span className="font-semibold">{placeLabel(walk.item.location)}</span> ·{" "}
               {tripLabel(walk.item, walk.minutes)}
               {!later && !walk.now ? ` · in ${untilText(walk.leaveMs - nowMs)}` : ""}
             </p>
@@ -286,7 +288,7 @@ export default function TodayPage() {
                 href={walkLink(walk.item.location, walk.item.campus)}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"
+                className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-3.5 text-[15px] font-semibold hover:border-ink/40"
               >
                 Walk me there
               </a>
@@ -295,14 +297,14 @@ export default function TodayPage() {
                 href={SHUTTLE_TRACKER}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"
+                className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-3.5 text-[15px] font-semibold hover:border-ink/40"
               >
                 Where’s my shuttle?
               </a>
             ) : null}
           </div>
         )}
-        {tight && <p className="mt-2 max-w-prose font-bold text-[#8C1D40]">{tight}</p>}
+        {tight && <p className="mt-2 max-w-prose font-semibold text-[#8C1D40]">{tight}</p>}
         <DayPicker days={chosen.days} date={chosen.date} />
         {/* "What if…" pills (heat, oversleeping, a cancelled class) and Sol's one-line note on what changed. */}
         {!later && <WhatIfBar day={day} />}
@@ -318,40 +320,30 @@ export default function TodayPage() {
         <section
           aria-busy={day.switching}
           aria-label={`${MASCOT}’s briefing`}
-          className={`relative mt-10 flex flex-col sm:mt-4 sm:flex-row sm:items-start sm:gap-4 lg:mt-0 lg:flex-col lg:gap-3 ${dim}`}
+          className={`mt-8 rounded-2xl border border-line bg-surface p-5 sm:p-6 lg:mt-0 lg:p-5 ${dim}`}
         >
-          {/* On a phone Sol is small and sits on his bubble's top edge; from sm up he stands beside it (above it on
-              a laptop) and the bubble's tail points at him. */}
-          <div
-            className={`absolute -top-8 left-4 z-10 shrink-0 sm:static sm:mt-2 sm:self-start lg:mt-0 lg:ml-6 ${
-              listening ? "mascot-listening" : speaking ? "mascot-talking" : ""
-            }`}
-          >
-            <Mascot size={112} mood={mood} animated className="h-16 w-16 sm:h-28 sm:w-28 lg:h-20 lg:w-20" />
-          </div>
-          <div className="relative min-w-0 flex-1 rounded-3xl bg-cloud p-5 sm:p-6 lg:w-full lg:p-5">
-            <span
-              aria-hidden
-              className="absolute hidden h-5 w-5 rotate-45 bg-cloud sm:top-10 sm:-left-2 sm:block lg:-top-2 lg:left-[54px]"
-            />
-            {/* Room on the first lines for the half of Sol that sits inside the bubble on a phone. */}
-            <span aria-hidden className="float-left h-4 w-[4.25rem] sm:hidden" />
-            <p className="relative max-w-prose text-lg leading-relaxed lg:text-base">{plan.briefing}</p>
-            {!plan.aiUsed && (
-              <p className="mt-2 text-sm text-ink-soft">
-                Gemini is not connected, so {MASCOT} planned this with plain rules.
-              </p>
-            )}
-            <div className="relative mt-4">
-              {/* A new day starts with a clean voice bar, not the last day's answer. */}
-              <VoiceBar
-                key={plan.date}
-                briefing={plan.briefing}
-                onCommand={day.command}
-                onListeningChange={setListening}
-                onSpeakingChange={setSpeaking}
-              />
+          <div className="flex items-center gap-3">
+            <div className={`shrink-0 ${listening ? "mascot-listening" : speaking ? "mascot-talking" : ""}`}>
+              <Mascot size={52} mood={mood} animated />
             </div>
+            <div>
+              <h2 className="font-display text-lg font-bold leading-tight">{MASCOT}’s take on your day</h2>
+              <p className="text-sm text-ink-soft">From your classes, Canvas and the weather</p>
+            </div>
+          </div>
+          <p className="mt-4 max-w-prose text-base leading-relaxed">{plan.briefing}</p>
+          {!plan.aiUsed && (
+            <p className="mt-2 text-sm text-ink-soft">Gemini is not connected, so {MASCOT} planned this with plain rules.</p>
+          )}
+          <div className="mt-4">
+            {/* A new day starts with a clean voice bar, not the last day's answer. */}
+            <VoiceBar
+              key={plan.date}
+              briefing={plan.briefing}
+              onCommand={day.command}
+              onListeningChange={setListening}
+              onSpeakingChange={setSpeaking}
+            />
           </div>
         </section>
         {heat && <HeatCard title={heatTitle} wide />}
@@ -364,7 +356,7 @@ export default function TodayPage() {
             type="button"
             aria-pressed={view === "list"}
             onClick={() => setView(view === "list" ? "sky" : "list")}
-            className="min-h-10 rounded-full px-3 py-2 font-bold underline underline-offset-4 hover:bg-ink/10"
+            className="min-h-10 rounded-lg px-3 py-2 font-semibold underline underline-offset-4 hover:bg-ink/10"
           >
             {view === "list" ? "Show the sky" : "Show as a list"}
           </button>
@@ -402,7 +394,7 @@ export default function TodayPage() {
             <section
               ref={sheet}
               aria-labelledby="selected-title"
-              className="fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto overscroll-contain rounded-t-3xl bg-cloud px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-10px_40px_rgba(20,50,74,0.28)] motion-safe:transition-[translate,opacity] motion-safe:duration-200 max-lg:starting:translate-y-8 max-lg:starting:opacity-0 lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-3xl lg:p-5 lg:shadow-none"
+              className="fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto overscroll-contain rounded-t-2xl bg-surface px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-10px_40px_rgba(20,50,74,0.28)] motion-safe:transition-[translate,opacity] motion-safe:duration-200 max-lg:starting:translate-y-8 max-lg:starting:opacity-0 lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-2xl lg:border lg:border-line lg:p-5 lg:shadow-none"
             >
               <span aria-hidden className="mx-auto mb-3 block h-1.5 w-12 rounded-full bg-ink/20 lg:hidden" />
               <p className="font-bold text-ink-soft">
@@ -416,7 +408,7 @@ export default function TodayPage() {
                 id="selected-title"
                 ref={cardTitle}
                 tabIndex={-1}
-                className="mt-1 font-display text-2xl font-bold leading-tight outline-none"
+                className="mt-1 font-display text-xl font-bold leading-tight outline-none"
               >
                 {selected.title}
               </h2>
@@ -455,7 +447,7 @@ export default function TodayPage() {
                     type="button"
                     disabled={day.busy}
                     onClick={() => void day.accept(selected.id)}
-                    className="rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50"
+                    className="rounded-lg bg-ink px-4 py-2 font-semibold text-cloud hover:bg-ink/90 disabled:opacity-50"
                   >
                     Add to my day
                   </button>
@@ -465,7 +457,7 @@ export default function TodayPage() {
                     href={selected.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                    className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
                   >
                     {selected.type === "deadline" ? "Open in Canvas" : "Open event page"}
                   </a>
@@ -478,7 +470,7 @@ export default function TodayPage() {
                       void day.unaccept(selected.id);
                       setSelectedId(null);
                     }}
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10 disabled:opacity-50"
+                    className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40 disabled:opacity-50"
                   >
                     Remove from my day
                   </button>
@@ -490,7 +482,7 @@ export default function TodayPage() {
                       day.hide(selected.id);
                       setSelectedId(null);
                     }}
-                    className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+                    className="rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
                   >
                     Remove this block
                   </button>
@@ -498,7 +490,7 @@ export default function TodayPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedId(null)}
-                  className="rounded-full px-4 py-2 font-bold hover:bg-ink/10"
+                  className="rounded-lg px-4 py-2 font-semibold hover:bg-ink/10"
                 >
                   Close
                 </button>
@@ -507,8 +499,8 @@ export default function TodayPage() {
           )}
         </div>
 
-        <section className={`rounded-3xl bg-cloud p-5 ${underCard}`}>
-          <h2 className="font-display text-2xl font-bold">Due soon</h2>
+        <section className={`rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
+          <h2 className="font-display text-xl font-bold">Due soon</h2>
           {deadlines.length === 0 && (
             <p className="mt-2 text-ink-soft">Nothing due. Add your Canvas token in Setup to see assignments.</p>
           )}
@@ -517,7 +509,7 @@ export default function TodayPage() {
               const date = parseLocal(d.start).date;
               return (
                 <li key={d.id} className="border-t border-ink/10 py-3 first:border-t-0">
-                  <p className="font-bold leading-snug">{d.title}</p>
+                  <p className="font-semibold leading-snug">{d.title}</p>
                   <p className="text-ink-soft">
                     Due {dueDay(date)} at {clock(d.start)}
                   </p>
@@ -531,12 +523,12 @@ export default function TodayPage() {
         </section>
 
         {plan.suggestions.length > 0 && (
-          <section className={`mt-4 rounded-3xl bg-sun-soft p-5 ${underCard}`}>
-            <h2 className="font-display text-2xl font-bold">Fits your day</h2>
+          <section className={`mt-4 rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
+            <h2 className="font-display text-xl font-bold">Fits your day</h2>
             <ul className="mt-2">
               {plan.suggestions.map((s) => (
                 <li key={s.id} className="border-t border-ink/15 py-3 first:border-t-0">
-                  <p className="font-bold leading-snug">{s.title}</p>
+                  <p className="font-semibold leading-snug">{s.title}</p>
                   <p className="text-ink-soft">
                     {clock(s.start)}
                     {s.location ? `, ${placeLabel(s.location)}` : ""}
@@ -546,7 +538,7 @@ export default function TodayPage() {
                     type="button"
                     disabled={day.busy}
                     onClick={() => void day.accept(s.id)}
-                    className="mt-2 rounded-full bg-ink px-4 py-2 font-bold text-cloud hover:bg-ink/90 disabled:opacity-50"
+                    className="mt-2 rounded-lg bg-ink px-4 py-2 font-semibold text-cloud hover:bg-ink/90 disabled:opacity-50"
                   >
                     Add to my day
                   </button>

@@ -32,8 +32,8 @@ function Pill({ on, disabled, onToggle, onClass, label, children }: PillProps) {
       aria-label={label}
       disabled={disabled}
       onClick={onToggle}
-      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 px-4 py-2 text-left font-bold leading-tight disabled:opacity-50 ${
-        on ? onClass : "border-ink/20 bg-cloud hover:border-ink"
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 py-2 text-left text-[15px] font-semibold leading-tight disabled:opacity-50 ${
+        on ? onClass : "border-line bg-surface hover:border-ink/40"
       }`}
     >
       {on && (
@@ -60,7 +60,7 @@ export default function WhatIfBar({ day }: Props) {
   return (
     <div className="mt-3">
       <div role="group" aria-label="What if…" className="flex flex-wrap items-center gap-2">
-        <span aria-hidden className="font-bold sm:hidden">
+        <span aria-hidden className="text-sm font-semibold text-ink-soft sm:hidden">
           What if…
         </span>
         <Pill
@@ -105,15 +105,15 @@ export default function WhatIfBar({ day }: Props) {
             {change && (
               <p
                 aria-hidden={replanning || undefined}
-                className={`flex items-start gap-3 rounded-2xl bg-sun-soft px-4 py-3 [grid-area:1/1] ${replanning ? "invisible" : ""}`}
+                className={`flex items-start gap-3 rounded-xl border border-sun/40 bg-sun-soft/60 px-4 py-3 [grid-area:1/1] ${replanning ? "invisible" : ""}`}
               >
-                <Mascot size={32} label="" className="mt-0.5 shrink-0" />
+                <Mascot size={26} label="" className="mt-0.5 shrink-0" />
                 <span>{change}</span>
               </p>
             )}
             {replanning && (
-              <p className="flex items-start gap-3 rounded-2xl bg-sun-soft px-4 py-3 [grid-area:1/1]">
-                <Mascot size={32} label="" className="mt-0.5 shrink-0" />
+              <p className="flex items-start gap-3 rounded-xl border border-sun/40 bg-sun-soft/60 px-4 py-3 [grid-area:1/1]">
+                <Mascot size={26} label="" className="mt-0.5 shrink-0" />
                 <span className="motion-safe:animate-pulse">{MASCOT} is re-planning your day…</span>
               </p>
             )}

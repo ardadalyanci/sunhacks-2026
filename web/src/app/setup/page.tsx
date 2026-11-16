@@ -34,7 +34,7 @@ const METHODS: { value: Method; label: string }[] = [
   { value: "type", label: "Type them in" },
 ];
 
-const field = "mt-1 w-full rounded-2xl border-2 border-ink/20 bg-cloud px-4 py-3 focus:border-ink";
+const field = "mt-1 w-full rounded-xl border border-line bg-surface px-4 py-3 focus:border-ink";
 
 const emptyClass = (): ClassBlock => ({ course: "", days: [], start: "09:00", end: "09:50", location: "" });
 
@@ -249,7 +249,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <Link href="/" className="flex items-center gap-2">
         <Mascot size={40} label="" />
-        <span className="font-display text-2xl font-bold tracking-tight">{PRODUCT}</span>
+        <span className="font-display text-xl font-bold tracking-tight">{PRODUCT}</span>
       </Link>
 
       <div className="mt-10 flex items-center gap-4">
@@ -268,7 +268,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
 
       <form onSubmit={submit} className="mt-10 space-y-12">
         <label className="block">
-          <span className="font-display text-2xl font-bold">What should {MASCOT} call you?</span>
+          <span className="font-display text-xl font-bold">What should {MASCOT} call you?</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -279,13 +279,13 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
         </label>
 
         <fieldset>
-          <legend className="font-display text-2xl font-bold">1. Connect Canvas</legend>
+          <legend className="font-display text-xl font-bold">1. Connect Canvas</legend>
           <p className="mt-1 text-ink-soft">So {MASCOT} can see what’s due and whether you turned it in.</p>
           <a
             href={CANVAS_SETTINGS}
             target="_blank"
             rel="noreferrer"
-            className="mt-4 inline-block rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+            className="mt-4 inline-block rounded-lg bg-ink px-5 py-3 font-semibold text-cloud hover:bg-ink/90"
           >
             Open my Canvas settings
           </a>
@@ -305,7 +305,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
               className={field}
             />
           </label>
-          <div className="mt-4 space-y-2 rounded-3xl bg-cloud p-4 text-sm">
+          <div className="mt-4 space-y-2 rounded-2xl border border-line bg-surface p-4 text-sm">
             <p>
               <span className="font-bold">What {PRODUCT} reads:</span> your Canvas to-do list, planner and course
               names.
@@ -339,7 +339,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
         </fieldset>
 
         <fieldset>
-          <legend className="font-display text-2xl font-bold">2. Add your classes</legend>
+          <legend className="font-display text-xl font-bold">2. Add your classes</legend>
           <p className="mt-1 text-ink-soft">
             Snap your class schedule or paste it from MyASU, and {MASCOT} fills in the rest.
           </p>
@@ -351,8 +351,8 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                 type="button"
                 aria-pressed={method === m.value}
                 onClick={() => chooseMethod(m.value)}
-                className={`rounded-full border-2 px-4 py-2 font-bold ${
-                  method === m.value ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
+                className={`min-h-10 rounded-full border px-3.5 py-2 text-[15px] font-semibold ${
+                  method === m.value ? "border-ink bg-ink text-cloud" : "border-line bg-surface hover:border-ink/40"
                 }`}
               >
                 {m.label}
@@ -361,7 +361,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
           </div>
 
           {method === "photo" && (
-            <label className="mt-4 block cursor-pointer rounded-3xl border-2 border-dashed border-ink/30 bg-cloud p-6 text-center hover:border-ink">
+            <label className="mt-4 block cursor-pointer rounded-2xl border-2 border-dashed border-line bg-surface p-6 text-center hover:border-ink">
               <span className="block font-display text-xl font-bold">
                 {photo ? photo.name : "Take a photo or choose a screenshot"}
               </span>
@@ -395,7 +395,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
               type="button"
               disabled={!canRead || reading}
               onClick={readSchedule}
-              className="mt-4 rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-4 rounded-lg bg-ink px-5 py-3 font-semibold text-cloud hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {reading ? "Reading…" : "Read my schedule"}
             </button>
@@ -412,7 +412,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                 return (
                   <div
                     key={index}
-                    className={`rounded-3xl border-2 bg-cloud p-4 ${issue ? "border-[#b91c1c]" : "border-ink/15"}`}
+                    className={`rounded-2xl border bg-surface p-4 ${issue ? "border-[#b91c1c]" : "border-line"}`}
                   >
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
@@ -482,9 +482,9 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                             type="button"
                             aria-pressed={on}
                             onClick={() => toggleDay(index, day)}
-                            className={`min-h-10 rounded-full border-2 px-3 py-1.5 font-bold ${
-                              on ? "border-ink bg-ink text-cloud" : "border-ink/20 hover:border-ink"
-                            }`}
+                            className={`min-h-10 rounded-full border px-3.5 py-2 text-[15px] font-semibold ${
+                  on ? "border-ink bg-ink text-cloud" : "border-line bg-surface hover:border-ink/40"
+                }`}
                           >
                             {day}
                           </button>
@@ -493,7 +493,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                       <button
                         type="button"
                         onClick={() => setClasses((prev) => prev.filter((_, i) => i !== index))}
-                        className="ml-auto min-h-10 rounded-full px-3 py-1.5 font-bold text-ink-soft hover:bg-ink/10"
+                        className="ml-auto min-h-10 rounded-lg px-3 py-1.5 font-semibold text-ink-soft hover:bg-ink/10"
                       >
                         Remove
                       </button>
@@ -509,7 +509,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
             <button
               type="button"
               onClick={() => setClasses((prev) => [...prev, emptyClass()])}
-              className="mt-4 rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10"
+              className="mt-4 rounded-lg border border-line bg-surface px-4 py-2 font-semibold hover:border-ink/40"
             >
               Add a class or a shift
             </button>
@@ -529,9 +529,9 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                   type="button"
                   aria-pressed={offCampus === choice.off}
                   onClick={() => setOffCampus(choice.off)}
-                  className={`rounded-full border-2 px-4 py-2 font-bold ${
-                    offCampus === choice.off ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
-                  }`}
+                  className={`min-h-10 rounded-full border px-3.5 py-2 text-[15px] font-semibold ${
+                  offCampus === choice.off ? "border-ink bg-ink text-cloud" : "border-line bg-surface hover:border-ink/40"
+                }`}
                 >
                   {choice.label}
                 </button>
@@ -560,7 +560,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                     type="button"
                     disabled={finding || address.trim().length < 3}
                     onClick={findHome}
-                    className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-lg bg-ink px-5 py-3 font-semibold text-cloud hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {finding ? "Finding…" : "Find on map"}
                   </button>
@@ -577,7 +577,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                         <button
                           type="button"
                           onClick={() => pickHome(place, place.label)}
-                          className="w-full rounded-2xl border-2 border-ink/20 bg-cloud px-4 py-2 text-left font-bold hover:border-ink"
+                          className="w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-left font-semibold hover:border-ink/40"
                         >
                           {place.label}
                         </button>
@@ -597,9 +597,9 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                       type="button"
                       aria-pressed={commuteBy === choice.by}
                       onClick={() => setCommuteBy(choice.by)}
-                      className={`min-h-10 rounded-full border-2 px-3 py-1.5 font-bold ${
-                        commuteBy === choice.by ? "border-ink bg-ink text-cloud" : "border-ink/20 hover:border-ink"
-                      }`}
+                      className={`min-h-10 rounded-full border px-3.5 py-2 text-[15px] font-semibold ${
+                  commuteBy === choice.by ? "border-ink bg-ink text-cloud" : "border-line bg-surface hover:border-ink/40"
+                }`}
                     >
                       {choice.label}
                     </button>
@@ -711,7 +711,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
         </fieldset>
 
         <fieldset>
-          <legend className="font-display text-2xl font-bold">3. Pick what you enjoy</legend>
+          <legend className="font-display text-xl font-bold">3. Pick what you enjoy</legend>
           <p className="mt-1 text-ink-soft">{MASCOT} uses these to pick club events for you. Yes, free food counts.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {INTEREST_CHIPS.map(({ key, label }) => {
@@ -722,9 +722,9 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                   type="button"
                   aria-pressed={on}
                   onClick={() => toggleInterest(key)}
-                  className={`rounded-full border-2 px-4 py-2 font-bold ${
-                    on ? "border-dusk bg-dusk text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
-                  }`}
+                  className={`min-h-10 rounded-full border px-3.5 py-2 text-[15px] font-semibold ${
+                  on ? "border-dusk bg-dusk text-cloud" : "border-line bg-surface hover:border-ink/40"
+                }`}
                 >
                   {label}
                 </button>
@@ -734,7 +734,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
         </fieldset>
 
         <div className="flex flex-wrap items-center gap-3 border-t border-ink/15 pt-8">
-          <button type="submit" className="rounded-full bg-ink px-6 py-4 text-lg font-bold text-cloud hover:bg-ink/90">
+          <button type="submit" className="rounded-lg bg-ink px-6 py-4 text-lg font-semibold text-cloud hover:bg-ink/90">
             Plan my day
           </button>
           <button
@@ -743,7 +743,7 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
               clearSetup();
               router.push("/today");
             }}
-            className="rounded-full border-2 border-ink px-6 py-4 text-lg font-bold hover:bg-ink/10"
+            className="rounded-lg border border-line bg-surface px-6 py-4 text-lg font-semibold hover:border-ink/40"
           >
             Use the sample student
           </button>

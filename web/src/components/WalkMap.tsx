@@ -80,8 +80,8 @@ export default function WalkMap({ date, items, startBuildingId, hot, nextItemId,
   const route = stops.map((s) => s.place.word).join(", then ");
 
   return (
-    <section className="rounded-3xl bg-cloud p-5" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className="font-display text-2xl font-bold">
+    <section className="rounded-2xl border border-line bg-surface p-5" aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className="font-display text-xl font-bold">
         Your walks
       </h2>
       <p className="mt-1">{walkSummary(legs, hot)}</p>
@@ -246,7 +246,7 @@ export default function WalkMap({ date, items, startBuildingId, hot, nextItemId,
                     {leg.toNumber}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-bold leading-snug">
+                    <span className="block font-semibold leading-snug">
                       {leg.from.word} → {leg.to.word}
                     </span>
                     <span className="block leading-snug">

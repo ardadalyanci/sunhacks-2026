@@ -26,11 +26,11 @@ function backToToday(e: MouseEvent<HTMLAnchorElement>) {
 export default function AppNav() {
   const pathname = usePathname();
   return (
-    <header className="sticky top-0 z-30 border-b border-ink/10 bg-sky/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:gap-6">
+    <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-2.5 sm:gap-8">
         <Link href="/" className="flex shrink-0 items-center gap-2" aria-label={`${PRODUCT} home`}>
-          <Mascot size={38} label="" />
-          <span className="hidden font-display text-2xl font-bold tracking-tight sm:inline">{PRODUCT}</span>
+          <Mascot size={32} label="" />
+          <span className="hidden font-display text-xl font-bold tracking-tight sm:inline">{PRODUCT}</span>
         </Link>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto">
           {LINKS.map((link) => {
@@ -41,8 +41,8 @@ export default function AppNav() {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 onClick={active && link.href === "/today" ? backToToday : undefined}
-                className={`whitespace-nowrap rounded-full px-4 py-2 font-bold ${
-                  active ? "bg-ink text-cloud" : "hover:bg-ink/10"
+                className={`inline-flex min-h-10 items-center whitespace-nowrap rounded-lg px-3.5 text-[15px] font-semibold ${
+                  active ? "bg-ink/[0.07] text-ink" : "text-ink-soft hover:bg-ink/[0.04] hover:text-ink"
                 }`}
               >
                 {link.label}
