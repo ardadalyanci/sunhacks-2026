@@ -50,7 +50,9 @@ export function walkLegs(items: DayItem[], date: string, startBuildingId?: strin
     .filter((i) => (i.type === "class" || i.type === "event") && i.leaveAt && parseLocal(i.start).date === date)
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   for (const item of walks) {
-    const place = placeOf(item.buildingId ?? item.location);
+    // The map knows Tempe's buildings only: a stop on another campus is left off rather than drawn at a Tempe
+    // building of the same name (every campus has a Sun Devil Fitness Complex).
+    const place = item.campus && item.campus !== "tempe" ? undefined : placeOf(item.buildingId ?? item.location);
     if (!place) continue;
     const last = stops.at(-1);
     if (last && last.place.id === place.id) {

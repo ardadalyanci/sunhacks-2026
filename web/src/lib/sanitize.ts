@@ -136,6 +136,7 @@ export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "s
     const leaveAt = isoDate(v.leaveAt);
     const end = isoDate(v.end);
     const why = str(v.why, 200); // lets Sol answer "should I go to the lunch talk?" with his own reason
+    const via = str(v.via, 400); // the shuttle or the trip from home, so a leave answer does not call it a walk
     return {
       id,
       title,
@@ -146,6 +147,7 @@ export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "s
       ...(location ? { location } : {}),
       ...(leaveAt ? { leaveAt } : {}),
       ...(why ? { why } : {}),
+      ...(via ? { via } : {}),
     };
   };
   return {

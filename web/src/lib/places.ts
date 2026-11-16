@@ -1,5 +1,7 @@
 // ASU Tempe buildings in the words students use, shared by the server (Sol's briefing) and the UI (leave times).
 import raw from "./buildings.json";
+import otherCampuses from "./campus-buildings.json";
+import type { CampusId } from "./types";
 
 type Building = { id: string; name: string; lat: number; lng: number; aliases?: string[] };
 const BUILDINGS = raw as Building[];
@@ -88,10 +90,21 @@ function withRoom(word: string, room: string): string {
   return `${word.replace(/^the /, "")} ${room}`;
 }
 
-/** Google Maps walking directions to the building (or to the place's name in Tempe). */
-export function walkLink(location: string | undefined): string {
-  const { building } = findPlace(location);
-  const destination = building ? `${building.lat},${building.lng}` : `${location ?? ""}, Tempe, AZ`;
+// The other campuses' buildings (lib/campus-buildings.json) and the city each campus is in.
+const OTHER = otherCampuses as (Building & { campus: CampusId })[];
+const CITY: Record<CampusId, string> = { tempe: "Tempe", downtown: "Phoenix", polytechnic: "Mesa", west: "Glendale" };
+
+/** A building on Downtown, Polytechnic or West Valley whose name or alias starts the location ("Santan Hall 120"). */
+function otherCampusBuilding(location: string, campus: CampusId): Building | undefined {
+  const lower = location.trim().toLowerCase();
+  const starts = (n: string) => lower.startsWith(n.toLowerCase()) && !/[a-z0-9]/.test(lower.charAt(n.length));
+  return OTHER.find((b) => b.campus === campus && [b.name, ...(b.aliases ?? [])].some(starts));
+}
+
+/** Google Maps walking directions to the building (or to the place's name in the campus's city). */
+export function walkLink(location: string | undefined, campus: CampusId = "tempe"): string {
+  const building = campus === "tempe" ? findPlace(location).building : otherCampusBuilding(location ?? "", campus);
+  const destination = building ? `${building.lat},${building.lng}` : `${location ?? ""}, ${CITY[campus]}, AZ`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=walking`;
 }
 

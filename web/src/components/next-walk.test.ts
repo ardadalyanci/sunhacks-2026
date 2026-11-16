@@ -72,3 +72,11 @@ describe("tripLabel", () => {
     );
   });
 });
+
+describe("walkLink on other campuses", () => {
+  it("points at the building on the class's own campus, not Tempe's building of the same name", () => {
+    expect(walkLink("Santan Hall 120", "polytechnic")).toContain(encodeURIComponent("33.30612,-111.67812"));
+    expect(walkLink("SDFC", "polytechnic")).not.toBe(walkLink("SDFC"));
+    expect(walkLink("Room 9", "west")).toContain(encodeURIComponent("Room 9, Glendale, AZ"));
+  });
+});

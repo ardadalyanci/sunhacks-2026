@@ -14,6 +14,7 @@ import {
   isCourse,
   isOnline,
   mstDate,
+  onCampusThen,
   placeStudyBlocks,
   rankByOverlap,
   reserveTime,
@@ -449,6 +450,24 @@ describe("other campuses", () => {
     addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { minutes: 30, by: "bus" } });
     expect(stops[1].leaveAt).toBe("2026-11-16T09:30:00-07:00");
     expect(stops[1].why).toBe("Tight: that is 20 minutes before MAT 343 ends.");
+  });
+
+  it("picks only events on the campus the student is on at the time, and online ones", () => {
+    const stops = [
+      item({ id: "c1", type: "class", start: "2026-11-16T09:00:00-07:00", end: "2026-11-16T09:50:00-07:00", buildingId: "BYENG" }),
+      item({ id: "z", type: "class", start: "2026-11-16T12:00:00-07:00", location: "Zoom" }),
+      item({ id: "c2", type: "class", start: "2026-11-16T13:00:00-07:00", end: "2026-11-16T13:50:00-07:00", location: "Santan Hall 120", campus: "polytechnic" }),
+    ];
+    const events = [
+      item({ id: "early-poly", start: "2026-11-16T08:00:00-07:00", campus: "polytechnic" }),
+      item({ id: "tempe-noon", start: "2026-11-16T12:30:00-07:00" }),
+      item({ id: "poly-noon", start: "2026-11-16T12:30:00-07:00", campus: "polytechnic" }),
+      item({ id: "poly-late", start: "2026-11-16T15:00:00-07:00", campus: "polytechnic" }),
+      item({ id: "tempe-late", start: "2026-11-16T15:00:00-07:00" }),
+      item({ id: "online", start: "2026-11-16T15:00:00-07:00", location: "Online", campus: "polytechnic" }),
+    ];
+    expect(onCampusThen(events, stops).map((e) => e.id)).toEqual(["tempe-noon", "poly-late", "online"]);
+    expect(onCampusThen(events.slice(0, 1), [], "polytechnic").map((e) => e.id)).toEqual(["early-poly"]);
   });
 
   it("puts a class's campus on its timeline item", () => {

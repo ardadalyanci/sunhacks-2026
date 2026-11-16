@@ -229,6 +229,20 @@ export function fittingEvents(events: DayItem[], gaps: Gap[], now: number, trave
   });
 }
 
+/**
+ * Events on the campus the student is on at the time: the campus of their last stop before the event (online
+ * stops do not count), or `home` before the first one. An event a shuttle ride away is not a free-time pick.
+ * Online events always stay.
+ */
+export function onCampusThen(events: DayItem[], stops: DayItem[], home: CampusId = "tempe"): DayItem[] {
+  const placed = stops.filter((s) => !isOnline(s.location)).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  return events.filter((e) => {
+    if (isOnline(e.location)) return true;
+    const last = placed.filter((s) => Date.parse(s.start) <= Date.parse(e.start)).at(-1);
+    return (e.campus ?? "tempe") === (last ? (last.campus ?? "tempe") : home);
+  });
+}
+
 /** Removes [start, end) from the gaps in place, splitting a gap when the window sits in its middle. */
 export function reserveTime(gaps: Gap[], start: number, end: number) {
   for (let i = gaps.length - 1; i >= 0; i--) {

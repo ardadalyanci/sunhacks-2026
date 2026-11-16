@@ -283,7 +283,7 @@ export default function TodayPage() {
             {/* A campus walk gets walking directions; a shuttle ride gets ASU's live shuttle map. */}
             {!walk.item.via ? (
               <a
-                href={walkLink(walk.item.location)}
+                href={walkLink(walk.item.location, walk.item.campus)}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"

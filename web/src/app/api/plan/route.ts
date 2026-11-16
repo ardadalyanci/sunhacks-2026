@@ -16,6 +16,7 @@ import {
   fittingEvents,
   freeGaps,
   mstDate,
+  onCampusThen,
   opportunityToItem,
   pickCandidates,
   placeStudyBlocks,
@@ -82,8 +83,15 @@ export async function POST(request: Request) {
   // that held its time before the add is still known (see picksThenStudy).
   const classStops = sortByStart(classItems(body.classes, date, buildings));
   addLeaveTimes(classStops, buildings, body.startBuildingId, body.weather, slower, campusLegs);
-  const candidates = pickCandidates(fittingEvents(dayEvents, dayGaps(classStops), nowMs, travelMin), interests, MAX_CANDIDATES);
-  const fitsNow = new Set(fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin).map((e) => e.id));
+  // Only events on the campus the student is on at the time are picks (a shuttle ride away is not free time).
+  const home = body.homeCampus;
+  const candidates = pickCandidates(
+    fittingEvents(onCampusThen(dayEvents, classStops, home), dayGaps(classStops), nowMs, travelMin),
+    interests,
+    MAX_CANDIDATES,
+  );
+  const openEvents = onCampusThen(dayEvents.filter((e) => !accepted.has(e.id)), fixedStops, home);
+  const fitsNow = new Set(fittingEvents(openEvents, gaps, nowMs, travelMin).map((e) => e.id));
   const openDeadlines = deadlines.filter((d) => !d.done && Date.parse(d.start) > nowMs);
 
   // 3. Gemini, two calls in parallel: rank events for this student (best first), and estimate homework time on
