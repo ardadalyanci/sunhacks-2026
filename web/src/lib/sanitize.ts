@@ -1,6 +1,7 @@
 // Cleans untrusted JSON from the browser before the planner touches it. Broken entries are dropped
 // instead of crashing the route; only a missing `classes` array is an error.
 import type { ClassBlock, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
+import { isCampus } from "./campuses";
 
 const WEEKDAYS: Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const LIMITS = { classes: 30, deadlines: 200, events: 1000, interests: 20, accepted: 50, items: 200 };
@@ -44,7 +45,8 @@ function cleanClass(v: unknown): ClassBlock | null {
   const start = minutesOf(v.start);
   const end = minutesOf(v.end);
   if (!course || !days.length || start === null || end === null || end <= start) return null;
-  return { course, days, start: v.start as string, end: v.end as string, location: str(v.location, 80) };
+  const campus = isCampus(v.campus) && v.campus !== "tempe" ? { campus: v.campus } : {};
+  return { course, days, start: v.start as string, end: v.end as string, location: str(v.location, 80), ...campus };
 }
 
 function cleanDeadline(v: unknown): DayItem | null {
@@ -106,6 +108,7 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
       startBuildingId: str(raw.startBuildingId, 80),
       calendarId: isCalendarId(raw.calendarId) ? raw.calendarId : undefined,
       pace: raw.pace === "slower" ? "slower" : undefined,
+      homeCampus: isCampus(raw.homeCampus) ? raw.homeCampus : undefined,
     },
   };
 }

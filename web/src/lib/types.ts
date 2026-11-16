@@ -20,7 +20,12 @@ export interface DayItem {
   tags?: string[]; // for interest matching
   leaveAt?: string; // set by /api/plan for classes and events: when to start walking
   why?: string; // set by /api/plan for events: one sentence on why it fits the student
+  campus?: CampusId; // classes and events off the Tempe campus (absent = Tempe)
+  via?: string; // set by /api/plan when the stop is on another campus: the ASU shuttle to take, or why none fits
 }
+
+/** ASU's metro campuses (see lib/campuses.ts). */
+export type CampusId = "tempe" | "downtown" | "polytechnic" | "west";
 
 export interface Weather {
   tempF: number;
@@ -51,6 +56,7 @@ export interface PlanRequest {
   startBuildingId?: string; // where the day starts, e.g. the dorm; used for the first leave time
   calendarId?: string; // a UUID the browser makes once (crypto.randomUUID) and keeps; saves the day for the calendar feed
   pace?: "slower"; // the student asked for more walking time (slower pace, a mobility aid, heat-sensitive): longer walks, more again in heat
+  homeCampus?: CampusId; // where the day starts (with startBuildingId); absent = Tempe
 }
 
 // Result of POST /api/command: what the voice command asked for.
@@ -104,6 +110,7 @@ export interface ClassBlock {
   start: string; // local time "13:30"
   end: string; // local time "14:45"
   location?: string;
+  campus?: CampusId; // absent = Tempe
 }
 
 export interface Student {

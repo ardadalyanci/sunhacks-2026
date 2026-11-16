@@ -4,9 +4,14 @@
 // data/ at runtime. The import reads an exact copy inside web/ (./buildings.json), because reaching data/ needed
 // turbopack.root = repo root, which made `next dev` reload in a loop. buildings.test.ts fails if the copy drifts.
 import raw from "./buildings.json";
+import campusRaw from "./campus-buildings.json";
 import type { Building } from "./planner";
 
-const buildings: Building[] = (raw as Building[]).filter((b) => b && typeof b.id === "string" && Number.isFinite(b.lat) && Number.isFinite(b.lng));
+// Tempe (data/buildings.json, no campus field) plus Downtown, Polytechnic and West Valley (campus-buildings.json,
+// made by scripts/campus-buildings.mjs from OpenStreetMap). findBuilding looks on one campus at a time.
+const buildings: Building[] = [...(raw as Building[]), ...(campusRaw as Building[])].filter(
+  (b) => b && typeof b.id === "string" && Number.isFinite(b.lat) && Number.isFinite(b.lng),
+);
 
 export async function loadBuildings(): Promise<Building[]> {
   return buildings;

@@ -1,7 +1,8 @@
 // Pure planning math for POST /api/plan: no network, no Gemini. Everything here is deterministic,
 // so the Today screen still works when Gemini is unavailable.
 import { placeLabel, spokenAssignment, spokenStop } from "./places";
-import type { ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./types";
+import { CAMPUS_INFO } from "./campuses";
+import type { CampusId, ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./types";
 
 export const MST = "-07:00"; // Arizona: no daylight saving
 const MST_MS = 7 * 60 * 60 * 1000;
@@ -41,7 +42,11 @@ export interface Building {
   lat: number;
   lng: number;
   aliases?: string[];
+  campus?: CampusId; // absent = Tempe (data/buildings.json); others come from lib/campus-buildings.json
 }
+
+/** The ASU shuttle for a stop on another campus: when to be at the stop (none = no shuttle fits) and what to say. */
+export type ShuttleLeg = (from: CampusId, to: CampusId, arriveBy: string) => { beAtStopBy?: string; via: string } | undefined;
 
 // ---------- time helpers (all in Arizona time) ----------
 
@@ -88,9 +93,11 @@ export function hasPhrase(hay: string, needle: string): boolean {
 /**
  * Matches "BYENG", "BYENG 210", "Brickyard Engineering" or an alias as whole words, case-insensitively.
  * When several buildings match, the longest matching name wins ("Memorial Union" beats "MU").
+ * Only buildings on `campus` (default Tempe) count, so Poly's "Administration Building" never answers a Tempe class.
  */
-export function findBuilding(buildings: Building[], ref?: string): Building | undefined {
+export function findBuilding(all: Building[], ref?: string, campus: CampusId = "tempe"): Building | undefined {
   if (!ref?.trim() || isOnline(ref)) return undefined;
+  const buildings = all.filter((b) => (b.campus ?? "tempe") === campus);
   // A code in parentheses names the building: "Life Sciences Center E (LSE)" is the E wing, not "Life Sciences Center".
   const code = /\(([A-Z]{2,6})\)/.exec(ref)?.[1];
   const coded = code && buildings.find((b) => b.id === code);
@@ -143,9 +150,10 @@ export function classItems(classes: ClassBlock[], date: string, buildings: Build
       title: c.course,
       start: toMstIso(atTime(date, c.start)),
       end: toMstIso(atTime(date, c.end)),
-      buildingId: findBuilding(buildings, c.location)?.id,
+      buildingId: findBuilding(buildings, c.location, c.campus)?.id,
       location: c.location,
       source: "manual" as const,
+      ...(c.campus && c.campus !== "tempe" ? { campus: c.campus } : {}),
     }));
 }
 
@@ -161,17 +169,19 @@ export function eventTitle(o: Pick<Opportunity, "title" | "organizer">): string 
 
 export function opportunityToItem(o: Opportunity, buildings: Building[]): DayItem | null {
   if (!o.startsAt) return null;
+  const campus = o.campus === "downtown" || o.campus === "polytechnic" || o.campus === "west" ? o.campus : undefined;
   return {
     id: `ev-${o.id}`,
     type: "event",
     title: eventTitle(o),
     start: o.startsAt,
     end: o.endsAt ?? toMstIso(new Date(new Date(o.startsAt).getTime() + 60 * MIN)),
-    buildingId: findBuilding(buildings, o.location)?.id,
+    buildingId: findBuilding(buildings, o.location, campus)?.id,
     location: o.location,
     source: o.source === "sundevilcentral" ? "sundevilcentral" : "asu_events",
     url: o.url,
     tags: o.tags,
+    ...(campus ? { campus } : {}),
   };
 }
 
@@ -298,6 +308,8 @@ export function placeStudyBlocks(
  * break it gets the leave time for a walk from an unknown place. When a walk has to start before
  * the stop before it ends (a slower pace or the heat on a short break), the leave time stays honest and `why` says
  * so, starting with "Tight:".
+ * A stop on another campus (`item.campus`; the day starts on `home`, default Tempe) is reached by ASU shuttle:
+ * walk to the stop, be there when `shuttle` says, walk from the stop; `via` names the shuttle, or says none fits.
  */
 export function addLeaveTimes(
   items: DayItem[],
@@ -305,9 +317,19 @@ export function addLeaveTimes(
   startBuildingId: string | undefined,
   weather?: Weather,
   slower = false,
+  campuses: { home?: CampusId; shuttle?: ShuttleLeg } = {},
 ) {
   const hot = weather?.isHot ?? false;
-  let here = findBuilding(buildings, startBuildingId);
+  let hereCampus: CampusId = campuses.home ?? "tempe";
+  // Only a real squeeze: a stop that starts before the one before it ends is a clash, not a tight walk.
+  const markTight = (item: DayItem, before: DayItem | undefined, leave: number) => {
+    const beforeEnd = before ? new Date(before.end ?? before.start).getTime() : Number.NaN;
+    if (before && leave < beforeEnd && new Date(item.start).getTime() >= beforeEnd) {
+      const short = Math.ceil((beforeEnd - leave) / MIN);
+      item.why = `Tight: that is ${short} minute${short === 1 ? "" : "s"} before ${stopName(before)} ends.`;
+    }
+  };
+  let here = findBuilding(buildings, startBuildingId, hereCampus);
   let lastStop = here; // the building of the stop just before (undefined when that place is unknown)
   let prev: DayItem | undefined;
   for (const item of items) {
@@ -319,7 +341,24 @@ export function addLeaveTimes(
       delete item.leaveAt; // nothing to walk to; the student stays where they are
       continue;
     }
-    const there = findBuilding(buildings, item.buildingId ?? item.location);
+    delete item.via; // from an earlier plan of the same day
+    const itemCampus: CampusId = item.campus ?? "tempe";
+    const there = findBuilding(buildings, item.buildingId ?? item.location, itemCampus);
+    if (itemCampus !== hereCampus) {
+      // Another campus: the stops' own spots are not in our data, so both walks (to and from the stop) are the default walk.
+      const walk = walkMinutes(undefined, undefined, hot, slower) * MIN;
+      const leg = campuses.shuttle?.(hereCampus, itemCampus, toMstIso(new Date(new Date(item.start).getTime() - walk)));
+      if (leg?.beAtStopBy) {
+        const leave = new Date(leg.beAtStopBy).getTime() - walk;
+        item.leaveAt = toMstIso(new Date(leave));
+        markTight(item, before, leave);
+      } else delete item.leaveAt;
+      item.via = leg?.via ?? `No direct ASU shuttle from ${CAMPUS_INFO[hereCampus].name} to ${CAMPUS_INFO[itemCampus].name}.`;
+      hereCampus = itemCampus;
+      here = there;
+      lastStop = there;
+      continue;
+    }
     const sameBuilding = Boolean(lastStop && there && lastStop.id === there.id);
     lastStop = there;
     // Down the hall right after the stop before is no walk. After a longer break the student has likely left
@@ -333,12 +372,7 @@ export function addLeaveTimes(
     const leave = new Date(item.start).getTime() - walkMinutes(from, there, hot, slower) * MIN;
     item.leaveAt = toMstIso(new Date(leave));
     if (there) here = there;
-    // Only a real squeeze: a stop that starts before the one before it ends is a clash, not a tight walk.
-    const beforeEnd = before ? new Date(before.end ?? before.start).getTime() : Number.NaN;
-    if (before && leave < beforeEnd && new Date(item.start).getTime() >= beforeEnd) {
-      const short = Math.ceil((beforeEnd - leave) / MIN);
-      item.why = `Tight: that is ${short} minute${short === 1 ? "" : "s"} before ${stopName(before)} ends.`;
-    }
+    markTight(item, before, leave);
   }
 }
 

@@ -4,7 +4,8 @@
 // is the arrival time minus the ride minus one full wait (the worst case for a shuttle every N minutes).
 // Weekends use weekend service. Class breaks, summer and holidays are not encoded (dates not published here).
 import data from "./shuttles.json";
-import { atTime, clock, mstDate, toMstIso, weekdayOf } from "./planner";
+import { CAMPUS_INFO } from "./campuses";
+import { type ShuttleLeg, atTime, clock, mstDate, toMstIso, weekdayOf } from "./planner";
 
 import { type Campus, isCampus } from "./campuses";
 
@@ -120,3 +121,12 @@ export function shuttleOptions({ from, to, at = new Date(), arriveBy }: { from: 
           );
   return { from, to, date, period, options, note: NOTE, trackerUrl: data.trackerUrl };
 }
+
+/** The best shuttle for a planner leg (see addLeaveTimes): when to be at the stop, or why no shuttle fits. */
+export const shuttleLeg: ShuttleLeg = (from, to, arriveBy) => {
+  const { options } = shuttleOptions({ from, to, arriveBy });
+  const best = options.find((o) => o.beAtStopBy);
+  if (best) return { beAtStopBy: best.beAtStopBy, via: best.summary };
+  if (options[0]) return { via: options[0].summary };
+  return { via: `No direct ASU shuttle from ${CAMPUS_INFO[from].name} to ${CAMPUS_INFO[to].name}; change at Tempe.` };
+};

@@ -31,6 +31,7 @@ import { sanitizePlanRequest } from "@/lib/sanitize";
 import { FULL_DAY, isCourse, spokenItem, tidyBriefing } from "@/lib/say";
 import { savePlan } from "@/lib/saved-plans";
 import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
+import { shuttleLeg } from "@/lib/shuttles";
 
 const MAX_SUGGESTIONS = 3;
 const MAX_PICKS = 6; // Gemini ranks a few extra, because study blocks may take the time of some
@@ -68,8 +69,10 @@ export async function POST(request: Request) {
   // 2. Leave times for the fixed stops, then the free time left around them and the events that fit into it.
   //    A student who asked for more walking time gets it on every walk, including the one to a suggested event.
   const slower = body.pace === "slower";
+  // A class or event on another campus is reached by ASU shuttle (lib/shuttles.ts); the day starts on homeCampus.
+  const campusLegs = { home: body.homeCampus, shuttle: shuttleLeg };
   const fixedStops = sortByStart([...classes, ...acceptedEvents]);
-  addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather, slower);
+  addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather, slower, campusLegs);
   const dayGaps = (stops: DayItem[]) => freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), stops, CLASS_TRAVEL_BUFFER_MIN);
   const gaps = dayGaps(fixedStops);
   const travelMin = walkMinutes(undefined, undefined, body.weather?.isHot ?? false, slower);
@@ -77,7 +80,7 @@ export async function POST(request: Request) {
   // ones among them: the same question as before the add (a cached answer, not a new Gemini call), and the pick
   // that held its time before the add is still known (see picksThenStudy).
   const classStops = sortByStart(classItems(body.classes, date, buildings));
-  addLeaveTimes(classStops, buildings, body.startBuildingId, body.weather, slower);
+  addLeaveTimes(classStops, buildings, body.startBuildingId, body.weather, slower, campusLegs);
   const candidates = pickCandidates(fittingEvents(dayEvents, dayGaps(classStops), nowMs, travelMin), interests, MAX_CANDIDATES);
   const fitsNow = new Set(fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin).map((e) => e.id));
   const openDeadlines = deadlines.filter((d) => !d.done && Date.parse(d.start) > nowMs);
