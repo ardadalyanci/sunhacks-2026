@@ -111,6 +111,12 @@ export function shuttleOptions({ from, to, at = new Date(), arriveBy }: { from: 
       ? []
       : ROUTES.map((r) => option(r, from, to, date, period, arrive))
           .filter((o): o is ShuttleOption => o !== null)
-          .sort((a, b) => Number(b.running) - Number(a.running) || (a.rideMinutes ?? Infinity) - (b.rideMinutes ?? Infinity));
+          .sort(
+            (a, b) =>
+              Number(b.running) - Number(a.running) ||
+              // with an arrival time, the best route is the one that lets you leave latest
+              (b.beAtStopBy ? Date.parse(b.beAtStopBy) : -Infinity) - (a.beAtStopBy ? Date.parse(a.beAtStopBy) : -Infinity) ||
+              (a.rideMinutes ?? Infinity) - (b.rideMinutes ?? Infinity),
+          );
   return { from, to, date, period, options, note: NOTE, trackerUrl: data.trackerUrl };
 }
