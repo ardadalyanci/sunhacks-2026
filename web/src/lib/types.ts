@@ -24,11 +24,16 @@ export interface DayItem {
   via?: string; // set by /api/plan when the trip is not a campus walk: the ASU shuttle to take (or why none fits), or the trip from an off-campus home
 }
 
-/** How a student who lives off campus gets to campus; `minutes` is their own door-to-campus estimate. */
+/**
+ * How a student who lives off campus gets to class: from `home` (their point on the map, rounded to about 100 m)
+ * the planner works the minutes out per first stop; `minutes` is their own door-to-class estimate and wins.
+ * At least one of the two is set.
+ */
 export type CommuteBy = "walk" | "bike" | "scooter" | "drive" | "bus";
 export interface Commute {
-  minutes: number; // 1 to 120
   by: CommuteBy;
+  minutes?: number; // 1 to 120
+  home?: { lat: number; lng: number };
 }
 
 /** ASU's metro campuses (see lib/campuses.ts). */

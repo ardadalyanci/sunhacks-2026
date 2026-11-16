@@ -46,6 +46,14 @@ describe("loadSetup", () => {
     expect(loadSetup()).toEqual({ name: "Maya", classes: [tempe], interests: [] });
   });
 
+  it("keeps a home point from the map with its label, rounded, and drops one outside the Phoenix area", () => {
+    const setup = { name: "", classes: [cse360], interests: [], commute: { by: "drive" as const, home: { lat: 33.432, lng: -111.945 } }, homeLabel: "Tempe Center for the Arts" };
+    saveSetup(setup, "");
+    expect(loadSetup()).toEqual(setup);
+    localStorage.setItem("daypilot.setup", JSON.stringify({ ...setup, commute: { by: "drive", home: { lat: 32.22, lng: -110.97 } } }));
+    expect(loadSetup()).toEqual({ name: "", classes: [cse360], interests: [] });
+  });
+
   it("drops fields with the wrong type instead of crashing Today", () => {
     localStorage.setItem(
       "daypilot.setup",

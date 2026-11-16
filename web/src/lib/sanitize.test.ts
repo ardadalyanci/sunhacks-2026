@@ -79,6 +79,10 @@ describe("sanitizePlanRequest", () => {
     expect(commute({ minutes: 25, by: "helicopter" })).toBeUndefined();
     expect(commute({ minutes: Number.NaN, by: "drive" })).toBeUndefined();
     expect(commute(undefined)).toBeUndefined();
+    // A home point in the Phoenix area, rounded to about 100 m; minutes are then optional.
+    expect(commute({ by: "bike", home: { lat: 33.43164, lng: -111.94526 } })).toEqual({ by: "bike", home: { lat: 33.432, lng: -111.945 } });
+    expect(commute({ by: "bike", home: { lat: 32.22, lng: -110.97 } })).toBeUndefined(); // Tucson
+    expect(commute({ by: "bike", home: { lat: "33.4", lng: -111.9 } })).toBeUndefined();
   });
 
   it("derives isHot when it is missing", () => {

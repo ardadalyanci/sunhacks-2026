@@ -23,6 +23,7 @@ import {
   walkMinutes,
   weekdayOf,
 } from "./planner";
+import { commuteMinutes } from "./commute";
 import type { DayItem } from "./types";
 
 const MIN = 60_000;
@@ -450,6 +451,38 @@ describe("other campuses", () => {
     addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { minutes: 30, by: "bus" } });
     expect(stops[1].leaveAt).toBe("2026-11-16T09:30:00-07:00");
     expect(stops[1].why).toBe("Tight: that is 20 minutes before MAT 343 ends.");
+  });
+
+  it("goes straight from a home point to the first stop, on any campus, and says how far", () => {
+    const home = { lat: 33.4316, lng: -111.9452 }; // by Tempe Town Lake
+    const stops = [item({ id: "c1", type: "class", start: "2026-11-16T10:30:00-07:00", end: "2026-11-16T11:20:00-07:00", buildingId: "BYENG" })];
+    addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { by: "bike", home } });
+    const minutes = commuteMinutes(home, BUILDINGS[0], "bike");
+    expect(stops[0].leaveAt).toBe(toMstIso(new Date(ms(stops[0].start) - minutes * MIN)));
+    expect(stops[0].via).toBe(`From home by bike: about 0.8 miles, ${minutes} minutes.`);
+    // A home in Mesa driving to Poly goes straight there, not through Tempe and the shuttle.
+    const mesa = { lat: 33.39, lng: -111.75 };
+    const poly = [item({ id: "p", type: "class", start: "2026-11-16T11:30:00-07:00", location: "Santan Hall 120", campus: "polytechnic" })];
+    addLeaveTimes(poly, ALL, undefined, undefined, false, { home: "tempe", commute: { by: "drive", home: mesa }, shuttle: () => undefined });
+    expect(poly[0].via).toMatch(/^From home by car: about [\d.]+ miles, \d+ minutes\.$/);
+    expect(poly[0].leaveAt).toBe(toMstIso(new Date(ms(poly[0].start) - commuteMinutes(mesa, POLY[1], "drive") * MIN)));
+  });
+
+  it("takes the shuttle from the campus nearest home when going straight would take over two hours", () => {
+    const home = { lat: 33.4316, lng: -111.9452 }; // Tempe, walking to Poly: far over two hours
+    const stops = [item({ id: "p", type: "class", start: "2026-11-16T11:30:00-07:00", location: "Santan Hall 120", campus: "polytechnic" })];
+    const shuttle = () => ({ beAtStopBy: "2026-11-16T10:15:00-07:00", via: "Gold shuttle." });
+    addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { by: "walk", home }, shuttle });
+    const toTempe = commuteMinutes(home, { lat: 33.42, lng: -111.93 }, "walk");
+    expect(stops[0].leaveAt).toBe(toMstIso(new Date(ms("2026-11-16T10:15:00-07:00") - toTempe * MIN)));
+    expect(stops[0].via).toMatch(/^From home on foot to the Tempe campus: about [\d.]+ miles, \d+ minutes\. Then: Gold shuttle\.$/);
+  });
+
+  it("keeps the student's own minutes over the map estimate", () => {
+    const stops = [item({ id: "c1", type: "class", start: "2026-11-16T10:30:00-07:00", buildingId: "BYENG" })];
+    addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { by: "drive", minutes: 40, home: { lat: 33.4316, lng: -111.9452 } } });
+    expect(stops[0].leaveAt).toBe("2026-11-16T09:50:00-07:00");
+    expect(stops[0].via).toBe("From home by car: about 40 minutes, your own estimate.");
   });
 
   it("picks only events on the campus the student is on at the time, and online ones", () => {

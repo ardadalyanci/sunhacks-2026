@@ -2,6 +2,7 @@
 // instead of crashing the route; only a missing `classes` array is an error.
 import type { ClassBlock, Commute, CommuteBy, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
 import { isCampus } from "./campuses";
+import { inPhoenixArea, roundPoint } from "./commute";
 
 const WEEKDAYS: Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const LIMITS = { classes: 30, deadlines: 200, events: 1000, interests: 20, accepted: 50, items: 200 };
@@ -60,11 +61,18 @@ function cleanDeadline(v: unknown): DayItem | null {
 
 const COMMUTE_BY: CommuteBy[] = ["walk", "bike", "scooter", "drive", "bus"];
 
-/** An off-campus student's trip to campus: whole minutes from 1 to 120, and how they travel. */
+/**
+ * An off-campus student's trip to campus: how they travel, and their own whole minutes from 1 to 120 and/or their
+ * home point (in the Phoenix area, rounded to about 100 m). Neither one: no commute.
+ */
 function cleanCommute(v: unknown): Commute | undefined {
-  if (!isObj(v) || typeof v.minutes !== "number" || !Number.isFinite(v.minutes)) return undefined;
-  if (!COMMUTE_BY.includes(v.by as CommuteBy)) return undefined;
-  return { minutes: Math.min(120, Math.max(1, Math.round(v.minutes))), by: v.by as CommuteBy };
+  if (!isObj(v) || !COMMUTE_BY.includes(v.by as CommuteBy)) return undefined;
+  const minutes = typeof v.minutes === "number" && Number.isFinite(v.minutes) ? Math.min(120, Math.max(1, Math.round(v.minutes))) : undefined;
+  const h = isObj(v.home) ? v.home : undefined;
+  const point = h && typeof h.lat === "number" && typeof h.lng === "number" ? { lat: h.lat, lng: h.lng } : undefined;
+  const home = point && inPhoenixArea(point) ? roundPoint(point) : undefined;
+  if (minutes === undefined && !home) return undefined;
+  return { by: v.by as CommuteBy, ...(minutes !== undefined ? { minutes } : {}), ...(home ? { home } : {}) };
 }
 
 const EVENT_CAMPUSES = ["tempe", "downtown", "polytechnic", "west", "online"];

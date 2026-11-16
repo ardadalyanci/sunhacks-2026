@@ -3,7 +3,19 @@ import raw from "@/lib/buildings.json";
 import { demoClasses } from "@/lib/demo";
 import { addLeaveTimes, classItems, sortByStart, walkMinutes, type Building } from "@/lib/planner";
 import type { DayItem } from "@/lib/types";
-import { fitBounds, legCurve, markers, placeLabels, project, tilesFor, toWorld, walkLegs, walkSummary } from "./walk-map";
+import {
+  boundsAround,
+  fitBounds,
+  legCurve,
+  markers,
+  placeLabels,
+  project,
+  tilesFor,
+  toWorld,
+  unproject,
+  walkLegs,
+  walkSummary,
+} from "./walk-map";
 
 const buildings = raw as Building[];
 const byId = (id: string) => buildings.find((b) => b.id === id)!;
@@ -190,5 +202,20 @@ describe("drawing", () => {
     const [spot] = placeLabels([{ at: { x: 320, y: 120 }, radius: 11, text: "Manzanita" }], [], SIZE);
     expect(spot.box.x + spot.box.width).toBeLessThanOrEqual(SIZE.width);
     expect(spot.anchor).toBe("end");
+  });
+});
+
+describe("unproject", () => {
+  it("puts a tap back on the place that was drawn there", () => {
+    const bounds = boundsAround(33.432, -111.945, 700);
+    const size = { width: 340, height: 220 };
+    const center = project(33.432, -111.945, bounds, size);
+    expect(center.x).toBeCloseTo(170, 0);
+    expect(center.y).toBeCloseTo(110, 0);
+    for (const [lat, lng] of [[33.432, -111.945], [33.435, -111.95], [33.429, -111.94]]) {
+      const back = unproject(project(lat, lng, bounds, size), bounds, size);
+      expect(back.lat).toBeCloseTo(lat, 6);
+      expect(back.lng).toBeCloseTo(lng, 6);
+    }
   });
 });

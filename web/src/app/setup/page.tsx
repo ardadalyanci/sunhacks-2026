@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type FormEvent } from "react";
+import HomeMap from "@/components/HomeMap";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
 import { BUILDING_HINTS, CAMPUS_CHOICES, COMMUTE_CHOICES, STARTS } from "@/components/campus-options";
@@ -10,7 +11,17 @@ import { classProblem, isBlankClass } from "@/components/classes";
 import { INTEREST_CHIPS } from "@/components/interests";
 import { clearSetup, forgetToken, loadSetup, loadToken, saveSetup, type SavedSetup } from "@/components/setup-store";
 import { WEEKDAYS } from "@/components/time";
-import { isCampus } from "@/lib/campuses";
+import { CAMPUS_INFO, isCampus } from "@/lib/campuses";
+import {
+  COMMUTE_WORDS,
+  campusPoint,
+  commuteMinutes as estimateMinutes,
+  milesText,
+  nearestCampus,
+  roadMiles,
+  roundPoint,
+  type Point,
+} from "@/lib/commute";
 import type { CampusId, ClassBlock, CommuteBy, Weekday } from "@/lib/types";
 
 const CANVAS_SETTINGS = "https://canvas.asu.edu/profile/settings";
@@ -93,7 +104,13 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
   const [homeCampus, setHomeCampus] = useState<CampusId>(saved?.homeCampus ?? "tempe");
   const [offCampus, setOffCampus] = useState(Boolean(saved?.commute)); // lives off campus: the day starts with a commute
   const [commuteBy, setCommuteBy] = useState<CommuteBy>(saved?.commute?.by ?? "drive");
-  const [commuteMinutes, setCommuteMinutes] = useState(saved?.commute ? String(saved.commute.minutes) : "");
+  const [commuteMinutes, setCommuteMinutes] = useState(saved?.commute?.minutes ? String(saved.commute.minutes) : "");
+  const [address, setAddress] = useState(saved?.homeLabel ?? ""); // what the student typed; searched only on "Find on map"
+  const [home, setHome] = useState<Point | null>(saved?.commute?.home ?? null);
+  const [homeLabel, setHomeLabel] = useState(saved?.homeLabel ?? "");
+  const [places, setPlaces] = useState<(Point & { label: string })[]>([]);
+  const [finding, setFinding] = useState(false);
+  const [homeNote, setHomeNote] = useState("");
   const [slower, setSlower] = useState(saved?.pace === "slower"); // "Give me more time to walk"
   const [tokenNote, setTokenNote] = useState(
     tokenSaved ? "A Canvas token is saved in this tab. Leave this blank to keep it." : "",
@@ -119,6 +136,46 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
       setMessage(e instanceof TypeError ? OFFLINE : e instanceof Error ? e.message : CANT_READ);
     } finally {
       setReading(false);
+    }
+  }
+
+  function pickHome(point: Point, label: string) {
+    const rounded = roundPoint(point);
+    setHome(rounded);
+    setHomeLabel(label);
+    setHomeCampus(nearestCampus(rounded));
+    setPlaces([]);
+    setHomeNote("");
+  }
+
+  /** One OpenStreetMap search per press (POST /api/geocode); one match is picked, several are listed. */
+  async function findHome() {
+    const q = address.trim();
+    if (q.length < 3 || finding) return;
+    setFinding(true);
+    setHomeNote("");
+    try {
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ q }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { places?: (Point & { label: string })[]; error?: string };
+      if (!res.ok || !body.places) throw new Error(body.error ?? "The map search is not answering right now. Try again in a minute.");
+      if (body.places.length === 0) {
+        setPlaces([]);
+        setHomeNote("No match around Phoenix. Try the street number, street and city, like 1001 S Mill Ave, Tempe.");
+      } else if (body.places.length === 1) {
+        pickHome(body.places[0], body.places[0].label);
+      } else {
+        setPlaces(body.places);
+        setHomeNote("Which one is yours?");
+      }
+    } catch (e) {
+      const offline = "No connection. Check the Wi-Fi and try again, or type your minutes below.";
+      setHomeNote(e instanceof TypeError ? offline : e instanceof Error ? e.message : "");
+    } finally {
+      setFinding(false);
     }
   }
 
@@ -152,11 +209,16 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
       setSaveError("Some classes need a fix. They are marked in step 2.");
       return;
     }
-    const minutes = Number(commuteMinutes);
-    if (offCampus && !(Number.isInteger(minutes) && minutes >= 1 && minutes <= 120)) {
-      setSaveError("Add how many minutes it takes you to get from home to class, from 1 to 120.");
+    const typed = commuteMinutes.trim() ? Number(commuteMinutes) : undefined;
+    if (offCampus && typed !== undefined && !(Number.isInteger(typed) && typed >= 1 && typed <= 120)) {
+      setSaveError("Minutes from home to class go from 1 to 120.");
       return;
     }
+    if (offCampus && !home && typed === undefined) {
+      setSaveError("Find your home on the map, or type how many minutes it takes you to get to class.");
+      return;
+    }
+    const campus = offCampus && home ? nearestCampus(home) : homeCampus;
     const kept = rows.map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
     // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
     saveSetup(
@@ -165,8 +227,11 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
         classes: kept,
         interests,
         startBuildingId: !offCampus && start ? start : undefined,
-        homeCampus: homeCampus === "tempe" ? undefined : homeCampus,
-        commute: offCampus ? { minutes, by: commuteBy } : undefined,
+        homeCampus: campus === "tempe" ? undefined : campus,
+        commute: offCampus
+          ? { by: commuteBy, ...(home ? { home } : {}), ...(typed !== undefined ? { minutes: typed } : {}) }
+          : undefined,
+        homeLabel: offCampus && home && homeLabel ? homeLabel : undefined,
         pace: slower ? "slower" : undefined,
       },
       token.trim() || loadToken() || "", // blank keeps the token already saved in this tab
@@ -472,54 +537,56 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                 </button>
               ))}
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="font-bold">{offCampus ? "Campus closest to home" : "Campus"}</span>
-                <select
-                  value={homeCampus}
-                  onChange={(e) => {
-                    setHomeCampus(isCampus(e.target.value) ? e.target.value : "tempe");
-                    setStart(""); // a dorm on one campus is not a place on another
-                  }}
-                  className={field}
-                >
-                  {CAMPUS_CHOICES.map((choice) => (
-                    <option key={choice.id} value={choice.id}>
-                      {choice.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {offCampus ? (
-                <label className="block">
-                  <span className="font-bold">Minutes from your door to class</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={120}
-                    value={commuteMinutes}
-                    onChange={(e) => setCommuteMinutes(e.target.value)}
-                    placeholder="25"
-                    className={field}
-                  />
-                </label>
-              ) : (
-                <label className="block">
-                  <span className="font-bold">Building</span>
-                  <select value={start} onChange={(e) => setStart(e.target.value)} className={field}>
-                    <option value="">Not sure yet</option>
-                    {STARTS[homeCampus].map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
             {offCampus ? (
               <>
+                <div className="mt-4 flex flex-wrap items-end gap-2">
+                  <label className="block min-w-0 flex-1 basis-64">
+                    <span className="font-bold">Your home address</span>
+                    <input
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault(); // Enter looks the address up instead of saving the whole form
+                          findHome();
+                        }
+                      }}
+                      autoComplete="street-address"
+                      placeholder="1001 S Mill Ave, Tempe"
+                      className={field}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={finding || address.trim().length < 3}
+                    onClick={findHome}
+                    className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {finding ? "Finding…" : "Find on map"}
+                  </button>
+                </div>
+                {homeNote && (
+                  <p role="status" className="mt-2 font-bold">
+                    {homeNote}
+                  </p>
+                )}
+                {places.length > 1 && (
+                  <ul className="mt-2 space-y-2">
+                    {places.map((place) => (
+                      <li key={`${place.lat},${place.lng}`}>
+                        <button
+                          type="button"
+                          onClick={() => pickHome(place, place.label)}
+                          className="w-full rounded-2xl border-2 border-ink/20 bg-cloud px-4 py-2 text-left font-bold hover:border-ink"
+                        >
+                          {place.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {home && <HomeMap home={home} onMove={(p) => pickHome(p, homeLabel)} />}
+
                 <p className="mt-4 font-bold" id="commute-label">
                   How do you get there?
                 </p>
@@ -538,15 +605,91 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                     </button>
                   ))}
                 </div>
+                {home && (
+                  <p className="mt-3 rounded-2xl bg-sun-soft px-4 py-3">
+                    About <span className="font-bold">{milesText(roadMiles(home, campusPoint(nearestCampus(home))))}</span> to
+                    the {CAMPUS_INFO[nearestCampus(home)].name} campus, so about{" "}
+                    <span className="font-bold">
+                      {estimateMinutes(home, campusPoint(nearestCampus(home)), commuteBy)} minutes {COMMUTE_WORDS[commuteBy]}
+                    </span>
+                    . {MASCOT} works out each day’s first trip from your pin to that class’s building.
+                  </p>
+                )}
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {!home && (
+                    <label className="block">
+                    <span className="font-bold">{offCampus ? "Campus closest to home" : "Campus"}</span>
+                    <select
+                      value={homeCampus}
+                      onChange={(e) => {
+                        setHomeCampus(isCampus(e.target.value) ? e.target.value : "tempe");
+                        setStart(""); // a dorm on one campus is not a place on another
+                      }}
+                      className={field}
+                    >
+                      {CAMPUS_CHOICES.map((choice) => (
+                        <option key={choice.id} value={choice.id}>
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  )}
+                  <label className="block">
+                    <span className="font-bold">{home ? "Your own minutes, door to class (optional)" : "Minutes from your door to class"}</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={120}
+                      value={commuteMinutes}
+                      onChange={(e) => setCommuteMinutes(e.target.value)}
+                      placeholder={home ? "Leave blank to use the map" : "25"}
+                      className={field}
+                    />
+                  </label>
+                </div>
                 <p className="mt-3 text-sm text-ink-soft">
-                  {MASCOT} has you leave this many minutes before your first class and never asks for your address. A
-                  class on another campus adds the ASU shuttle from this one.
+                  {MASCOT} searches your address on OpenStreetMap once. Only the pin, rounded to about a block, stays in
+                  this browser and goes with each plan; the address itself is never sent to {PRODUCT}’s calendar or kept.
                 </p>
               </>
             ) : (
-              <p className="mt-2 text-sm text-ink-soft">
-                {MASCOT} times your first walk from here. A class on another campus gets the ASU shuttle.
-              </p>
+              <>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                  <span className="font-bold">{offCampus ? "Campus closest to home" : "Campus"}</span>
+                  <select
+                    value={homeCampus}
+                    onChange={(e) => {
+                      setHomeCampus(isCampus(e.target.value) ? e.target.value : "tempe");
+                      setStart(""); // a dorm on one campus is not a place on another
+                    }}
+                    className={field}
+                  >
+                    {CAMPUS_CHOICES.map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                  <label className="block">
+                    <span className="font-bold">Building</span>
+                    <select value={start} onChange={(e) => setStart(e.target.value)} className={field}>
+                      <option value="">Not sure yet</option>
+                      {STARTS[homeCampus].map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p className="mt-2 text-sm text-ink-soft">
+                  {MASCOT} times your first walk from here. A class on another campus gets the ASU shuttle.
+                </p>
+              </>
             )}
           </div>
 
