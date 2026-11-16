@@ -93,6 +93,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   const [working, setWorking] = useState(false);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [typed, setTyped] = useState("");
+  const [speaking, setSpeaking] = useState(false); // shows "Stop talking" while Sol reads aloud
   const recognition = useRef<Recognition | null>(null);
   const chat = useRef<HTMLDivElement | null>(null);
   const history = useRef<ChatTurn[]>([]); // the same turns, readable inside an answer that lands later
@@ -139,9 +140,11 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
     add({ from: "sol", text: line });
     talking.current = onSpeakingChange ?? null;
     onSpeakingChange?.(true);
+    setSpeaking(true);
     speak(line, () => {
       talking.current = null;
       onSpeakingChange?.(false);
+      if (alive.current) setSpeaking(false);
     });
   }
 
@@ -189,45 +192,76 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
     setTyped("");
   }
 
+  function stopTalking() {
+    stopSpeaking();
+    talking.current?.(false);
+    talking.current = null;
+    setSpeaking(false);
+  }
+
+  function clear() {
+    stopTalking();
+    history.current = [];
+    setMessages([]);
+  }
+
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => say(briefing)}
-          className="rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+          className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
         >
+          <SpeakerIcon />
           Hear my day
         </button>
-        <button
-          type="button"
-          onClick={listen}
-          aria-pressed={listening}
-          className={`rounded-full border-2 px-5 py-3 font-bold ${
-            listening ? "border-dusk bg-dusk text-cloud" : "border-ink hover:bg-ink/10"
-          }`}
-        >
-          {listening ? "Listening… tap to stop" : `Ask ${MASCOT}`}
-        </button>
+        {speaking && (
+          <button
+            type="button"
+            onClick={stopTalking}
+            className="inline-flex items-center gap-2 rounded-full border-2 border-ink/20 px-4 py-2.5 font-bold hover:border-ink"
+          >
+            <StopIcon />
+            Stop talking
+          </button>
+        )}
       </div>
 
-      {/* The conversation for this day: the student's questions on the right, Sol's answers on the left. */}
-      {(messages.length > 0 || working) && (
-        <div
-          ref={chat}
-          aria-live="polite"
-          className="mt-3 max-h-80 space-y-2 overflow-y-auto overscroll-contain rounded-3xl bg-cloud/70 p-3 ring-1 ring-ink/10"
-        >
+      <section aria-label={`Chat with ${MASCOT}`} className="mt-4 overflow-hidden rounded-3xl bg-cloud ring-1 ring-ink/10">
+        <header className="flex items-center justify-between gap-3 border-b border-ink/10 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Mascot size={30} label="" className="shrink-0" />
+            <div className="min-w-0">
+              <p className="font-display text-lg font-bold leading-tight">Ask {MASCOT}</p>
+              <p className="truncate text-xs text-ink-soft">From your plan and Canvas</p>
+            </div>
+          </div>
+          {messages.length > 0 && (
+            <button type="button" onClick={clear} className="shrink-0 rounded-full px-3 py-1.5 text-sm font-bold text-ink-soft hover:bg-ink/5 hover:text-ink">
+              Clear
+            </button>
+          )}
+        </header>
+
+        {/* The conversation for this day: the student's questions on the right, Sol's answers on the left. */}
+        <div ref={chat} aria-live="polite" className="max-h-96 space-y-3 overflow-y-auto overscroll-contain px-4 py-4">
+          {messages.length === 0 && !working && (
+            <p className="text-[15px] leading-relaxed text-ink-soft">
+              Ask about your classes, what’s due, your free time or how to get somewhere. Or tap a question below.
+            </p>
+          )}
           {messages.map((m, i) =>
             m.from === "you" ? (
-              <p key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2 text-cloud">
-                <span className="sr-only">You asked: </span>
+              <p key={i} className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-sm bg-ink px-4 py-2.5 text-[15px] leading-relaxed text-cloud">
+                <span className="sr-only">You: </span>
                 {m.text}
               </p>
             ) : (
-              <div key={i} className="flex items-end gap-2">
-                <Mascot size={28} label="" className="shrink-0" />
-                <p className="w-fit max-w-[85%] rounded-2xl rounded-bl-md bg-sun-soft px-4 py-2 font-bold">
+              <div key={i} className="flex items-start gap-2.5">
+                {/* One avatar per run of Sol's messages. */}
+                <span className="mt-0.5 w-7 shrink-0">{messages[i - 1]?.from !== "sol" && <Mascot size={28} label="" />}</span>
+                <p className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm bg-sun-soft/70 px-4 py-2.5 text-[15px] leading-relaxed ring-1 ring-sun/30">
                   <span className="sr-only">{MASCOT}: </span>
                   {m.text}
                 </p>
@@ -235,52 +269,119 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
             ),
           )}
           {working && (
-            <div className="flex items-end gap-2">
-              <Mascot size={28} label="" className="shrink-0" />
-              <p className="rounded-2xl rounded-bl-md bg-sun-soft px-4 py-2 font-bold">
+            <div className="flex items-start gap-2.5">
+              <span className="mt-0.5 w-7 shrink-0">{messages.at(-1)?.from !== "sol" && <Mascot size={28} label="" />}</span>
+              <p className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-sun-soft/70 px-4 py-3.5 ring-1 ring-sun/30">
                 <span className="sr-only">{MASCOT} is thinking</span>
-                <span aria-hidden="true">…</span>
+                {[0, 150, 300].map((delay) => (
+                  <span
+                    key={delay}
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-full bg-ink/50 motion-safe:animate-bounce"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
               </p>
             </div>
           )}
         </div>
-      )}
 
-      {/* Ready-made questions: answered by code, so they work even when the AI is out. */}
-      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Quick questions for ${MASCOT}`}>
-        {CHIPS.map((c) => (
-          <button
-            key={c.text}
-            type="button"
-            disabled={working}
-            onClick={() => void handle(c.text)}
-            className="min-h-10 rounded-full border-2 border-ink/20 bg-cloud px-3 py-1.5 text-sm font-bold hover:border-ink disabled:opacity-50"
+        <div className="border-t border-ink/10 px-4 pt-3 pb-4">
+          {/* Ready-made questions: answered by code, so they work even when the AI is out. */}
+          {/* One row that scrolls sideways on a phone, so the questions don't push the chat off screen. */}
+          <div
+            className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
+            role="group"
+            aria-label={`Quick questions for ${MASCOT}`}
           >
-            {c.text}
-          </button>
-        ))}
-      </div>
+            {CHIPS.map((c) => (
+              <button
+                key={c.text}
+                type="button"
+                disabled={working}
+                onClick={() => void handle(c.text)}
+                className="min-h-9 shrink-0 whitespace-nowrap rounded-full border border-ink/15 bg-sky/40 px-3 py-1 text-sm font-bold text-ink hover:border-ink/40 hover:bg-sky disabled:opacity-50"
+              >
+                {c.text}
+              </button>
+            ))}
+          </div>
 
-      <form onSubmit={submit} className="mt-3 flex gap-2">
-        <label className="sr-only" htmlFor="command">
-          Ask {MASCOT} anything about your day
-        </label>
-        <input
-          id="command"
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          placeholder="Ask anything: do I have time for lunch?"
-          autoComplete="off"
-          className="min-w-0 flex-1 rounded-full border-2 border-ink/20 bg-cloud px-4 py-2 focus:border-ink"
-        />
-        <button
-          type="submit"
-          disabled={working}
-          className="rounded-full border-2 border-ink px-4 py-2 font-bold hover:bg-ink/10 disabled:opacity-50"
-        >
-          {working ? "…" : "Send"}
-        </button>
-      </form>
+          <form
+            onSubmit={submit}
+            className="mt-3 flex items-center gap-1 rounded-full border-2 border-ink/15 bg-cloud py-1 pr-1 pl-4 focus-within:border-ink"
+          >
+            <label className="sr-only" htmlFor="command">
+              Ask {MASCOT} anything about your day
+            </label>
+            <input
+              id="command"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={listening ? "Listening…" : "Ask about your day"}
+              autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/70"
+            />
+            <button
+              type="button"
+              onClick={listen}
+              aria-pressed={listening}
+              aria-label={listening ? "Stop listening" : `Ask ${MASCOT} out loud`}
+              title={listening ? "Stop listening" : "Speak"}
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
+                listening ? "bg-dusk text-cloud motion-safe:animate-pulse" : "text-ink hover:bg-ink/10"
+              }`}
+            >
+              <MicIcon />
+            </button>
+            <button
+              type="submit"
+              disabled={working || !typed.trim()}
+              aria-label="Send"
+              title="Send"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-cloud hover:bg-ink/90 disabled:bg-ink/25"
+            >
+              <SendIcon />
+            </button>
+          </form>
+        </div>
+      </section>
     </div>
+  );
+}
+
+const icon = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+
+function MicIcon() {
+  return (
+    <svg {...icon}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg {...icon}>
+      <path d="M5 12h13M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function SpeakerIcon() {
+  return (
+    <svg {...icon}>
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg {...icon}>
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
   );
 }
