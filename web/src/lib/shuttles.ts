@@ -122,11 +122,32 @@ export function shuttleOptions({ from, to, at = new Date(), arriveBy }: { from: 
   return { from, to, date, period, options, note: NOTE, trackerUrl: data.trackerUrl };
 }
 
+const TRANSFER_WALK_MIN = 5; // between two Tempe stops, when the two routes do not share one
+
+/** The best shuttle option for an arrival: the one that lets you leave latest, else the first one to explain. */
+function bestOption(from: Campus, to: Campus, arriveBy: string): ShuttleOption | undefined {
+  const { options } = shuttleOptions({ from, to, arriveBy });
+  return options.find((o) => o.beAtStopBy) ?? options[0];
+}
+
 /** The best shuttle for a planner leg (see addLeaveTimes): when to be at the stop, or why no shuttle fits. */
 export const shuttleLeg: ShuttleLeg = (from, to, arriveBy) => {
-  const { options } = shuttleOptions({ from, to, arriveBy });
-  const best = options.find((o) => o.beAtStopBy);
-  if (best) return { beAtStopBy: best.beAtStopBy, via: best.summary };
-  if (options[0]) return { via: options[0].summary };
-  return { via: `No direct ASU shuttle from ${CAMPUS_INFO[from].name} to ${CAMPUS_INFO[to].name}; change at Tempe.` };
+  const direct = bestOption(from, to, arriveBy);
+  if (direct) return direct.beAtStopBy ? { beAtStopBy: direct.beAtStopBy, via: direct.summary } : { via: direct.summary };
+  const noRoute = { via: `No direct ASU shuttle from ${CAMPUS_INFO[from].name} to ${CAMPUS_INFO[to].name}; change at Tempe.` };
+  if (from === "tempe" || to === "tempe") return noRoute;
+  // No route between the two (Polytechnic and Downtown Phoenix or West Valley): two shuttles, changing at Tempe.
+  // Planned backward: the second shuttle sets when to be at the Tempe stop, and the first must arrive by then.
+  const second = bestOption("tempe", to, arriveBy);
+  if (!second) return noRoute;
+  const change = `Two shuttles, changing at ${second.boardAt} in Tempe.`;
+  if (!second.beAtStopBy) return { via: `${change} ${second.summary}` };
+  let first = bestOption(from, "tempe", second.beAtStopBy);
+  if (first && first.alightAt !== second.boardAt) {
+    // Gold and Maroon share Forest Avenue and Lemon Street; any other pair needs the walk between the stops.
+    first = bestOption(from, "tempe", toMstIso(new Date(Date.parse(second.beAtStopBy) - TRANSFER_WALK_MIN * MIN)));
+  }
+  if (!first) return noRoute;
+  if (!first.beAtStopBy) return { via: `${change} ${first.summary} Then: ${second.summary}` };
+  return { beAtStopBy: first.beAtStopBy, via: `${change} ${first.summary} Then: ${second.summary}` };
 };
