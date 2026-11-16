@@ -217,7 +217,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
         <button
           type="button"
           onClick={() => say(briefing, true)}
-          className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-ink px-4 py-2.5 font-semibold text-cloud hover:bg-ink/90"
         >
           <SpeakerIcon />
           Hear my day
@@ -226,7 +226,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
           <button
             type="button"
             onClick={stopTalking}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-ink/20 px-4 py-2.5 font-bold hover:border-ink"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line bg-surface px-3.5 py-2 font-semibold hover:border-ink/40"
           >
             <StopIcon />
             Stop talking
@@ -234,12 +234,11 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
         )}
       </div>
 
-      <section aria-label={`Chat with ${MASCOT}`} className="mt-4 overflow-hidden rounded-3xl bg-cloud ring-1 ring-ink/10">
-        <header className="flex items-center justify-between gap-3 border-b border-ink/10 px-4 py-3">
+      <section aria-label={`Chat with ${MASCOT}`} className="mt-4 overflow-hidden rounded-xl border border-line bg-surface">
+        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <Mascot size={30} label="" className="shrink-0" />
             <div className="min-w-0">
-              <p className="font-display text-lg font-bold leading-tight">Ask {MASCOT}</p>
+              <p className="font-semibold leading-tight">Ask {MASCOT}</p>
               <p className="truncate text-xs text-ink-soft">From your plan and Canvas</p>
             </div>
           </div>
@@ -267,7 +266,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
               <div key={i} className="flex items-start gap-2.5">
                 {/* One avatar per run of Sol's messages. */}
                 <span className="mt-0.5 w-7 shrink-0">{messages[i - 1]?.from !== "sol" && <Mascot size={28} label="" />}</span>
-                <p className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm bg-sun-soft/70 px-4 py-2.5 text-[15px] leading-relaxed ring-1 ring-sun/30">
+                <p className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm bg-page px-4 py-2.5 text-[15px] leading-relaxed ring-1 ring-line">
                   <span className="sr-only">{MASCOT}: </span>
                   {m.text}
                 </p>
@@ -277,7 +276,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
           {working && (
             <div className="flex items-start gap-2.5">
               <span className="mt-0.5 w-7 shrink-0">{messages.at(-1)?.from !== "sol" && <Mascot size={28} label="" />}</span>
-              <p className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-sun-soft/70 px-4 py-3.5 ring-1 ring-sun/30">
+              <p className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-page px-4 py-3.5 ring-1 ring-line">
                 <span className="sr-only">{MASCOT} is thinking</span>
                 {[0, 150, 300].map((delay) => (
                   <span
@@ -292,7 +291,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
           )}
         </div>
 
-        <div className="border-t border-ink/10 px-4 pt-3 pb-4">
+        <div className="border-t border-line px-4 pt-3 pb-4">
           {/* Ready-made questions: answered by code, so they work even when the AI is out. */}
           {/* One row that scrolls sideways on a phone, so the questions don't push the chat off screen. */}
           <div
@@ -306,7 +305,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
                 type="button"
                 disabled={working}
                 onClick={() => void handle(c.text)}
-                className="min-h-9 shrink-0 whitespace-nowrap rounded-full border border-ink/15 bg-sky/40 px-3 py-1 text-sm font-bold text-ink hover:border-ink/40 hover:bg-sky disabled:opacity-50"
+                className="min-h-9 shrink-0 whitespace-nowrap rounded-full border border-line bg-page px-3 py-1 text-sm font-semibold text-ink hover:border-ink/40 disabled:opacity-50"
               >
                 {c.text}
               </button>
@@ -315,7 +314,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
 
           <form
             onSubmit={submit}
-            className="mt-3 flex items-center gap-1 rounded-full border-2 border-ink/15 bg-cloud py-1 pr-1 pl-4 focus-within:border-ink"
+            className="mt-3 flex items-center gap-1 rounded-full border border-line bg-surface py-1 pr-1 pl-4 focus-within:border-ink"
           >
             <label className="sr-only" htmlFor="command">
               Ask {MASCOT} anything about your day

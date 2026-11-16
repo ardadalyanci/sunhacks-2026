@@ -10,6 +10,10 @@
   --saguaro: #2e6b4f;
   --dusk: #5b3fa8;
   --cloud: #ffffff;
+  /* The app's frame: the page behind the cards, the cards, and their hairlines. One place to retune the look. */
+  --page: #f3f5f8;
+  --surface: #ffffff;
+  --line: #dde3ea;
 }
 
 @theme inline {
@@ -21,12 +25,15 @@
   --color-saguaro: var(--saguaro);
   --color-dusk: var(--dusk);
   --color-cloud: var(--cloud);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
   --font-display: var(--font-bricolage);
   --font-sans: var(--font-atkinson);
 }
 
 body {
-  background: var(--sky);
+  background: var(--page);
   color: var(--ink);
 }
 
