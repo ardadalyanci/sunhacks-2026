@@ -1,4 +1,4 @@
-// Campus events for Sundial: ASU Events (public JSON) + SunDevilCentral (public iCal), Tempe only,
+// Campus events for Sundial: ASU Events (public JSON) + SunDevilCentral (public iCal), Tempe by default (other campuses on request),
 // next 7 days, as Opportunity[] (lib/types.ts). Server-only. Each source is cached in memory for 1 hour;
 // if a refresh fails we keep serving the last good copy, and one source failing never hides the other.
 //
@@ -7,7 +7,14 @@
 // - SunDevilCentral DTSTART is real UTC; LOCATION is "Sign in to download the location" for most events.
 import { eventInterests } from "./interests";
 import { icsUtc, parseIcs, type IcsEvent } from "./ical";
+import { CAMPUSES, type Campus } from "../campuses";
 import type { Opportunity, OpportunityKind } from "../types";
+
+type EventCampus = NonNullable<Opportunity["campus"]>;
+/** The campuses Sundial shows when none are asked for: Tempe (online events are always kept). */
+export const DEFAULT_CAMPUSES: readonly Campus[] = ["tempe"];
+const keepCampus = (campus: EventCampus | undefined, campuses: readonly Campus[]) =>
+  campus === "online" || (campus !== undefined && (campuses as readonly string[]).includes(campus));
 
 export const ASU_EVENTS_URL = "https://asuevents.asu.edu/feed-json/students";
 export const SUN_DEVIL_CENTRAL_URL = "https://sundevilcentral.eoss.asu.edu/ical/arizonau/ical_arizonau.ics";
@@ -95,18 +102,26 @@ export function parseAsuTime(wall?: string, human?: string): Date | undefined {
   return new Date(`${h[3]}-${pad(month + 1)}-${pad(h[2])}T${pad(hour)}:${h[5]}:00-07:00`);
 }
 
-/** Keeps Tempe and online events; drops West Valley, Downtown, Poly, off campus and the rest. */
-function asuCampusOk(campus?: string): boolean {
-  if (!campus) return false;
-  return /tempe campus|online event/i.test(campus);
+/** ASU Events' campus field → our campus id. Mesa City Center, SkySong, off campus and the rest → undefined (dropped). */
+function asuCampus(campus?: string): EventCampus | undefined {
+  if (!campus) return undefined;
+  if (/tempe campus/i.test(campus)) return "tempe";
+  if (/downtown phoenix/i.test(campus)) return "downtown";
+  if (/polytechnic/i.test(campus)) return "polytechnic";
+  if (/west valley|west campus/i.test(campus)) return "west";
+  if (/online event/i.test(campus)) return "online";
+  return undefined;
 }
 
-export function parseAsuEvents(json: unknown, fetchedAt = new Date().toISOString()): Opportunity[] {
+/** Events on `campuses` (default Tempe) plus online ones, each tagged with its campus. */
+export function parseAsuEvents(json: unknown, fetchedAt = new Date().toISOString(), campuses: readonly Campus[] = DEFAULT_CAMPUSES): Opportunity[] {
   const nodes = (json as { nodes?: { node?: AsuNode }[] })?.nodes;
   if (!Array.isArray(nodes)) return [];
   const out: Opportunity[] = [];
   for (const { node } of nodes) {
-    if (!node?.title || !node.nid || !asuCampusOk(node.campus)) continue;
+    if (!node?.title || !node.nid) continue;
+    const campus = asuCampus(node.campus);
+    if (!keepCampus(campus, campuses)) continue;
     const start = parseAsuTime(node.very_start_date, node.start_date);
     if (!start || Number.isNaN(start.getTime())) continue;
     const end = parseAsuTime(node.very_end_date, node.end_date);
@@ -127,6 +142,7 @@ export function parseAsuEvents(json: unknown, fetchedAt = new Date().toISOString
       tags: eventInterests(feedTags, [title, feedTags.join(" "), description].join(" | ")).slice(0, MAX_TAGS),
       source: "asu_events",
       fetchedAt,
+      campus,
     });
   }
   return out;
@@ -136,12 +152,18 @@ export function parseAsuEvents(json: unknown, fetchedAt = new Date().toISOString
 
 const OTHER_CAMPUS = /downtown phoenix|polytechnic|west valley|west campus|mesa city|lake havasu|online event/i;
 
-/** Tempe, or no campus given (most club meetings): keep. Tagged or located on another campus only: drop. */
-function sdcCampusOk(tags: string[], location?: string): boolean {
-  if (tags.some((t) => /tempe campus/i.test(t))) return true;
-  if (tags.some((t) => OTHER_CAMPUS.test(t) && !/online event/i.test(t))) return false;
-  if (location && /\b(phoenix|glendale|mesa|scottsdale|lake havasu)\b/i.test(location) && !/tempe/i.test(location)) return false;
-  return true;
+/**
+ * A Tempe tag → Tempe; another campus tag → that campus (Mesa City, Lake Havasu → undefined, dropped); an address
+ * in another city with no tag → undefined (a Phoenix address could be Downtown, West Valley or neither); an online
+ * tag → online; no campus info (most club meetings) → Tempe.
+ */
+function sdcCampus(tags: string[], location?: string): EventCampus | undefined {
+  if (tags.some((t) => /tempe campus/i.test(t))) return "tempe";
+  const other = tags.find((t) => OTHER_CAMPUS.test(t) && !/online event/i.test(t));
+  if (other) return /downtown phoenix/i.test(other) ? "downtown" : /polytechnic/i.test(other) ? "polytechnic" : /west valley|west campus/i.test(other) ? "west" : undefined;
+  if (location && /\b(phoenix|glendale|mesa|scottsdale|lake havasu)\b/i.test(location) && !/tempe/i.test(location)) return undefined;
+  if (tags.some((t) => /online event/i.test(t))) return "online";
+  return "tempe";
 }
 
 /** "Hayden Library C12, 1151 S Forest Ave, Tempe, AZ 85281, United States" → "Hayden Library C12". Hidden → undefined. */
@@ -158,12 +180,14 @@ function sdcId(e: IcsEvent, start: Date): string {
   return `sdc-${base}-${icsUtc(start).slice(0, 13)}`;
 }
 
-export function parseSunDevilCentral(ics: string, fetchedAt = new Date().toISOString()): Opportunity[] {
+/** Events on `campuses` (default Tempe) plus online ones, each tagged with its campus. */
+export function parseSunDevilCentral(ics: string, fetchedAt = new Date().toISOString(), campuses: readonly Campus[] = DEFAULT_CAMPUSES): Opportunity[] {
   const out: Opportunity[] = [];
   for (const e of parseIcs(ics)) {
     if (!e.summary || !e.start || e.allDay) continue;
     const feedTags = [...(e.categories.event_type ?? []), ...(e.categories.event_tags ?? []), ...(e.categories[""] ?? [])];
-    if (!sdcCampusOk(feedTags, e.location)) continue;
+    const campus = sdcCampus(feedTags, e.location);
+    if (!keepCampus(campus, campuses)) continue;
     const description = clip(e.description?.replace(/\n?-{3,}\s*\nEvent Details:[\s\S]*$/, "")) ?? "";
     const organizer = e.organizer?.trim() || e.categories.club_acronym?.[0] || "Sun Devil Central";
     out.push({
@@ -179,6 +203,7 @@ export function parseSunDevilCentral(ics: string, fetchedAt = new Date().toISOSt
       tags: eventInterests(feedTags, [e.summary, organizer, feedTags.join(" "), description].join(" | ")).slice(0, MAX_TAGS),
       source: "sundevilcentral",
       fetchedAt,
+      campus,
     });
   }
   return out;
@@ -226,8 +251,9 @@ async function download(url: string, as: "json" | "text"): Promise<unknown> {
 }
 
 const LOADERS: Record<SourceKey, () => Promise<Opportunity[]>> = {
-  asu_events: async () => parseAsuEvents(await download(ASU_EVENTS_URL, "json")),
-  sundevilcentral: async () => parseSunDevilCentral(String(await download(SUN_DEVIL_CENTRAL_URL, "text"))),
+  // The cache keeps every campus; getEventFeed filters per request.
+  asu_events: async () => parseAsuEvents(await download(ASU_EVENTS_URL, "json"), undefined, CAMPUSES),
+  sundevilcentral: async () => parseSunDevilCentral(String(await download(SUN_DEVIL_CENTRAL_URL, "text")), undefined, CAMPUSES),
 };
 
 async function loadSource(key: SourceKey, nowMs: number): Promise<SourceCache> {
@@ -252,7 +278,8 @@ export interface EventFeedResult {
 }
 
 /** Events plus how each source did; GET /api/events returns this. */
-export async function getEventFeed(options: { now?: Date; days?: number } = {}): Promise<EventFeedResult> {
+export async function getEventFeed(options: { now?: Date; days?: number; campuses?: readonly Campus[] } = {}): Promise<EventFeedResult> {
+  const campuses = options.campuses?.length ? options.campuses : DEFAULT_CAMPUSES;
   const now = options.now ?? new Date();
   const keys: SourceKey[] = ["asu_events", "sundevilcentral"];
   const results = await Promise.all(keys.map((k) => loadSource(k, Date.now())));
@@ -260,15 +287,15 @@ export async function getEventFeed(options: { now?: Date; days?: number } = {}):
   const all: Opportunity[] = [];
   keys.forEach((k, i) => {
     const r = results[i];
-    const events = inWindow(r.events, now, options.days);
+    const events = inWindow(r.events.filter((e) => keepCampus(e.campus, campuses)), now, options.days);
     all.push(...events);
     sources[k] = { count: events.length, fetchedAt: r.fetchedAt && r.events.length ? new Date(r.fetchedAt).toISOString() : null, ...(r.error ? { error: r.error } : {}) };
   });
   return { events: inWindow(all, now, options.days), sources };
 }
 
-/** Tempe campus events from now through the next 7 days, soonest first. Never throws; an empty list means both feeds are down. */
-export async function getEvents(options: { now?: Date; days?: number } = {}): Promise<Opportunity[]> {
+/** Campus events (default Tempe, plus online) from now through the next 7 days, soonest first. Never throws; an empty list means both feeds are down. */
+export async function getEvents(options: { now?: Date; days?: number; campuses?: readonly Campus[] } = {}): Promise<Opportunity[]> {
   return (await getEventFeed(options)).events;
 }
 

@@ -3,6 +3,7 @@
 //   tempF  = feels-like temperature now (for today) or at noon (for another day)
 //   highF  = the day's forecast high (air temperature)
 //   isHot  = the feels-like temperature reaches 95 °F at any hour between 8 AM and 8 PM
+import { CAMPUS_INFO, type Campus } from "../campuses";
 import type { Weather } from "../types";
 
 export const TEMPE = { latitude: 33.42, longitude: -111.93 };
@@ -10,10 +11,11 @@ export const HOT_FEELS_LIKE_F = 95;
 const CACHE_MS = 30 * 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 
-export function openMeteoUrl(days = 8): string { // today + 7 days ahead
+export function openMeteoUrl(days = 8, campus: Campus = "tempe"): string { // today + 7 days ahead
+  const at = campus === "tempe" ? TEMPE : CAMPUS_INFO[campus];
   const q = new URLSearchParams({
-    latitude: String(TEMPE.latitude),
-    longitude: String(TEMPE.longitude),
+    latitude: String(at.latitude),
+    longitude: String(at.longitude),
     hourly: "temperature_2m,apparent_temperature",
     daily: "temperature_2m_max",
     temperature_unit: "fahrenheit",
@@ -64,17 +66,19 @@ export function summarizeWeather(day: { hourly: HourlyTemp[]; highF: number }, h
   return { tempF: Math.round(current.feelsLikeF), highF: Math.round(day.highF), isHot: peakFeels >= HOT_FEELS_LIKE_F };
 }
 
-let cache: { json: unknown; fetchedAt: number } | null = null;
+const caches = new Map<Campus, { json: unknown; fetchedAt: number }>();
 
-/** Tempe weather for today, or for `date` up to 7 days ahead. Undefined when Open-Meteo is unreachable. */
-export async function getWeather(date?: string, now = new Date()): Promise<Weather | undefined> {
+/** A campus's weather (default Tempe) for today, or for `date` up to 7 days ahead. Undefined when Open-Meteo is unreachable. */
+export async function getWeather(date?: string, now = new Date(), campus: Campus = "tempe"): Promise<Weather | undefined> {
+  let cache = caches.get(campus) ?? null;
   const today = arizonaDate(now);
   const day = date ?? today;
   if (!cache || Date.now() - cache.fetchedAt > CACHE_MS || !parseOpenMeteo(cache.json, day)) {
     try {
-      const res = await fetch(openMeteoUrl(), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: "no-store" });
+      const res = await fetch(openMeteoUrl(8, campus), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       cache = { json: await res.json(), fetchedAt: Date.now() };
+      caches.set(campus, cache);
     } catch {
       // Keep an older copy if we have one; it may still cover the day.
       if (!cache) return undefined;
@@ -90,5 +94,5 @@ const arizonaHour = (d: Date) => new Date(d.getTime() - AZ_MS).getUTCHours();
 
 /** Test helper. */
 export function clearWeatherCache(): void {
-  cache = null;
+  caches.clear();
 }

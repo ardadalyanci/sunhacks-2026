@@ -64,6 +64,7 @@ describe("ASU Events", () => {
       tags: ["robotics", "Engineering", "Technology"],
       source: "asu_events",
       fetchedAt: FETCHED,
+      campus: "tempe",
     });
   });
 
@@ -79,6 +80,30 @@ describe("ASU Events", () => {
     });
     expect(events.map((e) => e.id.split("-")[1])).toEqual(["1", "2"]);
     expect(events[1].location).toBe("Online");
+  });
+
+  it("keeps the campuses asked for, tags each event's campus, and still drops Mesa, SkySong and off campus", () => {
+    const events = parseAsuEvents(
+      {
+        nodes: [
+          asuNode({ nid: "1", campus: "Tempe campus" }),
+          asuNode({ nid: "2", campus: "Online event", locations: "" }),
+          asuNode({ nid: "3", campus: "West Valley campus" }),
+          asuNode({ nid: "4", campus: "Downtown Phoenix campus" }),
+          asuNode({ nid: "5", campus: "Thunderbird School of Global Management at ASU, Downtown Phoenix campus" }),
+          asuNode({ nid: "6", campus: "ASU at Mesa City Center" }),
+          asuNode({ nid: "7", campus: "Off campus" }),
+        ],
+      },
+      FETCHED,
+      ["downtown", "west"],
+    );
+    expect(events.map((e) => [e.id.split("-")[1], e.campus])).toEqual([
+      ["2", "online"],
+      ["3", "west"],
+      ["4", "downtown"],
+      ["5", "downtown"],
+    ]);
   });
 
   it("returns [] for an unexpected shape", () => {
@@ -115,6 +140,25 @@ describe("SunDevilCentral", () => {
       ]),
     );
     expect(events.map((e) => e.id)).toEqual(["sdc-1-20261116T2300"]);
+  });
+
+  it("tags SunDevilCentral campuses: a campus tag wins, a city alone is not enough, no info means Tempe", () => {
+    const events = parseSunDevilCentral(
+      sdcIcs([
+        sdcEvent({ "CATEGORIES;X-CG-CATEGORY=event_tags": "Polytechnic Campus", URL: "https://x/rsvp?id=1" }),
+        sdcEvent({ "CATEGORIES;X-CG-CATEGORY=event_tags": "Downtown Phoenix Campus", URL: "https://x/rsvp?id=2" }),
+        sdcEvent({ "CATEGORIES;X-CG-CATEGORY=event_tags": "In-Person Event", LOCATION: "Some Hall, Phoenix, AZ 85004", URL: "https://x/rsvp?id=3" }),
+        sdcEvent({ "CATEGORIES;X-CG-CATEGORY=event_tags": "Online Event", URL: "https://x/rsvp?id=4" }),
+        sdcEvent({ "CATEGORIES;X-CG-CATEGORY=event_tags": "In-Person Event", URL: "https://x/rsvp?id=5" }),
+      ]),
+      FETCHED,
+      ["polytechnic", "downtown"],
+    );
+    expect(events.map((e) => [e.id.split("-")[1], e.campus])).toEqual([
+      ["1", "polytechnic"],
+      ["2", "downtown"],
+      ["4", "online"],
+    ]); // 3: a Phoenix address could be any campus or none; 5: no campus info = Tempe, not asked for
   });
 
   it("shortens addresses", () => {
@@ -205,6 +249,16 @@ describe("getEvents", () => {
     expect(feed.events).toHaveLength(1);
     expect(feed.sources.asu_events).toMatchObject({ count: 0, error: "HTTP 503" });
     expect(feed.sources.sundevilcentral.count).toBe(1);
+  });
+
+  it("caches every campus once and filters per request (default: Tempe and online)", async () => {
+    respond(
+      () => Response.json({ nodes: [asuNode({ nid: "1" }), asuNode({ nid: "2", campus: "Downtown Phoenix campus" })] }),
+      () => new Response(sdcIcs([sdcEvent({ "CATEGORIES;X-CG-CATEGORY=event_tags": "Polytechnic Campus" })])),
+    );
+    expect((await getEvents({ now })).map((e) => e.campus)).toEqual(["tempe"]);
+    expect((await getEvents({ now, campuses: ["downtown", "polytechnic"] })).map((e) => e.campus).sort()).toEqual(["downtown", "polytechnic"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // both answers came from one download per feed
   });
 
   it("never throws when the network is gone", async () => {

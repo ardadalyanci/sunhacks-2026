@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const getWeather = vi.fn();
-vi.mock("@/lib/feeds/weather", () => ({ getWeather: (d?: string) => getWeather(d) }));
+vi.mock("@/lib/feeds/weather", () => ({ getWeather: (...a: unknown[]) => getWeather(...a) }));
 const { GET } = await import("./route");
 
 describe("GET /api/weather", () => {
@@ -10,6 +10,13 @@ describe("GET /api/weather", () => {
     const res = await GET(new Request("http://t/api/weather?date=2026-11-16"));
     expect(await res.json()).toEqual({ tempF: 74, highF: 81, isHot: false });
     expect(getWeather).toHaveBeenLastCalledWith("2026-11-16");
+  });
+
+  it("reads another campus when `campus` is given", async () => {
+    getWeather.mockResolvedValue({ tempF: 70, highF: 79, isHot: false });
+    await GET(new Request("http://t/api/weather?campus=polytechnic"));
+    expect(getWeather).toHaveBeenLastCalledWith(undefined, undefined, "polytechnic");
+    expect((await GET(new Request("http://t/api/weather?campus=mesa"))).status).toBe(400);
   });
 
   it("validates the date and reports an outage", async () => {

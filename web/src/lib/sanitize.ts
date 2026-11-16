@@ -56,6 +56,8 @@ function cleanDeadline(v: unknown): DayItem | null {
   return { id, type: "deadline", title, start, source: "canvas", done: v.done === true, url: httpUrl(v.url) };
 }
 
+const EVENT_CAMPUSES = ["tempe", "downtown", "polytechnic", "west", "online"];
+
 function cleanEvent(v: unknown): Opportunity | null {
   if (!isObj(v)) return null;
   const id = str(v.id, 120);
@@ -75,6 +77,7 @@ function cleanEvent(v: unknown): Opportunity | null {
     tags: list(v.tags, 20).filter((t): t is string => typeof t === "string" && t.length <= 60),
     source: v.source === "sundevilcentral" ? "sundevilcentral" : "asu_events",
     fetchedAt: isoDate(v.fetchedAt) ?? new Date(0).toISOString(),
+    ...(EVENT_CAMPUSES.includes(v.campus as string) ? { campus: v.campus as Opportunity["campus"] } : {}),
   };
 }
 

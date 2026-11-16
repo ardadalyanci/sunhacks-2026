@@ -6,9 +6,9 @@
 import data from "./shuttles.json";
 import { atTime, clock, mstDate, toMstIso, weekdayOf } from "./planner";
 
-export const CAMPUSES = ["tempe", "downtown", "polytechnic", "west"] as const;
-export type Campus = (typeof CAMPUSES)[number];
-export const isCampus = (v: unknown): v is Campus => typeof v === "string" && (CAMPUSES as readonly string[]).includes(v);
+import { type Campus, isCampus } from "./campuses";
+
+export { type Campus, isCampus };
 
 type Period = "weekday" | "weekend";
 interface Stop {

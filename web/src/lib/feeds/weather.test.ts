@@ -57,6 +57,16 @@ describe("getWeather", () => {
     expect(url).toContain("forecast_days=8"); // today + 7 days, for the day picker
   });
 
+  it("asks for each campus at its own coordinates and caches them separately", async () => {
+    const now = new Date("2026-11-16T09:20:00-07:00");
+    await getWeather(undefined, now);
+    await getWeather(undefined, now, "polytechnic");
+    await getWeather(undefined, now, "polytechnic");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("latitude=33.3066");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("longitude=-111.6767");
+  });
+
   it("returns undefined when Open-Meteo is unreachable", async () => {
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
     expect(await getWeather("2026-11-16")).toBeUndefined();

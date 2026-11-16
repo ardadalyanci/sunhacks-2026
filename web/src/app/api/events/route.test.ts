@@ -18,6 +18,13 @@ describe("GET /api/events", () => {
     expect(feed).toHaveBeenLastCalledWith({ days: 3 });
   });
 
+  it("asks the feed for other campuses only when `campus` is given", async () => {
+    feed.mockResolvedValue({ events: [], sources: ok });
+    await GET(new Request("http://t/api/events?campus=Downtown&campus=polytechnic"));
+    expect(feed).toHaveBeenLastCalledWith({ days: 7, campuses: ["downtown", "polytechnic"] });
+    expect((await GET(new Request("http://t/api/events?campus=mesa"))).status).toBe(400);
+  });
+
   it("rejects a bad days value", async () => {
     expect((await GET(new Request("http://t/api/events?days=30"))).status).toBe(400);
   });
