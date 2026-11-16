@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DayItem } from "@/lib/types";
-import { findPlace, nextWalk, placeLabel, toCelsius, untilText, walkLink } from "./next-walk";
+import { findPlace, nextWalk, placeLabel, toCelsius, tripLabel, untilText, walkLink } from "./next-walk";
 
 const at = (hhmm: string) => `2026-11-16T${hhmm}:00-07:00`;
 const item = (id: string, type: DayItem["type"], start: string, leaveAt?: string, location?: string): DayItem => ({
@@ -59,5 +59,24 @@ describe("small formats", () => {
     expect(untilText(23 * 60_000)).toBe("23 min");
     expect(untilText(60 * 60_000)).toBe("1 h");
     expect(toCelsius(104)).toBe(40);
+  });
+});
+
+describe("tripLabel", () => {
+  it("calls a campus walk a walk, and names the trip from home or the shuttle otherwise", () => {
+    expect(tripLabel({}, 13)).toBe("13-minute walk");
+    expect(tripLabel({ via: "From home by car: about 25 minutes, your own estimate." }, 25)).toBe("25-minute trip from home");
+    expect(tripLabel({ via: "Gold shuttle from Forest Avenue and Lemon Street to SIM Building: …" }, 75)).toBe("75 minutes with the shuttle");
+    expect(tripLabel({ via: "From home by bike to the Tempe campus: about 20 minutes. Then: Gold shuttle …" }, 95)).toBe(
+      "95 minutes with the shuttle",
+    );
+  });
+});
+
+describe("walkLink on other campuses", () => {
+  it("points at the building on the class's own campus, not Tempe's building of the same name", () => {
+    expect(walkLink("Santan Hall 120", "polytechnic")).toContain(encodeURIComponent("33.30612,-111.67812"));
+    expect(walkLink("SDFC", "polytechnic")).not.toBe(walkLink("SDFC"));
+    expect(walkLink("Room 9", "west")).toContain(encodeURIComponent("Room 9, Glendale, AZ"));
   });
 });

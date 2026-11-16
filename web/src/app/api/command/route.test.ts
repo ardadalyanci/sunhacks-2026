@@ -71,6 +71,18 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
     expect((await at("2026-11-16T20:00:00-07:00")).reply).toBe("Nothing else is planned today.");
   });
 
+  it("does not call a shuttle ride or the trip from home a walk", async () => {
+    const cse = plan.items.find((i) => i.title === "CSE 230")!;
+    const ride = (via: string) => ({ ...plan, items: plan.items.map((i) => (i === cse ? { ...i, leaveAt: "2026-11-16T09:15:00-07:00", via } : i)) });
+    const ask = (via: string) => command({ text: "when should I leave", plan: ride(via), now: "2026-11-16T08:00:00-07:00" }).then((r) => r.json.reply);
+    expect(await ask("From home by car: about 75 minutes, your own estimate.")).toBe(
+      "Leave at 9:15 am for CSE 230 in Brickyard 210, a 75-minute trip from home.",
+    );
+    expect(await ask("Gold shuttle from Forest Avenue and Lemon Street to SIM Building: …")).toBe(
+      "Leave at 9:15 am for CSE 230 in Brickyard 210, about 75 minutes with the shuttle.",
+    );
+  });
+
   it("names a commitment with 'your' and says which day on a look-ahead", async () => {
     const sunday = {
       items: [

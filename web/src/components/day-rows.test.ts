@@ -106,4 +106,22 @@ describe("dayRows", () => {
   it("says nothing for an empty day", () => {
     expect(dayRows([], DATE, ms("08:00"))).toEqual([]);
   });
+
+  it("names the trip from home or the shuttle, and tells why a stop has no leave time", () => {
+    const home: DayItem = { ...DAY[1], via: "From home by car: about 17 minutes, your own estimate." };
+    const poly: DayItem = {
+      id: "egr",
+      type: "class",
+      title: "EGR 104",
+      start: at("16:30"),
+      location: "Santan Hall 120",
+      campus: "polytechnic",
+      via: "No direct ASU shuttle in time.",
+      source: "manual",
+    };
+    const rows = dayRows([home, poly], DATE, ms("08:00"));
+    expect(rows.find((r) => r.key === "cse230-leave")?.detail).toBe("17-minute trip from home");
+    expect(rows.find((r) => r.key === "egr")?.detail).toBe("Santan Hall 120 · No direct ASU shuttle in time.");
+    expect(rows.some((r) => r.key === "egr-leave")).toBe(false);
+  });
 });

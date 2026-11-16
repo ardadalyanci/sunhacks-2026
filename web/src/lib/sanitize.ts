@@ -1,6 +1,6 @@
 // Cleans untrusted JSON from the browser before the planner touches it. Broken entries are dropped
 // instead of crashing the route; only a missing `classes` array is an error.
-import type { ClassBlock, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
+import type { ClassBlock, Commute, CommuteBy, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
 import { isCampus } from "./campuses";
 
 const WEEKDAYS: Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -58,6 +58,15 @@ function cleanDeadline(v: unknown): DayItem | null {
   return { id, type: "deadline", title, start, source: "canvas", done: v.done === true, url: httpUrl(v.url) };
 }
 
+const COMMUTE_BY: CommuteBy[] = ["walk", "bike", "scooter", "drive", "bus"];
+
+/** An off-campus student's trip to campus: whole minutes from 1 to 120, and how they travel. */
+function cleanCommute(v: unknown): Commute | undefined {
+  if (!isObj(v) || typeof v.minutes !== "number" || !Number.isFinite(v.minutes)) return undefined;
+  if (!COMMUTE_BY.includes(v.by as CommuteBy)) return undefined;
+  return { minutes: Math.min(120, Math.max(1, Math.round(v.minutes))), by: v.by as CommuteBy };
+}
+
 const EVENT_CAMPUSES = ["tempe", "downtown", "polytechnic", "west", "online"];
 
 function cleanEvent(v: unknown): Opportunity | null {
@@ -109,6 +118,7 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
       calendarId: isCalendarId(raw.calendarId) ? raw.calendarId : undefined,
       pace: raw.pace === "slower" ? "slower" : undefined,
       homeCampus: isCampus(raw.homeCampus) ? raw.homeCampus : undefined,
+      commute: cleanCommute(raw.commute),
     },
   };
 }
@@ -126,6 +136,7 @@ export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "s
     const leaveAt = isoDate(v.leaveAt);
     const end = isoDate(v.end);
     const why = str(v.why, 200); // lets Sol answer "should I go to the lunch talk?" with his own reason
+    const via = str(v.via, 400); // the shuttle or the trip from home, so a leave answer does not call it a walk
     return {
       id,
       title,
@@ -136,6 +147,7 @@ export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "s
       ...(location ? { location } : {}),
       ...(leaveAt ? { leaveAt } : {}),
       ...(why ? { why } : {}),
+      ...(via ? { via } : {}),
     };
   };
   return {

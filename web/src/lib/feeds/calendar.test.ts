@@ -29,6 +29,14 @@ describe("buildDayIcs", () => {
     expect(unfold(ics)).toContain("X-WR-CALNAME:Sundial: Alex");
   });
 
+  it("says how a shuttle ride or the trip from home is made, instead of calling it a walk", () => {
+    const via = "From home by car: about 25 minutes, your own estimate.";
+    const day = { ...plan, items: [{ ...plan.items[0], via, leaveAt: "2026-11-16T13:05:00-07:00" }] };
+    const [cls] = parseIcs(buildDayIcs(day, { now: new Date("2026-11-16T15:00:00Z") }));
+    expect(cls.description).toContain(`Leave at 1:05 PM (25 min). ${via}`);
+    expect(cls.description).not.toContain("walk");
+  });
+
   it("has the class, study block, event and open deadline, but not submitted work", () => {
     expect(events.map((e) => e.summary)).toEqual(["MAT 343", "Work on: CSE 230: Lab 7", "Robotics build night", "Due: CSE 230: Lab 7, part 2"]);
     const [cls, , ev, due] = events;

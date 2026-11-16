@@ -21,7 +21,14 @@ export interface DayItem {
   leaveAt?: string; // set by /api/plan for classes and events: when to start walking
   why?: string; // set by /api/plan for events: one sentence on why it fits the student
   campus?: CampusId; // classes and events off the Tempe campus (absent = Tempe)
-  via?: string; // set by /api/plan when the stop is on another campus: the ASU shuttle to take, or why none fits
+  via?: string; // set by /api/plan when the trip is not a campus walk: the ASU shuttle to take (or why none fits), or the trip from an off-campus home
+}
+
+/** How a student who lives off campus gets to campus; `minutes` is their own door-to-campus estimate. */
+export type CommuteBy = "walk" | "bike" | "scooter" | "drive" | "bus";
+export interface Commute {
+  minutes: number; // 1 to 120
+  by: CommuteBy;
 }
 
 /** ASU's metro campuses (see lib/campuses.ts). */
@@ -57,6 +64,7 @@ export interface PlanRequest {
   calendarId?: string; // a UUID the browser makes once (crypto.randomUUID) and keeps; saves the day for the calendar feed
   pace?: "slower"; // the student asked for more walking time (slower pace, a mobility aid, heat-sensitive): longer walks, more again in heat
   homeCampus?: CampusId; // where the day starts (with startBuildingId); absent = Tempe
+  commute?: Commute; // the student lives off campus, near homeCampus: the first stop of the day is this trip, not a walk
 }
 
 // Result of POST /api/command: what the voice command asked for.

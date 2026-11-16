@@ -56,6 +56,13 @@ export async function POST(request: Request) {
 const NEXT = { action: "next_item" } as const;
 type Decision = CommandAction | typeof NEXT;
 
+/** "a 17-minute walk", or the trip /api/plan described in `via` (an ASU shuttle, or the trip from an off-campus home). */
+function tripWords(item: DayItem, minutes: number): string {
+  if (!item.via) return `a ${minutes}-minute walk`;
+  if (item.via.startsWith("From home") && !item.via.includes("shuttle")) return `a ${minutes}-minute trip from home`;
+  return `about ${minutes} minutes with the shuttle`;
+}
+
 /** Questions about the walk itself ("when should I leave", "am I late") lead with the next leave time. */
 const LEAVE_WORDS = /\b(leave|leaving|head out|walk|late)\b/i;
 
@@ -79,7 +86,7 @@ function nextReply(items: DayItem[], nowMs: number, text: string): string {
 
   if (walk?.leaveAt && LEAVE_WORDS.test(text)) {
     const minutes = Math.max(1, Math.round((Date.parse(walk.start) - Date.parse(walk.leaveAt)) / 60_000));
-    const line = begin(`${leave(walk.leaveAt)} for ${spokenItem(walk)}${spokenWhere(walk)}, a ${minutes}-minute walk.`);
+    const line = begin(`${leave(walk.leaveAt)} for ${spokenItem(walk)}${spokenWhere(walk)}, ${tripWords(walk, minutes)}.`);
     if (walk === next) return line;
     const doing = next.type === "study_block" ? "you're on" : "you have";
     return `${line} Until then, ${doing} ${spokenItem(next)} at ${clock(next.start)}.`;

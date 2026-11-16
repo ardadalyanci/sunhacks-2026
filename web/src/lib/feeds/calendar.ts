@@ -36,7 +36,10 @@ function vevent(item: DayItem, plan: DayPlan, stamp: string): string[] {
   const leave = item.leaveAt && !Number.isNaN(Date.parse(item.leaveAt)) ? item.leaveAt : undefined;
 
   const notes: string[] = [];
-  if (leave) notes.push(`Leave at ${clock(leave)} (${Math.max(1, Math.round((start.getTime() - Date.parse(leave)) / MIN))} min walk).`);
+  const minutes = leave ? Math.max(1, Math.round((start.getTime() - Date.parse(leave)) / MIN)) : 0;
+  // `via` is set when the trip is a shuttle ride or the trip from an off-campus home, not a walk.
+  if (leave) notes.push(item.via ? `Leave at ${clock(leave)} (${minutes} min). ${item.via}` : `Leave at ${clock(leave)} (${minutes} min walk).`);
+  else if (item.via) notes.push(item.via);
   if (leave && plan.weather?.isHot) notes.push(`Hot day (high ${Math.round(plan.weather.highF)}°F): take water and pick a shaded path.`);
   if (item.why) notes.push(item.why);
   if (item.url) notes.push(item.url);

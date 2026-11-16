@@ -224,7 +224,9 @@ export default function SkyDay({ date, items, hot = false, nowHour, suggestion, 
         key: `${item.id}-leave`,
         itemId: item.id,
         at: leave,
-        text: `Leave ${formatTime(leave)} for ${buildingOf(item.location) || item.title}, ${minutes} min`,
+        text: `Leave ${formatTime(leave)} for ${buildingOf(item.location) || item.title}, ${minutes} min${
+          item.via ? (item.via.includes("shuttle") ? " by shuttle" : " from home") : ""
+        }`,
         short: `Leave ${formatTime(leave)}`,
         tone: "bg-ink text-cloud",
         right: false,

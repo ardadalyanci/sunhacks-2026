@@ -16,6 +16,7 @@ import {
   fittingEvents,
   freeGaps,
   mstDate,
+  onCampusThen,
   opportunityToItem,
   pickCandidates,
   placeStudyBlocks,
@@ -69,8 +70,9 @@ export async function POST(request: Request) {
   // 2. Leave times for the fixed stops, then the free time left around them and the events that fit into it.
   //    A student who asked for more walking time gets it on every walk, including the one to a suggested event.
   const slower = body.pace === "slower";
-  // A class or event on another campus is reached by ASU shuttle (lib/shuttles.ts); the day starts on homeCampus.
-  const campusLegs = { home: body.homeCampus, shuttle: shuttleLeg };
+  // A class or event on another campus is reached by ASU shuttle (lib/shuttles.ts); the day starts on homeCampus,
+  // or off campus near it when the student gave their commute.
+  const campusLegs = { home: body.homeCampus, shuttle: shuttleLeg, commute: body.commute };
   const fixedStops = sortByStart([...classes, ...acceptedEvents]);
   addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather, slower, campusLegs);
   const dayGaps = (stops: DayItem[]) => freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), stops, CLASS_TRAVEL_BUFFER_MIN);
@@ -81,8 +83,15 @@ export async function POST(request: Request) {
   // that held its time before the add is still known (see picksThenStudy).
   const classStops = sortByStart(classItems(body.classes, date, buildings));
   addLeaveTimes(classStops, buildings, body.startBuildingId, body.weather, slower, campusLegs);
-  const candidates = pickCandidates(fittingEvents(dayEvents, dayGaps(classStops), nowMs, travelMin), interests, MAX_CANDIDATES);
-  const fitsNow = new Set(fittingEvents(dayEvents.filter((e) => !accepted.has(e.id)), gaps, nowMs, travelMin).map((e) => e.id));
+  // Only events on the campus the student is on at the time are picks (a shuttle ride away is not free time).
+  const home = body.homeCampus;
+  const candidates = pickCandidates(
+    fittingEvents(onCampusThen(dayEvents, classStops, home), dayGaps(classStops), nowMs, travelMin),
+    interests,
+    MAX_CANDIDATES,
+  );
+  const openEvents = onCampusThen(dayEvents.filter((e) => !accepted.has(e.id)), fixedStops, home);
+  const fitsNow = new Set(fittingEvents(openEvents, gaps, nowMs, travelMin).map((e) => e.id));
   const openDeadlines = deadlines.filter((d) => !d.done && Date.parse(d.start) > nowMs);
 
   // 3. Gemini, two calls in parallel: rank events for this student (best first), and estimate homework time on
