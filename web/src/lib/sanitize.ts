@@ -131,6 +131,32 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
   };
 }
 
+/**
+ * The rest of the day /api/command answers from: the plan's date, every deadline the Due soon card shows (with
+ * `done`), the weather, and the last few chat turns (oldest first) so a follow-up question makes sense.
+ */
+export function sanitizeCommandContext(raw: unknown): {
+  date?: string;
+  deadlines: DayItem[];
+  weather?: Weather;
+  history: { from: "you" | "sol"; text: string }[];
+} {
+  const body = isObj(raw) ? raw : {};
+  const turn = (v: unknown) => {
+    if (!isObj(v) || (v.from !== "you" && v.from !== "sol")) return null;
+    const text = str(v.text, 400);
+    return text ? { from: v.from as "you" | "sol", text } : null;
+  };
+  return {
+    date: isCalendarDate(body.date) ? body.date : undefined,
+    deadlines: list(body.deadlines, LIMITS.deadlines).map(cleanDeadline).filter((d): d is DayItem => d !== null),
+    weather: cleanWeather(body.weather),
+    history: (Array.isArray(body.history) ? body.history.slice(-8) : [])
+      .map(turn)
+      .filter((t): t is { from: "you" | "sol"; text: string } => t !== null),
+  };
+}
+
 /** The parts of a client-sent DayPlan that /api/command reads: ids, titles, times, and Sol's reason for a pick. */
 export function sanitizePlanForCommand(raw: unknown): Pick<DayPlan, "items" | "suggestions"> {
   const plan = isObj(raw) ? raw : {};

@@ -91,6 +91,9 @@ type Loaded = {
 };
 
 /** A planned day: the real request, the pills that were on, what was sent to /api/plan, and its answer. */
+/** One message in Sol's chat. */
+export type ChatTurn = { from: "you" | "sol"; text: string };
+
 type Day = { loaded: Loaded; whatIf: WhatIf; request: PlanRequest; plan: DayPlan };
 type Inputs = { loaded: Loaded; whatIf: WhatIf };
 
@@ -430,8 +433,11 @@ export function useDay(date?: string) {
     return gone;
   }
 
-  /** Runs a spoken or typed question and returns what Sol says back. Failures are said in plain words. */
-  async function command(text: string): Promise<string> {
+  /**
+   * Runs a spoken or typed question and returns what Sol says back. Failures are said in plain words. `history`
+   * is the chat so far (oldest first), so Sol understands a follow-up.
+   */
+  async function command(text: string, history: ChatTurn[] = []): Promise<string> {
     const current = shown.current;
     if (!current) return "Your day is still loading.";
     const plan = visible(current.plan, hiddenRef.current);
@@ -440,7 +446,16 @@ export function useDay(date?: string) {
     const now = current.request.now;
     let action: CommandAction;
     try {
-      action = await postJson<CommandAction>("/api/command", { text, plan, now });
+      // The Due soon card's deadlines (with turned-in or not) and the weather, so Sol's answers match the screen.
+      action = await postJson<CommandAction>("/api/command", {
+        text,
+        plan,
+        now,
+        date: plan.date,
+        deadlines: current.request.deadlines,
+        weather: plan.weather ?? current.request.weather,
+        history: history.slice(-8),
+      });
     } catch (e) {
       // No Wi-Fi or Gemini out: what the plan on screen can answer, Sol still answers.
       const local = offlineAnswer(text, plan, now ? Date.parse(now) : Date.now());
