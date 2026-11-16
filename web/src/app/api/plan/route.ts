@@ -109,7 +109,9 @@ export async function POST(request: Request) {
   // 4. Sol's picks and the study blocks: the top pick holds its time and the study blocks go around it, until the
   //    student adds that pick. Every pick shown costs no homework time (see picksThenStudy).
   const minutesFor = (id: string) => estimates.get(id) ?? defaultStudyMinutes();
-  const { suggestions, study } = picksThenStudy(ordered, gaps, openDeadlines, nowMs, travelMin, minutesFor, accepted, fitsNow);
+  // "Move my study time to after CSE 240": no study block before studyFrom.
+  const studyNow = body.studyFrom ? Math.max(nowMs, atTime(date, body.studyFrom).getTime()) : nowMs;
+  const { suggestions, study } = picksThenStudy(ordered, gaps, openDeadlines, studyNow, travelMin, minutesFor, accepted, fitsNow);
   const items = sortByStart([...fixedStops, ...deadlinesToday, ...study]);
 
   // 5. Gemini call 3: the spoken briefing.

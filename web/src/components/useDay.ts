@@ -11,7 +11,8 @@
 // Sol says in one line what the re-plan changed (`change`).
 // Every failure is said in plain words (errors.ts) and leaves the app usable: the day on screen stays.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CampusId, CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
+import type { CampusId, ClassBlock, CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
+import { type DayEdits, endAfter, isAdded, loadEdits, saveEdits, withEdits } from "./day-edits";
 import { briefingWithout } from "./briefing";
 import { HttpError, canvasNotice, errorText, offlineAnswer } from "./errors";
 import { createShared, newestWins } from "./loading";
@@ -84,7 +85,8 @@ function asEvents(value: unknown): Opportunity[] {
 const asEventItemId = (id: string) => (id.startsWith("ev-") ? id : `ev-${id}`);
 
 type Loaded = {
-  request: PlanRequest; // the student's real request, before any "What if…" pill
+  request: PlanRequest; // the student's real request, before any "What if…" pill, with the day's chat edits applied
+  classes: ClassBlock[]; // the classes as saved, before the day's edits (components/day-edits.ts)
   name: string;
   isDemo: boolean;
   notice: string;
@@ -106,8 +108,25 @@ function weatherUrl(date: string | undefined, campus: CampusId | undefined): str
   return text ? `/api/weather?${text}` : "/api/weather";
 }
 
-/** The plan request for `date`; a date after `today` is a look-ahead. */
+/** "17:30" → 17.5, the hours formatTime takes. */
+const hoursOf = (hhmm: string) => Number(hhmm.slice(0, 2)) + Number(hhmm.slice(3)) / 60;
+
+/** The plan request for `date` with the edits the student made to that day by chatting with Sol. */
 async function buildRequest(date: string, today: string): Promise<Loaded> {
+  return withDayEdits(await buildPlainRequest(date, today), date);
+}
+
+/** `loaded` with the day's edits applied to its classes and study time. */
+function withDayEdits(loaded: Loaded, date: string, edits: DayEdits = loadEdits(loaded.request.date ?? date)): Loaded {
+  const day = loaded.request.date ?? date;
+  const request: PlanRequest = { ...loaded.request, classes: withEdits(loaded.classes, edits, day) };
+  if (edits.studyFrom) request.studyFrom = edits.studyFrom;
+  else delete request.studyFrom;
+  return { ...loaded, request };
+}
+
+/** The plan request for `date`; a date after `today` is a look-ahead. */
+async function buildPlainRequest(date: string, today: string): Promise<Loaded> {
   const later = date > today;
   const setup = loadSetup();
   if (!setup) {
@@ -128,6 +147,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
         acceptedEventIds: loadAccepted(date),
         calendarId: loadCalendarId(),
       },
+      classes: demo.request.classes,
       name: demo.persona.name,
       isDemo: true,
       notice: "",
@@ -165,6 +185,7 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
       pace: setup.pace,
       calendarId: loadCalendarId(), // /api/plan saves the day for the calendar feed (MongoDB) and sets calendarUrl
     },
+    classes: setup.classes,
     name: setup.name,
     isDemo: false,
     notice,
@@ -389,6 +410,16 @@ export function useDay(date?: string) {
 
   const setHotPreview = (value: boolean) => setWhatIf({ hot: value });
 
+  /** Changes this day's chat edits (components/day-edits.ts), saves them and plans the day again. */
+  function editDay(change: (edits: DayEdits) => DayEdits): Promise<DayPlan | null> {
+    const now = wanted.current;
+    const date = shown.current?.plan.date;
+    if (!now || !date) return Promise.resolve(null);
+    const edits = change(loadEdits(date));
+    saveEdits(date, edits);
+    return replan({ ...now, loaded: withDayEdits(now.loaded, date, edits) }, null);
+  }
+
   function setAccepted(now: Inputs, ids: string[], cause: Cause) {
     saveAccepted(now.loaded.request.date ?? arizonaToday(), ids);
     return replan({ ...now, loaded: { ...now.loaded, request: { ...now.loaded.request, acceptedEventIds: ids } } }, cause);
@@ -455,6 +486,7 @@ export function useDay(date?: string) {
         deadlines: current.request.deadlines,
         weather: plan.weather ?? current.request.weather,
         history: history.slice(-8),
+        skipped: loadEdits(plan.date).skip, // so "put MAT 343 back" can name one
       });
     } catch (e) {
       // No Wi-Fi or Gemini out: what the plan on screen can answer, Sol still answers.
@@ -474,6 +506,44 @@ export function useDay(date?: string) {
       const added = next?.items.find((i) => i.id === id);
       if (added) return `Added ${added.title} at ${formatTime(parseLocal(added.start).hours)}.`;
       return next ? `${name} does not fit in your day.` : `I could not add ${name}. Try again in a moment.`;
+    }
+
+    if (action.action === "add_block") {
+      const end = endAfter(action.start, action.minutes);
+      const block = { title: action.title, start: action.start, end, ...(action.location ? { location: action.location } : {}) };
+      const startMs = Date.parse(`${plan.date}T${action.start}:00-07:00`);
+      const endMs = Date.parse(`${plan.date}T${end}:00-07:00`);
+      const clash = plan.items.find(
+        (i) => (i.type === "class" || i.type === "event") && Date.parse(i.start) < endMs && Date.parse(i.end ?? i.start) > startMs,
+      );
+      const next = await editDay((e) => ({ ...e, add: [...e.add.filter((b) => b.title !== block.title), block] }));
+      if (!next) return `I could not add ${action.title}. Try again in a moment.`;
+      const when = `${formatTime(hoursOf(action.start))} to ${formatTime(hoursOf(end))}`;
+      return `Added ${action.title}, ${when}.${clash ? ` It overlaps ${clash.title}, so check which one you'll go to.` : " I planned the rest of your day around it."}`;
+    }
+    if (action.action === "skip_class") {
+      const edits = loadEdits(plan.date);
+      const added = isAdded(edits, action.course);
+      const next = await editDay((e) =>
+        added
+          ? { ...e, add: e.add.filter((b) => b.title.toLowerCase() !== action.course.toLowerCase()) }
+          : { ...e, skip: [...e.skip.filter((c) => c !== action.course), action.course] },
+      );
+      if (!next) return `I could not change your day. Try again in a moment.`;
+      return added ? `Took ${action.course} off today.` : `Skipping ${action.course} today. I re-planned the rest of your day. Say "put ${action.course} back" to undo.`;
+    }
+    if (action.action === "restore_class") {
+      const next = await editDay((e) => ({ ...e, skip: e.skip.filter((c) => c.toLowerCase() !== action.course.toLowerCase()) }));
+      return next ? `${action.course} is back on your day.` : `I could not change your day. Try again in a moment.`;
+    }
+    if (action.action === "study_from") {
+      const next = await editDay((e) => ({ ...e, studyFrom: action.time }));
+      if (!next) return `I could not move your study time. Try again in a moment.`;
+      const first = next.items.find((i) => i.type === "study_block" && i.start >= `${next.date}T${action.time}`);
+      const from = formatTime(hoursOf(action.time));
+      const starts = first ? formatTime(parseLocal(first.start).hours) : "";
+      if (!first) return `Done: no study time before ${from}. There isn't room for it after that today, so check what's due.`;
+      return starts === from ? `Done: study time now starts at ${from}.` : `Done: no study time before ${from}; it now starts at ${starts}.`;
     }
 
     const item = plan.items.find((i) => i.id === action.itemId);

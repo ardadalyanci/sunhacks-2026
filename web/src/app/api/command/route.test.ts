@@ -40,8 +40,8 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
     expect((await command({ text: "what‘s the schedule", plan })).json).toEqual({ action: "briefing" });
   });
 
-  it("never removes classes and answers unknown with help, never with a question", async () => {
-    expect((await command({ text: "drop CSE 230", plan })).json.action).toBe("unknown");
+  it("skips a class for today only (setup keeps it), and answers unknown with help, never with a question", async () => {
+    expect((await command({ text: "drop CSE 230", plan })).json).toEqual({ action: "skip_class", course: "CSE 230" });
     const { json } = await command({ text: "order me a pizza", plan });
     expect(json).toEqual({ action: "unknown", reply: 'I can tell you how your day looks, when to leave, or add an event, like "add the Sun Devil Robotics build night".' });
   });
@@ -144,7 +144,7 @@ describe("POST /api/command with Gemini", () => {
     const prompt = String(generateJson.mock.calls[0][0]);
     expect(prompt).toContain("ev-e1");
     expect(prompt).toContain("study-canvas-quiz-3-1");
-    expect(prompt).not.toContain("class-0-CSE230");
+    expect(prompt.split("\n").find((l) => l.startsWith("REMOVABLE:"))).not.toContain("class-0-CSE230"); // classes are skipped, not removed
   });
 
   it("passes a validator that rejects ids that were not offered", async () => {
@@ -274,5 +274,55 @@ describe("Sol's chat: chips, answers from the day's facts, and memory", () => {
     expect(prompt).toContain("turn 5");
     expect(prompt).toContain("turn 11");
     expect(prompt).not.toContain("admin");
+  });
+});
+
+describe("editing the day by chat", () => {
+  const cse230 = { ...plan.items[0], end: "2026-11-16T11:20:00-07:00" };
+  const day = { ...plan, items: [cse230, ...plan.items.slice(1)] };
+
+  it.each([
+    ["Add gym at 5 for an hour", { action: "add_block", title: "Gym", start: "17:00", minutes: 60 }],
+    ["put lunch with Sam at 12:30 pm for 45 minutes", { action: "add_block", title: "Lunch with Sam", start: "12:30", minutes: 45 }],
+    ["I'm skipping CSE 230 today", { action: "skip_class", course: "CSE 230" }],
+    ["move my study time to after CSE 230", { action: "study_from", time: "11:20" }],
+    ["no studying before 2 pm", { action: "study_from", time: "14:00" }],
+  ])("rules (Gemini out): %s", async (text, expected) => {
+    expect((await command({ text, plan: day })).json).toEqual(expected);
+  });
+
+  it("puts a skipped class back only when it was skipped", async () => {
+    expect((await command({ text: "put CSE 230 back", plan: day, skipped: ["CSE 230"] })).json).toEqual({ action: "restore_class", course: "CSE 230" });
+    expect((await command({ text: "put CSE 230 back", plan: day })).json.action).not.toBe("restore_class");
+  });
+
+  it("checks every field of Gemini's edit before using it", async () => {
+    await command({ text: "something", plan: day, skipped: ["MAT 343"] });
+    const isValid = generateJson.mock.calls[0][2] as (v: unknown) => boolean;
+    expect(isValid({ action: "add_block", title: "Gym", start: "17:00", minutes: 60 })).toBe(true);
+    expect(isValid({ action: "add_block", title: "Gym", start: "5 pm", minutes: 60 })).toBe(false);
+    expect(isValid({ action: "add_block", title: "Gym", start: "23:30", minutes: 60 })).toBe(false); // past midnight
+    expect(isValid({ action: "add_block", title: "", start: "17:00", minutes: 60 })).toBe(false);
+    expect(isValid({ action: "skip_class", itemId: "class-0-CSE230" })).toBe(true);
+    expect(isValid({ action: "skip_class", itemId: "ev-e9" })).toBe(false); // an event is removed, not skipped
+    expect(isValid({ action: "restore_class", course: "mat 343" })).toBe(true);
+    expect(isValid({ action: "restore_class", course: "PHY 121" })).toBe(false);
+    expect(isValid({ action: "study_from", itemId: "class-0-CSE230" })).toBe(true);
+    expect(isValid({ action: "study_from", time: "25:00" })).toBe(false);
+  });
+
+  it("turns Gemini's edit into the action the app applies", async () => {
+    generateJson.mockResolvedValueOnce({ action: "skip_class", itemId: "class-0-CSE230" });
+    expect((await command({ text: "not going to computer org today", plan: day })).json).toEqual({ action: "skip_class", course: "CSE 230" });
+    generateJson.mockResolvedValueOnce({ action: "study_from", itemId: "class-0-CSE230" });
+    expect((await command({ text: "push homework past my morning class", plan: day })).json).toEqual({ action: "study_from", time: "11:20" });
+    generateJson.mockResolvedValueOnce({ action: "add_block", title: "Gym", start: "17:00", minutes: 90, location: "SDFC" });
+    expect((await command({ text: "gym 5 to 6:30 at the SDFC", plan: day })).json).toEqual({
+      action: "add_block",
+      title: "Gym",
+      start: "17:00",
+      minutes: 90,
+      location: "SDFC",
+    });
   });
 });
