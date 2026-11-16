@@ -134,10 +134,15 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
     onListeningChange?.(value);
   }
 
-  function say(text: string) {
+  /**
+   * Puts Sol's line in the chat, and reads it aloud only when `aloud`: after a question asked out loud (the mic)
+   * and for "Hear my day". A typed question or a chip gets a quiet answer.
+   */
+  function say(text: string, aloud: boolean) {
     if (!alive.current) return;
     const line = polishLine(text);
     add({ from: "sol", text: line });
+    if (!aloud) return;
     talking.current = onSpeakingChange ?? null;
     onSpeakingChange?.(true);
     setSpeaking(true);
@@ -148,15 +153,16 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
     });
   }
 
-  async function handle(text: string) {
+  async function handle(text: string, aloud = false) {
     if (working) return;
+    if (!aloud) stopTalking(); // typing while Sol reads the last answer: he stops
     const before = history.current;
     add({ from: "you", text });
     setWorking(true);
     try {
-      say(await onCommand(text, before));
+      say(await onCommand(text, before), aloud);
     } catch {
-      say("I couldn't do that right now. Try again in a moment.");
+      say("I couldn't do that right now. Try again in a moment.", aloud);
     } finally {
       setWorking(false);
     }
@@ -176,7 +182,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
     r.lang = "en-US";
     r.interimResults = false;
     r.maxAlternatives = 1;
-    r.onresult = (event) => void handle(event.results[0][0].transcript);
+    r.onresult = (event) => void handle(event.results[0][0].transcript, true);
     r.onerror = (event) =>
       add({ from: "sol", text: event.error === "not-allowed" ? `Allow the microphone to talk to ${MASCOT}.` : "I didn't catch that. Try again." });
     r.onend = () => setListening(false);
@@ -210,7 +216,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => say(briefing)}
+          onClick={() => say(briefing, true)}
           className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 font-bold text-cloud hover:bg-ink/90"
         >
           <SpeakerIcon />
