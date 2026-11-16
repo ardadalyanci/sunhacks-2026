@@ -93,6 +93,7 @@ export interface Opportunity {
   tags: string[]; // e.g. ["software", "networking", "soccer"]
   source: OpportunitySource;
   fetchedAt: string;
+  campus?: "tempe" | "downtown" | "polytechnic" | "west" | "online"; // events: where it happens (feeds tag it; most club meetings default to Tempe)
 }
 
 export type Weekday = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
