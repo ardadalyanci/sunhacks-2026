@@ -199,6 +199,18 @@ describe("POST /api/plan with Gemini", () => {
     expect(json.items.find((i) => i.title === "MAT 343")!.via).toBeUndefined(); // Tempe classes are untouched
   });
 
+  it("starts an off-campus student's day with their own commute, and keeps study time out of it", async () => {
+    const { status, json } = await plan({ ...baseRequest, startBuildingId: undefined, commute: { minutes: 35, by: "drive" } });
+    expect(status).toBe(200);
+    const cse = json.items.find((i) => i.title === "CSE 230")!;
+    expect(cse.leaveAt).toBe("2026-11-16T09:55:00-07:00"); // 10:30 class, 35 minutes by car
+    expect(cse.via).toBe("From home by car: about 35 minutes, your own estimate.");
+    expect(json.items.find((i) => i.title === "MAT 343")!.via).toBeUndefined(); // then a walk from Brickyard
+    for (const block of json.items.filter((i) => i.type === "study_block")) {
+      expect(block.end! <= cse.leaveAt! || block.start >= cse.end!).toBe(true); // no study block while on the road
+    }
+  });
+
   it("plans a future day from its start and briefs it as a look-ahead", async () => {
     // Sunday evening, looking at Monday: Lab 7 (due Mon 23:59) is open, Saturday's work is not.
     const req = {

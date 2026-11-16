@@ -24,6 +24,18 @@ export function nextWalk(items: DayItem[], nowMs: number): Walk | null {
   };
 }
 
+export const SHUTTLE_TRACKER = "https://asu-shuttles.rider.peaktransit.com/";
+
+/**
+ * How the trip to a stop is made, in a few words: "13-minute walk", "25-minute trip from home",
+ * "75 minutes with the shuttle". `via` (from /api/plan) is set when the trip is not a campus walk.
+ */
+export function tripLabel(item: Pick<DayItem, "via">, minutes: number): string {
+  if (!item.via) return `${minutes}-minute walk`;
+  if (item.via.startsWith("From home") && !item.via.includes("shuttle")) return `${minutes}-minute trip from home`;
+  return `${minutes} minutes with the shuttle`;
+}
+
 /** "2 h 13 min", "23 min", "1 h": how long until a moment. */
 export function untilText(ms: number): string {
   const minutes = Math.max(0, Math.round(ms / 60_000));

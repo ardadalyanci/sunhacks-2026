@@ -86,6 +86,18 @@ describe("walkLegs", () => {
   });
 });
 
+describe("walkLegs with rides", () => {
+  it("keeps a stop reached by shuttle or from home on the map, without drawing that trip as a walk", () => {
+    const day = [
+      { ...item("a", "10:30", "10:05", "BYENG 210"), via: "From home by car: about 25 minutes, your own estimate." },
+      item("b", "12:00", "11:50", "COOR 170"),
+    ];
+    const { stops, legs } = walkLegs(day, MONDAY);
+    expect(stops.map((s) => s.place.word)).toEqual(["Brickyard", "Coor Hall"]);
+    expect(legs.map((l) => l.itemId)).toEqual(["b"]);
+  });
+});
+
 describe("tiles", () => {
   it("finds the tile that holds a known point", () => {
     // Manzanita Hall, 33.42247 N, 111.93007 W, at zoom 16 (2^16 = 65536 tiles across):

@@ -417,6 +417,40 @@ describe("other campuses", () => {
     expect(stops[1].why).toBe("Tight: that is 45 minutes before CSE 240 ends.");
   });
 
+  it("starts an off-campus day with the student's own commute, then walks as usual", () => {
+    const stops = [
+      item({ id: "o", type: "class", start: "2026-11-16T08:00:00-07:00", end: "2026-11-16T08:50:00-07:00", location: "Online" }),
+      item({ id: "c1", type: "class", start: "2026-11-16T10:30:00-07:00", end: "2026-11-16T11:20:00-07:00", buildingId: "BYENG" }),
+      item({ id: "c2", type: "class", start: "2026-11-16T12:00:00-07:00", buildingId: "COOR" }),
+    ];
+    addLeaveTimes(stops, ALL, "Manzanita", { tempF: 99, highF: 101, isHot: true }, true, { commute: { minutes: 25, by: "drive" } });
+    expect(stops[0].leaveAt).toBeUndefined(); // online: the commute waits for the first place to go to
+    expect(stops[1].leaveAt).toBe("2026-11-16T10:05:00-07:00"); // 25 minutes, no heat or pace minutes on top of the student's own estimate
+    expect(stops[1].via).toBe("From home by car: about 25 minutes, your own estimate.");
+    expect(stops[2].via).toBeUndefined(); // the next stop is a walk from Brickyard, not from the start building
+    expect(stops[2].leaveAt).toBe(toMstIso(new Date(ms(stops[2].start) - walkMinutes(BUILDINGS[0], BUILDINGS[1], true, true) * MIN)));
+  });
+
+  it("rides home to the home campus first when the first stop is on another campus", () => {
+    const stops = [item({ id: "c1", type: "class", start: "2026-11-16T11:30:00-07:00", location: "Santan Hall 120", campus: "polytechnic" })];
+    const shuttle = () => ({ beAtStopBy: "2026-11-16T10:15:00-07:00", via: "Gold shuttle from Forest Avenue and Lemon Street to SIM Building." });
+    addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { minutes: 20, by: "bike" }, shuttle });
+    expect(stops[0].leaveAt).toBe("2026-11-16T09:55:00-07:00");
+    expect(stops[0].via).toBe(
+      "From home by bike to the Tempe campus: about 20 minutes, your own estimate. Then: Gold shuttle from Forest Avenue and Lemon Street to SIM Building.",
+    );
+  });
+
+  it("flags a commute that starts before the class before it ends", () => {
+    const stops = [
+      item({ id: "o", type: "class", title: "MAT 343", start: "2026-11-16T09:00:00-07:00", end: "2026-11-16T09:50:00-07:00", location: "Zoom" }),
+      item({ id: "c1", type: "class", start: "2026-11-16T10:00:00-07:00", buildingId: "BYENG" }),
+    ];
+    addLeaveTimes(stops, ALL, undefined, undefined, false, { commute: { minutes: 30, by: "bus" } });
+    expect(stops[1].leaveAt).toBe("2026-11-16T09:30:00-07:00");
+    expect(stops[1].why).toBe("Tight: that is 20 minutes before MAT 343 ends.");
+  });
+
   it("puts a class's campus on its timeline item", () => {
     const [poly] = classItems([{ course: "EGR 104", days: ["Mon"], start: "11:30", end: "12:20", location: "Santan Hall 120", campus: "polytechnic" }], "2026-11-16", ALL);
     expect(poly).toMatchObject({ campus: "polytechnic", buildingId: "polytechnic-santan-hall" });

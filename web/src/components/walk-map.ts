@@ -60,6 +60,7 @@ export function walkLegs(items: DayItem[], date: string, startBuildingId?: strin
     const stop = { number: stops.length + 1, place, itemIds: [item.id] };
     stops.push(stop);
     if (!last) continue; // the first stop of a day with no start building: nothing to walk from
+    if (item.via) continue; // a shuttle ride or the trip from home: a stop on the map, but not a walk
     legs.push({
       itemId: item.id,
       title: item.title,

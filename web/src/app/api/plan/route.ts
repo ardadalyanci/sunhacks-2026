@@ -69,8 +69,9 @@ export async function POST(request: Request) {
   // 2. Leave times for the fixed stops, then the free time left around them and the events that fit into it.
   //    A student who asked for more walking time gets it on every walk, including the one to a suggested event.
   const slower = body.pace === "slower";
-  // A class or event on another campus is reached by ASU shuttle (lib/shuttles.ts); the day starts on homeCampus.
-  const campusLegs = { home: body.homeCampus, shuttle: shuttleLeg };
+  // A class or event on another campus is reached by ASU shuttle (lib/shuttles.ts); the day starts on homeCampus,
+  // or off campus near it when the student gave their commute.
+  const campusLegs = { home: body.homeCampus, shuttle: shuttleLeg, commute: body.commute };
   const fixedStops = sortByStart([...classes, ...acceptedEvents]);
   addLeaveTimes(fixedStops, buildings, body.startBuildingId, body.weather, slower, campusLegs);
   const dayGaps = (stops: DayItem[]) => freeGaps(atTime(date, DAY_START).getTime(), atTime(date, DAY_END).getTime(), stops, CLASS_TRAVEL_BUFFER_MIN);

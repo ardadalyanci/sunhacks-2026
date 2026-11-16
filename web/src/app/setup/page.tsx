@@ -5,24 +5,13 @@ import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type FormEvent } from "react";
 import Mascot from "@/components/Mascot";
 import { MASCOT, PRODUCT } from "@/components/brand";
+import { BUILDING_HINTS, CAMPUS_CHOICES, COMMUTE_CHOICES, STARTS } from "@/components/campus-options";
 import { classProblem, isBlankClass } from "@/components/classes";
 import { INTEREST_CHIPS } from "@/components/interests";
 import { clearSetup, forgetToken, loadSetup, loadToken, saveSetup, type SavedSetup } from "@/components/setup-store";
 import { WEEKDAYS } from "@/components/time";
-import type { ClassBlock, Weekday } from "@/lib/types";
-
-// Hints for the location field; the planner matches "BYENG 210" to data/buildings.json.
-const BUILDING_HINTS = ["BYENG", "COOR", "ECG", "ISTB4", "LL", "MU", "PSH", "SDFC", "WXLR", "Hayden Library"];
-
-// Where the first walk of the day starts (building ids in data/buildings.json), named the way students say them.
-const STARTS: { id: string; label: string }[] = [
-  { id: "", label: "Not sure yet" },
-  { id: "TOOKR", label: "Tooker House" },
-  { id: "MANZ", label: "Manzanita (Manzy)" },
-  { id: "SNPBL", label: "San Pablo" },
-  { id: "BARRETT", label: "Barrett" },
-  { id: "MU", label: "Off campus: I start at the MU" },
-];
+import { isCampus } from "@/lib/campuses";
+import type { CampusId, ClassBlock, CommuteBy, Weekday } from "@/lib/types";
 
 const CANVAS_SETTINGS = "https://canvas.asu.edu/profile/settings";
 
@@ -101,6 +90,10 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
   const [checked, setChecked] = useState(false); // mark rows that need a fix only after a save attempt
   const [saveError, setSaveError] = useState("");
   const [start, setStart] = useState(saved?.startBuildingId ?? ""); // where the first walk starts (building id)
+  const [homeCampus, setHomeCampus] = useState<CampusId>(saved?.homeCampus ?? "tempe");
+  const [offCampus, setOffCampus] = useState(Boolean(saved?.commute)); // lives off campus: the day starts with a commute
+  const [commuteBy, setCommuteBy] = useState<CommuteBy>(saved?.commute?.by ?? "drive");
+  const [commuteMinutes, setCommuteMinutes] = useState(saved?.commute ? String(saved.commute.minutes) : "");
   const [slower, setSlower] = useState(saved?.pace === "slower"); // "Give me more time to walk"
   const [tokenNote, setTokenNote] = useState(
     tokenSaved ? "A Canvas token is saved in this tab. Leave this blank to keep it." : "",
@@ -159,6 +152,11 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
       setSaveError("Some classes need a fix. They are marked in step 2.");
       return;
     }
+    const minutes = Number(commuteMinutes);
+    if (offCampus && !(Number.isInteger(minutes) && minutes >= 1 && minutes <= 120)) {
+      setSaveError("Add how many minutes it takes you to get from home to class, from 1 to 120.");
+      return;
+    }
     const kept = rows.map((c) => ({ ...c, course: c.course.trim(), location: c.location?.trim() || undefined }));
     // The token stays in this tab only. It goes to Canvas through our server and is never stored there.
     saveSetup(
@@ -166,7 +164,9 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
         name: name.trim(),
         classes: kept,
         interests,
-        startBuildingId: start || undefined,
+        startBuildingId: !offCampus && start ? start : undefined,
+        homeCampus: homeCampus === "tempe" ? undefined : homeCampus,
+        commute: offCampus ? { minutes, by: commuteBy } : undefined,
         pace: slower ? "slower" : undefined,
       },
       token.trim() || loadToken() || "", // blank keeps the token already saved in this tab
@@ -360,33 +360,52 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
                         />
                       </label>
                       <label className="block">
+                        <span className="font-bold">Campus</span>
+                        <select
+                          value={c.campus ?? "tempe"}
+                          onChange={(e) => {
+                            const campus = isCampus(e.target.value) ? e.target.value : "tempe";
+                            updateClass(index, { campus: campus === "tempe" ? undefined : campus });
+                          }}
+                          className={field}
+                        >
+                          {CAMPUS_CHOICES.map((choice) => (
+                            <option key={choice.id} value={choice.id}>
+                              {choice.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
                         <span className="font-bold">Building and room</span>
                         <input
                           value={c.location ?? ""}
                           onChange={(e) => updateClass(index, { location: e.target.value })}
-                          placeholder="BYENG 210"
-                          list="building-hints"
+                          placeholder={BUILDING_HINTS[c.campus ?? "tempe"][0] + " 210"}
+                          list={`building-hints-${c.campus ?? "tempe"}`}
                           className={field}
                         />
                       </label>
-                      <label className="block">
-                        <span className="font-bold">Starts</span>
-                        <input
-                          type="time"
-                          value={c.start}
-                          onChange={(e) => updateClass(index, { start: e.target.value })}
-                          className={field}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="font-bold">Ends</span>
-                        <input
-                          type="time"
-                          value={c.end}
-                          onChange={(e) => updateClass(index, { end: e.target.value })}
-                          className={field}
-                        />
-                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="font-bold">Starts</span>
+                          <input
+                            type="time"
+                            value={c.start}
+                            onChange={(e) => updateClass(index, { start: e.target.value })}
+                            className={field}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="font-bold">Ends</span>
+                          <input
+                            type="time"
+                            value={c.end}
+                            onChange={(e) => updateClass(index, { end: e.target.value })}
+                            className={field}
+                          />
+                        </label>
+                      </div>
                     </div>
                     <p className="mt-3 font-bold">Days</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -431,17 +450,105 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
             </button>
           )}
 
-          <label className="mt-8 block">
-            <span className="font-bold">Where does your day start?</span>
-            <span className="block text-sm text-ink-soft">{MASCOT} times your first walk from here.</span>
-            <select value={start} onChange={(e) => setStart(e.target.value)} className={field}>
-              {STARTS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
+          <div className="mt-8">
+            <p className="font-bold" id="start-label">
+              Where does your day start?
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-labelledby="start-label">
+              {[
+                { off: false, label: "On campus" },
+                { off: true, label: "At home, off campus" },
+              ].map((choice) => (
+                <button
+                  key={choice.label}
+                  type="button"
+                  aria-pressed={offCampus === choice.off}
+                  onClick={() => setOffCampus(choice.off)}
+                  className={`rounded-full border-2 px-4 py-2 font-bold ${
+                    offCampus === choice.off ? "border-ink bg-ink text-cloud" : "border-ink/20 bg-cloud hover:border-ink"
+                  }`}
+                >
+                  {choice.label}
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="font-bold">{offCampus ? "Campus closest to home" : "Campus"}</span>
+                <select
+                  value={homeCampus}
+                  onChange={(e) => {
+                    setHomeCampus(isCampus(e.target.value) ? e.target.value : "tempe");
+                    setStart(""); // a dorm on one campus is not a place on another
+                  }}
+                  className={field}
+                >
+                  {CAMPUS_CHOICES.map((choice) => (
+                    <option key={choice.id} value={choice.id}>
+                      {choice.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {offCampus ? (
+                <label className="block">
+                  <span className="font-bold">Minutes from your door to class</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={120}
+                    value={commuteMinutes}
+                    onChange={(e) => setCommuteMinutes(e.target.value)}
+                    placeholder="25"
+                    className={field}
+                  />
+                </label>
+              ) : (
+                <label className="block">
+                  <span className="font-bold">Building</span>
+                  <select value={start} onChange={(e) => setStart(e.target.value)} className={field}>
+                    <option value="">Not sure yet</option>
+                    {STARTS[homeCampus].map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            {offCampus ? (
+              <>
+                <p className="mt-4 font-bold" id="commute-label">
+                  How do you get there?
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-labelledby="commute-label">
+                  {COMMUTE_CHOICES.map((choice) => (
+                    <button
+                      key={choice.by}
+                      type="button"
+                      aria-pressed={commuteBy === choice.by}
+                      onClick={() => setCommuteBy(choice.by)}
+                      className={`min-h-10 rounded-full border-2 px-3 py-1.5 font-bold ${
+                        commuteBy === choice.by ? "border-ink bg-ink text-cloud" : "border-ink/20 hover:border-ink"
+                      }`}
+                    >
+                      {choice.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-sm text-ink-soft">
+                  {MASCOT} has you leave this many minutes before your first class and never asks for your address. A
+                  class on another campus adds the ASU shuttle from this one.
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-ink-soft">
+                {MASCOT} times your first walk from here. A class on another campus gets the ASU shuttle.
+              </p>
+            )}
+          </div>
 
           <label className="mt-6 flex items-start gap-3">
             <input
@@ -504,11 +611,13 @@ function SetupForm({ saved, tokenSaved }: { saved: SavedSetup | null; tokenSaved
           )}
         </div>
       </form>
-      <datalist id="building-hints">
-        {BUILDING_HINTS.map((b) => (
-          <option key={b} value={b} />
-        ))}
-      </datalist>
+      {CAMPUS_CHOICES.map(({ id }) => (
+        <datalist key={id} id={`building-hints-${id}`}>
+          {BUILDING_HINTS[id].map((b) => (
+            <option key={b} value={b} />
+          ))}
+        </datalist>
+      ))}
     </main>
   );
 }

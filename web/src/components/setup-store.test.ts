@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClassBlock, DayItem } from "@/lib/types";
-import { forgetToken, itemKey, loadHidden, loadSetup, loadToken, saveHidden, saveSetup } from "./setup-store";
+import { eventCampusQuery, forgetToken, itemKey, loadHidden, loadSetup, loadToken, saveHidden, saveSetup } from "./setup-store";
 
 /** A Storage stand-in, since the tests run in Node. */
 function memoryStorage(): Storage {
@@ -30,6 +30,20 @@ describe("loadSetup", () => {
     const setup = { name: "Maya", classes: [cse360], interests: ["robotics"], startBuildingId: "TOOKR", pace: "slower" };
     localStorage.setItem("daypilot.setup", JSON.stringify(setup));
     expect(loadSetup()).toEqual(setup);
+  });
+
+  it("keeps other campuses and an off-campus commute through a save and a reload", () => {
+    const poly: ClassBlock = { course: "EGR 104", days: ["Tue"], start: "11:30", end: "12:20", location: "Santan Hall 120", campus: "polytechnic" };
+    const setup = { name: "Maya", classes: [cse360, poly], interests: [], homeCampus: "polytechnic" as const, commute: { minutes: 20, by: "bike" as const } };
+    saveSetup(setup, "");
+    expect(loadSetup()).toEqual(setup);
+    // Tempe is the default, so it is not kept; a commute out of range or by an unknown way is dropped.
+    localStorage.setItem(
+      "daypilot.setup",
+      JSON.stringify({ ...setup, classes: [{ ...poly, campus: "tempe" }], homeCampus: "mars", commute: { minutes: 500, by: "bike" } }),
+    );
+    const tempe: ClassBlock = { course: "EGR 104", days: ["Tue"], start: "11:30", end: "12:20", location: "Santan Hall 120" };
+    expect(loadSetup()).toEqual({ name: "Maya", classes: [tempe], interests: [] });
   });
 
   it("drops fields with the wrong type instead of crashing Today", () => {
@@ -97,5 +111,13 @@ describe("hidden items", () => {
     saveHidden("2026-11-15", [itemKey(block("08:00", "10:00"))]);
     expect(loadHidden("2026-11-15")).toEqual(["study_block|Work on: CSE 230: Lab 7 (pipelining)"]);
     expect(localStorage.getItem("daypilot.hidden")).toBeNull();
+  });
+});
+
+describe("eventCampusQuery", () => {
+  it("asks for the home campus and every class's campus, and nothing extra for an all-Tempe student", () => {
+    expect(eventCampusQuery({ classes: [cse360] })).toBe("");
+    expect(eventCampusQuery({ classes: [cse360], homeCampus: "polytechnic" })).toBe("?campus=polytechnic&campus=tempe");
+    expect(eventCampusQuery({ classes: [{ ...cse360, campus: "downtown" }], homeCampus: "downtown" })).toBe("?campus=downtown");
   });
 });

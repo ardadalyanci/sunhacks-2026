@@ -66,6 +66,21 @@ describe("sanitizePlanRequest", () => {
     expect(pace(undefined)).toBeUndefined();
   });
 
+  it("keeps an off-campus commute only with whole minutes from 1 to 120 and a known way to travel", () => {
+    const commute = (v: unknown) => {
+      const res = sanitizePlanRequest({ classes: [], commute: v });
+      return res.ok ? res.value.commute : "rejected";
+    };
+    expect(commute({ minutes: 25, by: "drive" })).toEqual({ minutes: 25, by: "drive" });
+    expect(commute({ minutes: 12.4, by: "bike" })).toEqual({ minutes: 12, by: "bike" });
+    expect(commute({ minutes: 500, by: "bus" })).toEqual({ minutes: 120, by: "bus" });
+    expect(commute({ minutes: 0, by: "walk" })).toEqual({ minutes: 1, by: "walk" });
+    expect(commute({ minutes: "25", by: "drive" })).toBeUndefined();
+    expect(commute({ minutes: 25, by: "helicopter" })).toBeUndefined();
+    expect(commute({ minutes: Number.NaN, by: "drive" })).toBeUndefined();
+    expect(commute(undefined)).toBeUndefined();
+  });
+
   it("derives isHot when it is missing", () => {
     const res = sanitizePlanRequest({ classes: [], weather: { tempF: 90, highF: 101 } });
     expect(res.ok && res.value.weather).toEqual({ tempF: 90, highF: 101, isHot: true });

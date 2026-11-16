@@ -11,12 +11,13 @@
 // Sol says in one line what the re-plan changed (`change`).
 // Every failure is said in plain words (errors.ts) and leaves the app usable: the day on screen stays.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
+import type { CampusId, CommandAction, DayItem, DayPlan, Opportunity, PlanRequest, Weather } from "@/lib/types";
 import { briefingWithout } from "./briefing";
 import { HttpError, canvasNotice, errorText, offlineAnswer } from "./errors";
 import { createShared, newestWins } from "./loading";
 import { describeChange, describeRemovedStudy, describeStack, type Cause } from "./plan-diff";
 import {
+  eventCampusQuery,
   itemKey,
   loadAccepted,
   loadCalendarId,
@@ -93,6 +94,15 @@ type Loaded = {
 type Day = { loaded: Loaded; whatIf: WhatIf; request: PlanRequest; plan: DayPlan };
 type Inputs = { loaded: Loaded; whatIf: WhatIf };
 
+/** Weather for the day, on the home campus when it is not Tempe. */
+function weatherUrl(date: string | undefined, campus: CampusId | undefined): string {
+  const query = new URLSearchParams();
+  if (date) query.set("date", date);
+  if (campus && campus !== "tempe") query.set("campus", campus);
+  const text = query.toString();
+  return text ? `/api/weather?${text}` : "/api/weather";
+}
+
 /** The plan request for `date`; a date after `today` is a look-ahead. */
 async function buildRequest(date: string, today: string): Promise<Loaded> {
   const later = date > today;
@@ -132,8 +142,8 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
             return [] as DayItem[];
           })
       : Promise.resolve([] as DayItem[]),
-    getJson<unknown>("/api/events").then(asEvents),
-    getJson<Weather>(later ? `/api/weather?date=${date}` : "/api/weather"),
+    getJson<unknown>(`/api/events${eventCampusQuery(setup)}`).then(asEvents),
+    getJson<Weather>(weatherUrl(later ? date : undefined, setup.homeCampus)),
   ]);
   if (!token) notice = "Add your Canvas token in Setup to see your assignments here.";
 
@@ -146,7 +156,9 @@ async function buildRequest(date: string, today: string): Promise<Loaded> {
       acceptedEventIds: loadAccepted(date),
       interests: setup.interests,
       weather: weather ?? undefined,
-      startBuildingId: setup.startBuildingId,
+      startBuildingId: setup.commute ? undefined : setup.startBuildingId,
+      homeCampus: setup.homeCampus,
+      commute: setup.commute,
       pace: setup.pace,
       calendarId: loadCalendarId(), // /api/plan saves the day for the calendar feed (MongoDB) and sets calendarUrl
     },

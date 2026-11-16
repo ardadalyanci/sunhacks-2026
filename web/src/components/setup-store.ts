@@ -1,5 +1,6 @@
 // What the setup screen saves in the browser. Nothing here is sent to our server except per request.
-import type { ClassBlock, DayItem, Weekday } from "@/lib/types";
+import { isCampus } from "@/lib/campuses";
+import type { CampusId, ClassBlock, Commute, CommuteBy, DayItem, Weekday } from "@/lib/types";
 import { WEEKDAYS } from "./time";
 
 export interface SavedSetup {
@@ -7,6 +8,8 @@ export interface SavedSetup {
   classes: ClassBlock[];
   interests: string[];
   startBuildingId?: string;
+  homeCampus?: CampusId; // the campus the day starts on (or the one nearest an off-campus home); absent = Tempe
+  commute?: Commute; // the student lives off campus: their own minutes from home to class, and how they travel
   pace?: "slower"; // "Give me more time to walk": every leave time is earlier, and earlier again in heat
 }
 
@@ -35,6 +38,16 @@ export function loadCalendarId(): string | undefined {
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const isWeekday = (d: unknown): d is Weekday => typeof d === "string" && (WEEKDAYS as string[]).includes(d);
 
+export const COMMUTE_BY: CommuteBy[] = ["walk", "bike", "scooter", "drive", "bus"];
+
+/** A saved commute, or undefined when either field is off (the same limits as the server: 1 to 120 minutes). */
+function asCommute(value: unknown): Commute | undefined {
+  const c = value as Partial<Record<keyof Commute, unknown>> | null;
+  if (!c || typeof c !== "object" || typeof c.minutes !== "number" || !Number.isInteger(c.minutes)) return undefined;
+  if (c.minutes < 1 || c.minutes > 120 || !COMMUTE_BY.includes(c.by as CommuteBy)) return undefined;
+  return { minutes: c.minutes, by: c.by as CommuteBy };
+}
+
 /** One saved class, or null when a field has the wrong type (an old or hand-edited setup). */
 function asClass(value: unknown): ClassBlock | null {
   const c = value as Partial<Record<keyof ClassBlock, unknown>> | null;
@@ -45,6 +58,7 @@ function asClass(value: unknown): ClassBlock | null {
   if (days.length === 0) return null;
   const block: ClassBlock = { course: c.course, days, start: c.start, end: c.end };
   if (typeof c.location === "string" && c.location) block.location = c.location;
+  if (isCampus(c.campus) && c.campus !== "tempe") block.campus = c.campus;
   return block;
 }
 
@@ -66,11 +80,24 @@ export function loadSetup(): SavedSetup | null {
       interests: Array.isArray(saved.interests) ? saved.interests.filter((i): i is string => typeof i === "string") : [],
     };
     if (typeof saved.startBuildingId === "string" && saved.startBuildingId) setup.startBuildingId = saved.startBuildingId;
+    if (isCampus(saved.homeCampus) && saved.homeCampus !== "tempe") setup.homeCampus = saved.homeCampus;
+    const commute = asCommute(saved.commute);
+    if (commute) setup.commute = commute;
     if (saved.pace === "slower") setup.pace = "slower";
     return setup;
   } catch {
     return null;
   }
+}
+
+/**
+ * The query for /api/events: the home campus and every class's campus ("?campus=tempe&campus=polytechnic").
+ * Empty for an all-Tempe student, so their request stays exactly the default one.
+ */
+export function eventCampusQuery(setup: Pick<SavedSetup, "classes" | "homeCampus">): string {
+  const campuses = new Set<CampusId>([setup.homeCampus ?? "tempe", ...setup.classes.map((c) => c.campus ?? "tempe")]);
+  if (campuses.size === 1 && campuses.has("tempe")) return "";
+  return `?${[...campuses].map((c) => `campus=${c}`).join("&")}`;
 }
 
 /**

@@ -2,7 +2,7 @@
 // so the Today screen still works when Gemini is unavailable.
 import { placeLabel, spokenAssignment, spokenStop } from "./places";
 import { CAMPUS_INFO } from "./campuses";
-import type { CampusId, ClassBlock, DayItem, Opportunity, Weather, Weekday } from "./types";
+import type { CampusId, ClassBlock, Commute, CommuteBy, DayItem, Opportunity, Weather, Weekday } from "./types";
 
 export const MST = "-07:00"; // Arizona: no daylight saving
 const MST_MS = 7 * 60 * 60 * 1000;
@@ -20,6 +20,13 @@ const SLOWER_PACE_FACTOR = 1.35; // "Give me more time to walk" in Setup
 const HEAT_EXTRA_MIN = 2;
 const HEAT_EXTRA_SLOWER_MIN = 5;
 const SAME_BUILDING_BREAK_MIN = 60; // a longer break between two stops in one building gets a leave time again
+const COMMUTE_WORDS: Record<CommuteBy, string> = {
+  walk: "on foot",
+  bike: "by bike",
+  scooter: "by scooter",
+  drive: "by car",
+  bus: "by bus or light rail",
+};
 
 // A class is a course code and nothing else ("CSE 230", "BIO 181L"). "MAT 343 study group" or "Work shift" is a
 // commitment the student added, and Sol calls it by its own name.
@@ -310,6 +317,9 @@ export function placeStudyBlocks(
  * so, starting with "Tight:".
  * A stop on another campus (`item.campus`; the day starts on `home`, default Tempe) is reached by ASU shuttle:
  * walk to the stop, be there when `shuttle` says, walk from the stop; `via` names the shuttle, or says none fits.
+ * A student who lives off campus (`commute`, near `home`) starts with that trip instead of a walk: the first stop
+ * is `commute.minutes` away (their own estimate, door to class, so no heat or pace minutes are added). When that
+ * stop is on another campus they ride to `home` first, then take the shuttle. `via` says so.
  */
 export function addLeaveTimes(
   items: DayItem[],
@@ -317,10 +327,11 @@ export function addLeaveTimes(
   startBuildingId: string | undefined,
   weather?: Weather,
   slower = false,
-  campuses: { home?: CampusId; shuttle?: ShuttleLeg } = {},
+  campuses: { home?: CampusId; shuttle?: ShuttleLeg; commute?: Commute } = {},
 ) {
   const hot = weather?.isHot ?? false;
   let hereCampus: CampusId = campuses.home ?? "tempe";
+  let commute = campuses.commute; // the trip from an off-campus home; used up by the first stop
   // Only a real squeeze: a stop that starts before the one before it ends is a clash, not a tight walk.
   const markTight = (item: DayItem, before: DayItem | undefined, leave: number) => {
     const beforeEnd = before ? new Date(before.end ?? before.start).getTime() : Number.NaN;
@@ -329,7 +340,7 @@ export function addLeaveTimes(
       item.why = `Tight: that is ${short} minute${short === 1 ? "" : "s"} before ${stopName(before)} ends.`;
     }
   };
-  let here = findBuilding(buildings, startBuildingId, hereCampus);
+  let here = commute ? undefined : findBuilding(buildings, startBuildingId, hereCampus);
   let lastStop = here; // the building of the stop just before (undefined when that place is unknown)
   let prev: DayItem | undefined;
   for (const item of items) {
@@ -344,6 +355,32 @@ export function addLeaveTimes(
     delete item.via; // from an earlier plan of the same day
     const itemCampus: CampusId = item.campus ?? "tempe";
     const there = findBuilding(buildings, item.buildingId ?? item.location, itemCampus);
+    if (commute) {
+      const { minutes, by } = commute;
+      const ride = minutes * MIN;
+      const trip = (to: string) => `From home ${COMMUTE_WORDS[by]}${to}: about ${minutes} minutes, your own estimate.`;
+      commute = undefined;
+      if (itemCampus === hereCampus) {
+        const leave = new Date(item.start).getTime() - ride;
+        item.leaveAt = toMstIso(new Date(leave));
+        item.via = trip("");
+        markTight(item, before, leave);
+      } else {
+        const walk = walkMinutes(undefined, undefined, hot, slower) * MIN;
+        const leg = campuses.shuttle?.(hereCampus, itemCampus, toMstIso(new Date(new Date(item.start).getTime() - walk)));
+        if (leg?.beAtStopBy) {
+          const leave = new Date(leg.beAtStopBy).getTime() - ride;
+          item.leaveAt = toMstIso(new Date(leave));
+          markTight(item, before, leave);
+        } else delete item.leaveAt;
+        const shuttle = leg?.via ?? `No direct ASU shuttle from ${CAMPUS_INFO[hereCampus].name} to ${CAMPUS_INFO[itemCampus].name}.`;
+        item.via = `${trip(` to the ${CAMPUS_INFO[hereCampus].name} campus`)} Then: ${shuttle}`;
+        hereCampus = itemCampus;
+      }
+      here = there;
+      lastStop = there;
+      continue;
+    }
     if (itemCampus !== hereCampus) {
       // Another campus: the stops' own spots are not in our data, so both walks (to and from the stop) are the default walk.
       const walk = walkMinutes(undefined, undefined, hot, slower) * MIN;

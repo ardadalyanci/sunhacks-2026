@@ -115,13 +115,18 @@ function walksFact(request: PlanRequest, plan: DayPlan): PlanFact | null {
   const source = `Each leave time comes from distances between ${buildings.length} ASU buildings from OpenStreetMap.`;
   // No map at all (one stop, or only places the map does not know): count the plan's own walks.
   if (!legs.length) {
-    const minutes = walks.reduce((sum, i) => sum + walkMinutes(i), 0);
-    return { key: "walks", label: "Walks", text: `${plural(walks.length, "walk")}, ${plural(minutes, "minute")} on foot in all. ${source}` };
+    const onFoot = walks.filter((i) => !i.via); // a shuttle ride or the trip from home is not on foot
+    if (!onFoot.length) return null;
+    const minutes = onFoot.reduce((sum, i) => sum + walkMinutes(i), 0);
+    return { key: "walks", label: "Walks", text: `${plural(onFoot.length, "walk")}, ${plural(minutes, "minute")} on foot in all. ${source}` };
   }
   const minutes = legs.reduce((sum, leg) => sum + leg.minutes, 0);
   const start = findPlace(request.startBuildingId).building ? `, starting from ${placeLabel(request.startBuildingId)}` : "";
   const first = walks[0];
-  const plus = legs.some((leg) => leg.itemId === first.id) ? "" : `, plus the walk to your first ${first.type === "event" ? "event" : "class"}`;
+  const plus =
+    legs.some((leg) => leg.itemId === first.id) || first.via
+      ? ""
+      : `, plus the walk to your first ${first.type === "event" ? "event" : "class"}`;
   return {
     key: "walks",
     label: "Walks",

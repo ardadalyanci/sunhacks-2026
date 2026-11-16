@@ -4,6 +4,7 @@
 import { placeLabel } from "@/lib/places";
 import type { DayItem } from "@/lib/types";
 import { assignmentName, blockTitle, hourOn, rangeLabel } from "./sky-layout";
+import { tripLabel } from "./next-walk";
 import { formatTime, parseLocal } from "./time";
 
 export type RowKind = "leave" | "block" | "study" | "deadline";
@@ -61,7 +62,7 @@ export function dayRows(items: DayItem[], date: string, nowMs: number): DayRow[]
         endMs: leaveMs,
         time: formatTime(hourOn(item.leaveAt, date)),
         title: `Leave for ${placeLabel(item.location) || item.title}`,
-        detail: `${minutes}-minute walk`,
+        detail: tripLabel(item, minutes),
       });
     }
 
@@ -90,7 +91,8 @@ export function dayRows(items: DayItem[], date: string, nowMs: number): DayRow[]
         endMs,
         time,
         title: blockTitle(item.title),
-        detail: place,
+        // A stop on another campus with no shuttle in time has no leave row: the reason goes with the stop.
+        detail: [place, !item.leaveAt ? item.via : undefined].filter(Boolean).join(" · "),
         label: item.type === "event" ? "Event" : undefined,
       });
     }

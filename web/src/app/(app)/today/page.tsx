@@ -12,7 +12,15 @@ import VoiceBar from "@/components/VoiceBar";
 import WalkMap from "@/components/WalkMap";
 import WhatIfBar from "@/components/WhatIfBar";
 import { MASCOT, PRODUCT } from "@/components/brand";
-import { nextWalk, placeLabel, toCelsius, untilText, walkLink } from "@/components/next-walk";
+import {
+  SHUTTLE_TRACKER,
+  nextWalk,
+  placeLabel,
+  toCelsius,
+  tripLabel,
+  untilText,
+  walkLink,
+} from "@/components/next-walk";
 import { loadSetup } from "@/components/setup-store";
 import { formatDay, formatTime, parseLocal } from "@/components/time";
 import { useChosenDay } from "@/components/useChosenDay";
@@ -269,17 +277,29 @@ export default function TodayPage() {
             <p className="text-lg">
               {walk.item.title} {isCourse(walk.item.title) ? "in" : "at"}{" "}
               <span className="font-bold">{placeLabel(walk.item.location)}</span> ·{" "}
-              {walk.minutes}-minute walk
+              {tripLabel(walk.item, walk.minutes)}
               {!later && !walk.now ? ` · in ${untilText(walk.leaveMs - nowMs)}` : ""}
             </p>
-            <a
-              href={walkLink(walk.item.location)}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"
-            >
-              Walk me there
-            </a>
+            {/* A campus walk gets walking directions; a shuttle ride gets ASU's live shuttle map. */}
+            {!walk.item.via ? (
+              <a
+                href={walkLink(walk.item.location)}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"
+              >
+                Walk me there
+              </a>
+            ) : walk.item.via.includes("shuttle") ? (
+              <a
+                href={SHUTTLE_TRACKER}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border-2 border-ink px-4 py-1.5 font-bold hover:bg-ink/10"
+              >
+                Where’s my shuttle?
+              </a>
+            ) : null}
           </div>
         )}
         {tight && <p className="mt-2 max-w-prose font-bold text-[#8C1D40]">{tight}</p>}
@@ -411,6 +431,7 @@ export default function TodayPage() {
                   Leave at {clock(selected.leaveAt)} for {placeLabel(selected.location) || selected.title}.
                 </p>
               )}
+              {selected.via && <p className="mt-2">{selected.via}</p>}
               {selected.why && <p className="mt-2">{selected.why}</p>}
               {selected.type === "study_block" &&
                 (() => {
