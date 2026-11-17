@@ -265,6 +265,20 @@ describe("Sol's chat: chips, answers from the day's facts, and memory", () => {
     expect((await command({ text: "when is my lab due", plan, now: at, ...day })).json.reply).toContain("Lab 7 for CSE 230 is due today at 11:59 pm.");
   });
 
+  it("answers where to get help in code: tutoring that is open while the student is free", async () => {
+    const essay = { id: "canvas-assignment-3", type: "deadline", title: "ENG 102: Reading response", start: "2026-11-17T12:00:00-07:00", source: "canvas", done: false };
+    const withEssay = { ...day, deadlines: [...day.deadlines, essay] };
+    const ask = (text: string) => command({ text, plan, now: at, ...withEssay }).then((r) => r.json.reply);
+    // Noble's Writing Center opens at 10; the student is free 10:30 to 11:10, between CSE 230 and study time.
+    expect(await ask("Where can I get help with ENG 102?")).toBe(
+      "For the Reading response for ENG 102, try the Writing Center, Noble Library 280, open while you're free 10:30 am to 11:10 am.",
+    );
+    expect(await ask("Where can I get help?")).toBe(
+      "For Lab 7 for CSE 230, try the Engineering Tutoring Centers, hours vary by location, the link is on Due soon. For the Reading response for ENG 102, try the Writing Center, Noble Library 280, open while you're free 10:30 am to 11:10 am.",
+    );
+    expect(generateJson).not.toHaveBeenCalled();
+  });
+
   it("keeps only the last 8 turns of the chat, and only well-formed ones", async () => {
     generateJson.mockResolvedValueOnce({ action: "unknown", reply: "I can help with your day." });
     const history = [...Array.from({ length: 12 }, (_, i) => ({ from: i % 2 ? "sol" : "you", text: `turn ${i}` })), { from: "admin", text: "x" }];

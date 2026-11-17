@@ -481,3 +481,19 @@ describe("POST /api/plan: Sol's picks keep their time", () => {
     expect(json.briefing).toBe("Work on Lab 7 for CSE 230 at 8 am. I saved the lunch hour for you.");
   });
 });
+
+describe("tutoring for open deadlines", () => {
+  it("adds ASU tutoring that fits: a link for engineering, a center and free time for math, none for a quiz or done work", async () => {
+    generateJson.mockResolvedValue(null);
+    const hw = { id: "canvas-assignment-4", type: "deadline", title: "MAT 343: HW 10", start: "2026-11-16T23:59:00-07:00", source: "canvas", done: false };
+    const { json } = await plan({ ...baseRequest, deadlines: [...baseRequest.deadlines, hw] });
+    expect(json.help?.map((h) => h.deadlineId)).toEqual(["canvas-assignment-1", "canvas-assignment-4"]);
+    expect(json.help?.[0]).toEqual({ deadlineId: "canvas-assignment-1", center: "Engineering Tutoring Centers", url: "https://tutoring.engineering.asu.edu/" });
+    const math = json.help![1];
+    expect(math).toMatchObject({ center: "Math Tutoring Center", place: "Wexler Hall 116" });
+    // Inside the center's hours and never on top of a class.
+    expect(t(math.from)! >= "10:00" && t(math.to)! <= "18:00").toBe(true);
+    const classes = json.items.filter((i) => i.type === "class");
+    expect(classes.some((c) => overlaps(c, { ...c, start: math.from!, end: math.to! }))).toBe(false);
+  });
+});

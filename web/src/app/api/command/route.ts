@@ -18,7 +18,8 @@ import { sanitizeCommandContext, sanitizePlanForCommand } from "@/lib/sanitize";
 import { dayOpener, spokenEvent, spokenItem, spokenWhere } from "@/lib/say";
 import type { CommandAction, DayItem } from "@/lib/types";
 import { type EditAnswer, ruleEdit, toEdit } from "./edits";
-import { type CommandDay, dayFacts, dueReply, freeReply, relativeReply, timesIn, weatherReply, withoutHeatTips } from "./facts";
+import { type CommandDay, TUTORING, dayFacts, dueReply, freeReply, relativeReply, timesIn, tutoringReply, weatherReply, withoutHeatTips } from "./facts";
+import { tutoringHelp } from "@/lib/tutoring";
 
 type Turn = { from: "you" | "sol"; text: string };
 
@@ -49,12 +50,14 @@ export async function POST(request: Request) {
 
   const nowMs = typeof body?.now === "string" && !Number.isNaN(Date.parse(body.now)) ? Date.parse(body.now) : Date.now();
   const firstStart = plan.items.find((i) => i.start)?.start;
+  const date = context.date ?? (firstStart ? mstDate(new Date(firstStart)) : mstDate(new Date(nowMs)));
   const day: CommandDay = {
-    date: context.date ?? (firstStart ? mstDate(new Date(firstStart)) : mstDate(new Date(nowMs))),
+    date,
     items: plan.items,
     suggestions: plan.suggestions,
     deadlines: context.deadlines,
     weather: context.weather,
+    help: tutoringHelp(context.deadlines, plan.items, date, nowMs, context.campus),
   };
 
   // The chips under the chat are answered by code: no Gemini call, and they work when Gemini is out.
@@ -63,6 +66,8 @@ export async function POST(request: Request) {
   // "And after that?" right after talking about CSE 240: what comes after it, worked out in code.
   const relative = relativeReply(text, context.history, day);
   if (relative) return Response.json({ action: "briefing", reply: polishLine(relative) } satisfies CommandAction);
+  // "Where can I get help with ENG 102?": the tutoring centers that fit, worked out in code.
+  if (TUTORING.test(text)) return Response.json({ action: "briefing", reply: polishLine(tutoringReply(text, day)) } satisfies CommandAction);
 
   // "Drop the study block" is answered by the keyword rule, with no Gemini call: Gemini sees study blocks only as
   // "Work on: …" titles and sometimes answers that there is none (and that answer gets cached). Only when the
@@ -87,7 +92,15 @@ export async function POST(request: Request) {
 /** A chip's answer, in code. */
 function chipAction(topic: ReturnType<typeof chipTopic>, day: CommandDay, items: DayItem[], nowMs: number, text: string): CommandAction {
   const reply =
-    topic === "due" ? dueReply(day, nowMs) : topic === "free" ? freeReply(day, nowMs) : topic === "weather" ? weatherReply(day) : nextReply(items, nowMs, text);
+    topic === "due"
+      ? dueReply(day, nowMs)
+      : topic === "free"
+        ? freeReply(day, nowMs)
+        : topic === "weather"
+          ? weatherReply(day)
+          : topic === "help"
+            ? tutoringReply(text, day)
+            : nextReply(items, nowMs, text);
   return { action: "briefing", reply: polishLine(reply) };
 }
 

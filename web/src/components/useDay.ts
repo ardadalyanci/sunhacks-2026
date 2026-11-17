@@ -487,6 +487,7 @@ export function useDay(date?: string) {
         weather: plan.weather ?? current.request.weather,
         history: history.slice(-8),
         skipped: loadEdits(plan.date).skip, // so "put MAT 343 back" can name one
+        campus: current.request.homeCampus, // which tutoring centers are near
       });
     } catch (e) {
       // No Wi-Fi or Gemini out: what the plan on screen can answer, Sol still answers.

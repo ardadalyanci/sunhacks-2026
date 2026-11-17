@@ -3,7 +3,7 @@
 // only phrases them. Also the code answers for the chips under the chat, so those work without Gemini.
 import { placeLabel, polishLine, spokenAssignment } from "@/lib/places";
 import { DAY_END, DAY_START, atTime, clock, freeGaps, mstDate } from "@/lib/planner";
-import type { DayItem, Weather } from "@/lib/types";
+import type { DayItem, TutoringHelp, Weather } from "@/lib/types";
 
 export type CommandDay = {
   date: string; // the plan's day, "2026-11-16"
@@ -11,6 +11,7 @@ export type CommandDay = {
   suggestions: DayItem[];
   deadlines: DayItem[]; // every deadline the Due soon card shows, with `done`
   weather?: Weather;
+  help?: TutoringHelp[]; // ASU tutoring for open deadlines (lib/tutoring.ts)
 };
 
 const MIN = 60_000;
@@ -66,6 +67,7 @@ export function dayFacts(day: CommandDay, nowMs: number): string {
   lines.push(`FREE TIME FROM NOW: ${free.length ? free.map((g) => `${t(g.start)} to ${t(g.end)} (${hours(g.minutes)})`).join("; ") : "none"}.`);
   const due = [...day.deadlines].sort((a, b) => a.start.localeCompare(b.start));
   lines.push("DEADLINES:", ...(due.length ? due.map((d) => `- ${deadlineFact(d, day.date)}`) : ["- none from Canvas"]));
+  if (day.help?.length) lines.push("FREE ASU TUTORING (drop-in):", ...helpLines(day).map((l) => `- ${l}`));
   if (day.suggestions.length) {
     lines.push(
       "SOL'S PICKS (not on the day unless added):",
@@ -147,4 +149,38 @@ export function withoutHeatTips(reply: string, weather?: { isHot: boolean }): st
   if (weather?.isHot) return reply;
   const kept = reply.split(/(?<=[.!])\s+/).filter((s) => !/\b(hydrat\w*|water|heat|sunscreen|degrees)\b/i.test(s));
   return kept.length ? kept.join(" ") : reply;
+}
+
+/** Each tutoring pointer as words: the assignment, where to go and when. */
+function helpParts(day: CommandDay, help = day.help ?? []): { what: string; where: string; when: string }[] {
+  return help.flatMap((h) => {
+    const d = day.deadlines.find((x) => x.id === h.deadlineId);
+    if (!d) return [];
+    const where = [h.center, h.place].filter(Boolean).join(", ");
+    const when = h.from && h.to ? `open while you're free ${t(h.from)} to ${t(h.to)}` : "hours vary by location, the link is on Due soon";
+    return [{ what: spokenAssignment(d.title), where, when }];
+  });
+}
+
+/** "the Reading response for ENG 102: Writing Center, Noble Library 280, open while you're free 11:20 am to 1:20 pm." */
+function helpLines(day: CommandDay): string[] {
+  return helpParts(day).map((p) => `${p.what}: ${p.where}, ${p.when}.`);
+}
+
+/** Asking for tutoring or help with homework: "where can I get help with ENG 102?", "is there tutoring for MAT 343?" */
+export const TUTORING = /\b(tutor|tutors|tutoring|get help|need help|help with|stuck on)\b/i;
+
+/** Sol's answer about tutoring, in code. Only the deadlines of a course the student names, when they name one. */
+export function tutoringReply(text: string, day: CommandDay): string {
+  const said = text.toUpperCase();
+  const named = (day.help ?? []).filter((h) => {
+    const course = /^([A-Z]{2,4} \d{3}[A-Z]?)/.exec(day.deadlines.find((x) => x.id === h.deadlineId)?.title ?? "")?.[1];
+    return course !== undefined && said.includes(course);
+  });
+  const parts = helpParts(day, named.length ? named : day.help);
+  if (!parts.length) return "I don't see free tutoring that fits before your deadlines today. Online hours are on tutoring.asu.edu.";
+  return parts
+    .slice(0, 2)
+    .map((p) => `For ${p.what}, try the ${p.where}, ${p.when}.`)
+    .join(" ");
 }

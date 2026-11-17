@@ -1,6 +1,6 @@
 // Cleans untrusted JSON from the browser before the planner touches it. Broken entries are dropped
 // instead of crashing the route; only a missing `classes` array is an error.
-import type { ClassBlock, Commute, CommuteBy, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
+import type { CampusId, ClassBlock, Commute, CommuteBy, DayItem, DayPlan, Opportunity, PlanRequest, Weather, Weekday } from "./types";
 import { isCampus } from "./campuses";
 import { inPhoenixArea, roundPoint } from "./commute";
 
@@ -137,7 +137,8 @@ export function sanitizePlanRequest(raw: unknown): { ok: true; value: PlanReques
 
 /**
  * The rest of the day /api/command answers from: the plan's date, every deadline the Due soon card shows (with
- * `done`), the weather, and the last few chat turns (oldest first) so a follow-up question makes sense.
+ * `done`), the weather, the student's home campus (for tutoring), and the last few chat turns (oldest first) so a
+ * follow-up question makes sense.
  */
 export function sanitizeCommandContext(raw: unknown): {
   date?: string;
@@ -145,6 +146,7 @@ export function sanitizeCommandContext(raw: unknown): {
   weather?: Weather;
   history: { from: "you" | "sol"; text: string }[];
   skipped: string[];
+  campus?: CampusId;
 } {
   const body = isObj(raw) ? raw : {};
   const turn = (v: unknown) => {
@@ -160,6 +162,7 @@ export function sanitizeCommandContext(raw: unknown): {
       .map(turn)
       .filter((t): t is { from: "you" | "sol"; text: string } => t !== null),
     skipped: list(body.skipped, 10).map((c) => str(c, 60)).filter((c): c is string => Boolean(c)),
+    campus: isCampus(body.campus) ? body.campus : undefined,
   };
 }
 
