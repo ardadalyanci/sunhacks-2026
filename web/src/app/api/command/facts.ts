@@ -2,11 +2,13 @@
 // leave times, how each trip is made, free time, what is due and whether it is turned in, the weather). Gemini
 // only phrases them. Also the code answers for the chips under the chat, so those work without Gemini.
 import { placeLabel, polishLine, spokenAssignment } from "@/lib/places";
-import { DAY_END, DAY_START, atTime, clock, freeGaps, mstDate } from "@/lib/planner";
+import { DAY_END, DAY_START, addDays, atTime, clock, freeGaps, mstDate } from "@/lib/planner";
+import { dayOpener, spokenItem, spokenWhere } from "@/lib/say";
 import type { DayItem, TutoringHelp, Weather } from "@/lib/types";
 
 export type CommandDay = {
   date: string; // the plan's day, "2026-11-16"
+  today: string; // Arizona's date now; a later `date` is a coming day the student picked (Tomorrow, Wed 18)
   items: DayItem[];
   suggestions: DayItem[];
   deadlines: DayItem[]; // every deadline the Due soon card shows, with `done`
@@ -22,9 +24,19 @@ const span = (i: DayItem) => (i.end ? `${t(i.start)} to ${t(i.end)}` : t(i.start
 const minutesBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(b) - Date.parse(a)) / MIN));
 const hours = (min: number) => (min < 60 ? `${min} minutes` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ""}`);
 
+/** "Tomorrow" / "On Wednesday" when the student is looking at a coming day; null for today. */
+export function dayAhead(day: CommandDay): string | null {
+  return dayOpener(`${day.date}T12:00:00-07:00`, Date.parse(`${day.today}T12:00:00-07:00`));
+}
+
+const longDate = (date: string) =>
+  new Date(`${date}T12:00:00-07:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Phoenix" });
+
+/** "today", "tomorrow" or the weekday ("Wednesday"), counted from the real today, the way Due soon says it. */
 function dayWord(iso: string, today: string): string {
   const date = mstDate(new Date(iso));
   if (date === today) return "today";
+  if (date === addDays(today, 1)) return "tomorrow";
   const d = new Date(`${date}T12:00:00-07:00`);
   return d.toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Phoenix" });
 }
@@ -59,14 +71,26 @@ function deadlineFact(d: DayItem, today: string): string {
 
 /** The facts block for Gemini. */
 export function dayFacts(day: CommandDay, nowMs: number): string {
-  const lines = [`DAY: ${new Date(`${day.date}T12:00:00-07:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Phoenix" })}. NOW: ${t(new Date(nowMs).toISOString())}.`];
-  if (day.weather) lines.push(`WEATHER: ${day.weather.tempF}°F now, high ${day.weather.highF}°F${day.weather.isHot ? ", a hot day" : ""}.`);
+  // A coming day gets no clock time: "now" is another day, and only confuses which day the answer is about.
+  const ahead = dayAhead(day);
+  const lines = [
+    ahead
+      ? `DAY: ${longDate(day.date)}, a coming day (today is ${longDate(day.today)}). The student picked this day in the app: every answer is about it.`
+      : `DAY: ${longDate(day.date)}. NOW: ${t(new Date(nowMs).toISOString())}.`,
+  ];
+  if (day.weather) {
+    lines.push(
+      ahead
+        ? `WEATHER: forecast high ${day.weather.highF}°F that day${day.weather.isHot ? ", a hot day" : ""}.`
+        : `WEATHER: ${day.weather.tempF}°F now, high ${day.weather.highF}°F${day.weather.isHot ? ", a hot day" : ""}.`,
+    );
+  }
   const plan = day.items.filter((i) => i.type !== "deadline").sort((a, b) => a.start.localeCompare(b.start));
   lines.push("SCHEDULE:", ...(plan.length ? plan.map((i) => itemFact(i, nowMs)) : ["- nothing planned"]));
   const free = freeTime(day, nowMs);
-  lines.push(`FREE TIME FROM NOW: ${free.length ? free.map((g) => `${t(g.start)} to ${t(g.end)} (${hours(g.minutes)})`).join("; ") : "none"}.`);
+  lines.push(`${ahead ? "FREE TIME" : "FREE TIME FROM NOW"}: ${free.length ? free.map((g) => `${t(g.start)} to ${t(g.end)} (${hours(g.minutes)})`).join("; ") : "none"}.`);
   const due = [...day.deadlines].sort((a, b) => a.start.localeCompare(b.start));
-  lines.push("DEADLINES:", ...(due.length ? due.map((d) => `- ${deadlineFact(d, day.date)}`) : ["- none from Canvas"]));
+  lines.push("DEADLINES:", ...(due.length ? due.map((d) => `- ${deadlineFact(d, day.today)}`) : ["- none from Canvas"]));
   if (day.help?.length) lines.push("FREE ASU TUTORING (drop-in):", ...helpLines(day).map((l) => `- ${l}`));
   if (day.suggestions.length) {
     lines.push(
@@ -83,7 +107,7 @@ export function dueReply(day: CommandDay, nowMs: number): string {
   const done = day.deadlines.filter((d) => d.done);
   if (!day.deadlines.length) return "I don't see any deadlines. Add your Canvas token in Setup and I'll keep track of them.";
   const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1); // "the Essay for ENG 102" starts a sentence
-  const parts = open.slice(0, 3).map((d) => cap(`${spokenAssignment(d.title)} is due ${dayWord(d.start, day.date)} at ${t(d.start)}`));
+  const parts = open.slice(0, 3).map((d) => cap(`${spokenAssignment(d.title)} is due ${dayWord(d.start, day.today)} at ${t(d.start)}`));
   if (open.length > 3) parts.push(`${open.length - 3} more after that`);
   const head = parts.length ? `${parts.join(". ")}.` : "Nothing is left to turn in.";
   return done.length ? `${head} ${cap(done.length === 1 ? `${spokenAssignment(done[0].title)} is` : `${done.length} assignments are`)} already turned in.` : head;
@@ -92,15 +116,19 @@ export function dueReply(day: CommandDay, nowMs: number): string {
 /** "You're free 11:20 am to 1:20 pm (2 h) and 2:50 pm to 6 pm (3 h 10 min)." */
 export function freeReply(day: CommandDay, nowMs: number): string {
   const free = freeTime(day, nowMs);
-  if (!free.length) return "You don't have a free stretch of 20 minutes or more left today.";
+  const ahead = dayAhead(day); // "On Wednesday, you're free …"
+  if (!free.length) return ahead ? `${ahead}, you don't have a free stretch of 20 minutes or more.` : "You don't have a free stretch of 20 minutes or more left today.";
   const list = free.slice(0, 3).map((g) => `${t(g.start)} to ${t(g.end)} (${hours(g.minutes)})`);
-  return `You're free ${list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0]}.`;
+  return `${ahead ? `${ahead}, you're` : "You're"} free ${list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0]}.`;
 }
 
 /** "It's 97°F now with a high of 101°F. It's a hot day: take water, and I've added time to your walks." */
 export function weatherReply(day: CommandDay): string {
   const w = day.weather;
   if (!w) return "I don't have the weather right now.";
+  // A coming day has a forecast high; the temperature "now" belongs to today.
+  const ahead = dayAhead(day);
+  if (ahead) return `${ahead}, the high is ${w.highF}°F.${w.isHot ? " It'll be a hot day: take water, and I've added time to your walks." : ""}`;
   const base = `It's ${w.tempF}°F now with a high of ${w.highF}°F.`;
   return w.isHot ? `${base} It's a hot day: take water, and I've added time to your walks.` : base;
 }
@@ -192,10 +220,58 @@ export function tutoringReply(text: string, day: CommandDay): string {
   if (!parts.length) {
     return asked
       ? `I don't see free tutoring that fits before your ${asked} work is due. The hours are on tutoring.asu.edu.`
-      : "I don't see free tutoring that fits before your deadlines today. Online hours are on tutoring.asu.edu.";
+      : `I don't see free tutoring that fits before your deadlines${dayAhead(day) ? "" : " today"}. Online hours are on tutoring.asu.edu.`;
   }
   return parts
     .slice(0, 2)
     .map((p) => `For ${p.what}, try the ${p.where}, ${p.when}.`)
     .join(" ");
+}
+
+const PERIODS = { morning: [0, 12], afternoon: [12, 17], evening: [17, 24], tonight: [17, 24] } as const;
+type Period = keyof typeof PERIODS;
+const hourOf = (iso: string) => Number(iso.slice(11, 13));
+const stopName = (i: DayItem) => (i.type === "study_block" ? `study time for ${spokenItem(i)}` : spokenItem(i));
+
+/**
+ * "What do I have this morning?", "what classes do I have?": the classes, events and study time in that part of
+ * the day (or all of it), named for the day the student is looking at. Undefined when the question is not like that.
+ */
+export function scheduleReply(text: string, day: CommandDay): string | undefined {
+  const t2 = text.toLowerCase();
+  const period = (Object.keys(PERIODS) as Period[]).find((p) => new RegExp(`\\b${p}\\b`).test(t2));
+  const classesOnly = /\bclass(es)?\b/.test(t2) && !period;
+  if (!period && !classesOnly && !/\b(what do i have|what am i doing|what's on|what is on)\b/.test(t2.replace(/[‘’ʼ]/g, "'"))) return undefined;
+  const [from, to] = period ? PERIODS[period] : [0, 24];
+  const stops = day.items
+    .filter((i) => i.type !== "deadline" && i.type !== "travel" && (!classesOnly || i.type === "class"))
+    .filter((i) => hourOf(i.start) >= from && hourOf(i.start) < to)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const ahead = dayAhead(day);
+  const when = period
+    ? ahead
+      ? `${ahead} ${period === "tonight" ? "evening" : period}`
+      : period === "tonight"
+        ? "Tonight"
+        : `This ${period}`
+    : ahead ?? "Today";
+  if (!stops.length) return `${when}, you have ${classesOnly ? "no classes" : "nothing planned"}.`;
+  const parts = stops.slice(0, 4).map((i) => `${stopName(i)} at ${t(i.start)}${spokenWhere(i)}`);
+  if (stops.length > 4) parts.push(`${stops.length - 4} more after that`);
+  return `${when}, you have ${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]}.`;
+}
+
+/** "Where is CSE 230?": the class or event named, with its time, place and leave time. Undefined otherwise. */
+export function whereReply(text: string, day: CommandDay): string | undefined {
+  if (!/\bwhere\b/i.test(text)) return undefined;
+  const said = text.toLowerCase().replace(/\s+/g, "");
+  const stop = day.items.find((i) => (i.type === "class" || i.type === "event") && said.includes(i.title.toLowerCase().replace(/\s+/g, "")));
+  const ahead = dayAhead(day);
+  if (!stop) {
+    // "Where is CSE 230?" on a day without it: say so, instead of the generic help line.
+    const m = COURSE.exec(text);
+    return m ? `${ahead ?? "Today"}, ${`${m[1]} ${m[2]}`.toUpperCase()} isn't on your schedule.` : undefined;
+  }
+  const leave = stop.leaveAt ? ` Leave at ${t(stop.leaveAt)}.` : "";
+  return `${ahead ? `${ahead}, ` : ""}${stop.title} is at ${t(stop.start)}${spokenWhere(stop)}.${leave}`;
 }

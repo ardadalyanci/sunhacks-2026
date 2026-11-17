@@ -18,7 +18,7 @@ import { sanitizeCommandContext, sanitizePlanForCommand } from "@/lib/sanitize";
 import { dayOpener, spokenEvent, spokenItem, spokenWhere } from "@/lib/say";
 import type { CommandAction, DayItem } from "@/lib/types";
 import { type EditAnswer, ruleEdit, toEdit } from "./edits";
-import { type CommandDay, dayFacts, isTutoringQuestion, dueReply, freeReply, relativeReply, timesIn, tutoringReply, weatherReply, withoutHeatTips } from "./facts";
+import { type CommandDay, dayFacts, isTutoringQuestion, dueReply, freeReply, relativeReply, scheduleReply, timesIn, tutoringReply, weatherReply, whereReply, withoutHeatTips } from "./facts";
 import { tutoringHelp } from "@/lib/tutoring";
 
 type Turn = { from: "you" | "sol"; text: string };
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
   const date = context.date ?? (firstStart ? mstDate(new Date(firstStart)) : mstDate(new Date(nowMs)));
   const day: CommandDay = {
     date,
+    today: mstDate(new Date(nowMs)), // a later `date` is a coming day: Sol names it ("On Wednesday, …")
     items: plan.items,
     suggestions: plan.suggestions,
     deadlines: context.deadlines,
@@ -80,12 +81,14 @@ export async function POST(request: Request) {
     rules;
   // A clear edit the rules understood ("skip MAT 343") beats Gemini saying it can't help.
   if (decision.action === "unknown" && ["add_block", "skip_class", "restore_class", "study_from"].includes(rules.action)) decision = rules;
+  // Gemini calling a day question "not about your day" loses to an answer the code has ("where is CSE 230?").
+  if (decision.action === "unknown" && rules.action === "briefing" && rules.reply) decision = rules;
   // "Add the robotics meeting" once came back as "I couldn't find a robotics meeting" while robotics night was a
   // pick (Gemini does not always see "meeting" in "build night"). When the student asks to add something and a pick
   // shares its words, add it. Not for questions: "should I go to the lunch talk?" gets Gemini's answer.
   if (decision.action === "unknown" && rules.action === "add_event" && !isQuestion(text)) decision = rules;
   const action: CommandAction =
-    decision.action === "next_item" ? { action: "briefing", reply: polishLine(nextReply(plan.items, nowMs, text)) } : decision;
+    decision.action === "next_item" ? { action: "briefing", reply: polishLine(nextReply(plan.items, nowMs, text, date)) } : decision;
   return Response.json(action);
 }
 
@@ -100,7 +103,7 @@ function chipAction(topic: ReturnType<typeof chipTopic>, day: CommandDay, items:
           ? weatherReply(day)
           : topic === "help"
             ? tutoringReply(text, day)
-            : nextReply(items, nowMs, text);
+            : nextReply(items, nowMs, text, day.date);
   return { action: "briefing", reply: polishLine(reply) };
 }
 
@@ -124,26 +127,30 @@ const LEAVE_WORDS = /\b(leave|leaving|head out|walk|late)\b/i;
  * A leave question names the walk first, even when a study block comes before it ("Until then, you're on …").
  * When the next thing is on a later day (a look-ahead), the reply says which day.
  */
-function nextReply(items: DayItem[], nowMs: number, text: string): string {
+function nextReply(items: DayItem[], nowMs: number, text: string, date: string): string {
   const upcoming = items
     .filter((i) => (i.type === "class" || i.type === "event" || i.type === "study_block") && Date.parse(i.start) > nowMs)
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   const next = upcoming[0];
-  if (!next) return "Nothing else is planned today.";
+  if (!next) {
+    const later = dayOpener(`${date}T12:00:00-07:00`, nowMs); // "On Wednesday" when a coming day is picked
+    return later ? `${later}, nothing is planned.` : "Nothing else is planned today.";
+  }
   const walk = upcoming.find((i) => i.leaveAt); // the next stop the student walks to
   const opener = dayOpener(next.start, nowMs); // "Tomorrow" / "On Tuesday", or null for today
   const leave = (leaveAt: string) => (Date.parse(leaveAt) <= nowMs ? "leave now" : `leave at ${clock(leaveAt)}`);
   const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
   const begin = (sentence: string) => (opener ? `${opener}, ${sentence}` : cap(sentence));
 
+  // A study block is time to work on the assignment: "study time for Quiz 5", never "Quiz 5 at 8 am".
+  const what = next.type === "study_block" ? `study time for ${spokenItem(next)}` : spokenItem(next);
   if (walk?.leaveAt && LEAVE_WORDS.test(text)) {
     const minutes = Math.max(1, Math.round((Date.parse(walk.start) - Date.parse(walk.leaveAt)) / 60_000));
     const line = begin(`${leave(walk.leaveAt)} for ${spokenItem(walk)}${spokenWhere(walk)}, ${tripWords(walk, minutes)}.`);
     if (walk === next) return line;
-    const doing = next.type === "study_block" ? "you're on" : "you have";
-    return `${line} Until then, ${doing} ${spokenItem(next)} at ${clock(next.start)}.`;
+    return `${line} Until then, you have ${what} at ${clock(next.start)}.`;
   }
-  const head = `${opener ? `${opener}, first up is` : "Next up:"} ${spokenItem(next)} at ${clock(next.start)}${spokenWhere(next)}.`;
+  const head = `${opener ? `${opener}, first up is` : "Next up:"} ${what} at ${clock(next.start)}${spokenWhere(next)}.`;
   if (next.leaveAt) return `${head} ${cap(leave(next.leaveAt))}.`;
   if (!walk?.leaveAt) return head;
   return `${head} Then ${leave(walk.leaveAt)} for ${spokenItem(walk)}${spokenWhere(walk)}.`;
@@ -171,6 +178,7 @@ async function understand(
     '- "restore_class": they want one of SKIPPED back on today. "course" must be from SKIPPED.',
     '- "study_from": they want study time later ("move my study time to after CSE 240", "no studying before 2"). Give itemId from CLASSES when they name one (study starts when it ends), else "time" as 24-hour "HH:MM".',
     '- "unknown": not about their day at all. Put a short reply (max 25 words) in "reply" saying what you can help with.',
+    'If DAY is a coming day, the student is looking at that day in the app: answer about it and name it ("On Wednesday, …", "Tomorrow, …"); never call it today, tonight or now.',
     "Never ask a question back. Use CONVERSATION to understand follow-ups: \"and after that?\" means after the thing just talked about, so answer from the SCHEDULE after it.",
     // "Should I go to the lunch talk?" is a question about one of Sol's picks: a straight answer, not "I'm not sure".
     'If they ask whether to go to something in ADDABLE, answer "Yes" first, then one reason from its "why", title or time, then how to add it, like "Yes: it\'s at noon and it\'s about software internships. Say add the lunch & learn." Never say you are not sure.',
@@ -262,6 +270,10 @@ function byRules(
   if (/\b(due|deadlines?|assignments?|homework|turned in)\b/.test(t)) return { action: "briefing", reply: polishLine(dueReply(day, nowMs)) };
   if (/\b(free|break|gap|lunch)\b/.test(t)) return { action: "briefing", reply: polishLine(freeReply(day, nowMs)) };
   if (/\b(hot|heat|weather|temperature|degrees)\b/.test(t)) return { action: "briefing", reply: polishLine(weatherReply(day)) };
+  const where = whereReply(text, day); // "where is CSE 230?"
+  if (where) return { action: "briefing", reply: polishLine(where) };
+  const schedule = scheduleReply(text, day); // "what do I have this afternoon?", "what classes do I have?"
+  if (schedule) return { action: "briefing", reply: polishLine(schedule) };
   return { action: "unknown", reply: help(addable) };
 }
 

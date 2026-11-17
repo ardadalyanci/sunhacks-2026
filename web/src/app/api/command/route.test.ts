@@ -67,7 +67,7 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
       action: "briefing",
       reply: "Leave now for CSE 230 in Brickyard 210, a 10-minute walk.",
     });
-    expect((await at("2026-11-16T11:00:00-07:00", "where do I go now")).reply).toBe("Next up: the Reading quiz for ENG 102 at 11:20 am.");
+    expect((await at("2026-11-16T11:00:00-07:00", "where do I go now")).reply).toBe("Next up: study time for the Reading quiz for ENG 102 at 11:20 am.");
     expect((await at("2026-11-16T20:00:00-07:00")).reply).toBe("Nothing else is planned today.");
   });
 
@@ -94,10 +94,10 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
     };
     const ask = (text: string, now: string) => command({ text, plan: sunday, now }).then((r) => r.json.reply);
     expect(await ask("when should I leave?", "2026-11-15T11:00:00-07:00")).toBe(
-      "Leave at 1:15 pm for your work shift at the MU, a 15-minute walk. Until then, you're on the Reading response for ENG 102 at 11:50 am.",
+      "Leave at 1:15 pm for your work shift at the MU, a 15-minute walk. Until then, you have study time for the Reading response for ENG 102 at 11:50 am.",
     );
     expect(await ask("what's next?", "2026-11-15T11:00:00-07:00")).toBe(
-      "Next up: the Reading response for ENG 102 at 11:50 am. Then leave at 1:15 pm for your work shift at the MU.",
+      "Next up: study time for the Reading response for ENG 102 at 11:50 am. Then leave at 1:15 pm for your work shift at the MU.",
     );
     expect(await ask("what's next?", "2026-11-15T09:00:00-07:00")).toBe("Next up: your MAT 343 study group at 10:30 am at Hayden. Leave at 10:18 am.");
     // Saturday evening looking at Sunday, and Friday looking at Sunday.
@@ -119,12 +119,12 @@ describe("POST /api/command with keyword rules (Gemini unavailable)", () => {
     };
     const ask = (text: string) => command({ text, plan: morning, now: "2026-11-16T08:00:00-07:00" }).then((r) => r.json.reply);
     expect(await ask("When should I leave?")).toBe(
-      "Leave at 10:20 am for CSE 230 in Brickyard 210, a 10-minute walk. Until then, you're on the Reading response for ENG 102 at 9:30 am.",
+      "Leave at 10:20 am for CSE 230 in Brickyard 210, a 10-minute walk. Until then, you have study time for the Reading response for ENG 102 at 9:30 am.",
     );
     expect(await ask("am I late")).toBe(
-      "Leave at 10:20 am for CSE 230 in Brickyard 210, a 10-minute walk. Until then, you're on the Reading response for ENG 102 at 9:30 am.",
+      "Leave at 10:20 am for CSE 230 in Brickyard 210, a 10-minute walk. Until then, you have study time for the Reading response for ENG 102 at 9:30 am.",
     );
-    expect(await ask("what's next?")).toBe("Next up: the Reading response for ENG 102 at 9:30 am. Then leave at 10:20 am for CSE 230 in Brickyard 210.");
+    expect(await ask("what's next?")).toBe("Next up: study time for the Reading response for ENG 102 at 9:30 am. Then leave at 10:20 am for CSE 230 in Brickyard 210.");
   });
 
   it("answers 400 for bad bodies and survives a broken plan", async () => {
@@ -349,5 +349,51 @@ describe("editing the day by chat", () => {
       minutes: 90,
       location: "SDFC",
     });
+  });
+});
+
+describe("a coming day the student picked (it is Monday, the day on screen is Wednesday)", () => {
+  const wed = (hhmm: string) => `2026-11-18T${hhmm}:00-07:00`;
+  const wednesday = {
+    items: [
+      { id: "study-q-0", type: "study_block", title: "Work on: CSE 240: Quiz 5", start: wed("08:00"), end: wed("08:30") },
+      { id: "class-0", type: "class", title: "CSE 230", start: wed("10:30"), end: wed("11:20"), location: "BYENG 210", leaveAt: wed("10:13") },
+    ],
+    suggestions: [],
+  };
+  const context = {
+    now: "2026-11-16T21:00:00-07:00",
+    date: "2026-11-18",
+    weather: { tempF: 70, highF: 84, isHot: false },
+    deadlines: [{ id: "canvas-assignment-4", type: "deadline", title: "CSE 240: Quiz 5", start: wed("23:59"), source: "canvas", done: false }],
+  };
+  const ask = (text: string, plan = wednesday) => command({ text, plan, ...context }).then((r) => r.json.reply);
+
+  it("answers in code about Wednesday, not today", async () => {
+    expect(await ask("What's due?")).toBe("Quiz 5 for CSE 240 is due Wednesday at 11:59 pm.");
+    expect(await ask("How hot is it?")).toBe("On Wednesday, the high is 84°F.");
+    expect(await ask("Do I have free time?")).toMatch(/^On Wednesday, you're free 8:30 am to 10:13 am/);
+    expect(await ask("What's next?")).toBe("On Wednesday, first up is study time for Quiz 5 for CSE 240 at 8 am. Then leave at 10:13 am for CSE 230 in Brickyard 210.");
+    expect(await ask("What's next?", { items: [], suggestions: [] })).toBe("On Wednesday, nothing is planned.");
+  });
+
+  it("tells Gemini the day is a coming one and to name it", async () => {
+    await ask("do I have time for lunch");
+    const prompt = generateJson.mock.calls[0][0] as string;
+    expect(prompt).toContain("DAY: Wednesday, November 18, a coming day (today is Monday, November 16).");
+    expect(prompt).toContain('answer about it and name it ("On Wednesday, …", "Tomorrow, …")');
+    expect(prompt).not.toContain("NOW:");
+  });
+
+  it("prefers the code's answer when Gemini calls a day question off-topic", async () => {
+    generateJson.mockResolvedValue({ action: "unknown" });
+    expect(await ask("where is CSE 230?")).toBe("On Wednesday, CSE 230 is at 10:30 am in Brickyard 210. Leave at 10:13 am.");
+  });
+
+  it("still answers where a class is and what is on in the morning when Gemini is out", async () => {
+    expect(await ask("where is CSE 230?")).toBe("On Wednesday, CSE 230 is at 10:30 am in Brickyard 210. Leave at 10:13 am.");
+    expect(await ask("what do I have in the morning")).toBe(
+      "On Wednesday morning, you have study time for Quiz 5 for CSE 240 at 8 am and CSE 230 at 10:30 am in Brickyard 210.",
+    );
   });
 });

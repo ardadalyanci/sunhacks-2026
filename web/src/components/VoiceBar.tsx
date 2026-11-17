@@ -80,6 +80,7 @@ type Props = {
   onCommand: (text: string, history: ChatTurn[]) => Promise<string>; // returns what to say back
   onListeningChange?: (listening: boolean) => void;
   onSpeakingChange?: (speaking: boolean) => void;
+  waiting?: string; // "Planning Friday…": another day is loading, so questions wait for it
 };
 
 const MAX_TURNS = 20; // what the chat keeps on screen; the last 8 go to Sol as context
@@ -88,7 +89,7 @@ const MAX_TURNS = 20; // what the chat keeps on screen; the last 8 go to Sol as 
  * "Hear my day" reads the briefing; the mic, the text box or a ready-made question asks Sol. The chat keeps the
  * conversation for this day, and Sol gets the last few turns, so "and after that?" makes sense.
  */
-export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpeakingChange }: Props) {
+export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpeakingChange, waiting }: Props) {
   const [listening, setListeningState] = useState(false);
   const [working, setWorking] = useState(false);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
@@ -154,7 +155,9 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   }
 
   async function handle(text: string, aloud = false) {
-    if (working) return;
+    // While another day loads, typed questions and chips wait; a spoken one goes through, and Sol says he is
+    // still planning (useDay), so it is not dropped without a word.
+    if (working || (waiting && !aloud)) return;
     if (!aloud) stopTalking(); // typing while Sol reads the last answer: he stops
     const before = history.current;
     add({ from: "you", text });
@@ -303,7 +306,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
               <button
                 key={c.text}
                 type="button"
-                disabled={working}
+                disabled={working || Boolean(waiting)}
                 onClick={() => void handle(c.text)}
                 className="min-h-9 shrink-0 whitespace-nowrap rounded-full border border-line bg-page px-3 py-1 text-sm font-semibold text-ink hover:border-ink/40 disabled:opacity-50"
               >
@@ -323,7 +326,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
               id="command"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              placeholder={listening ? "Listening…" : "Ask about your day"}
+              placeholder={waiting ?? (listening ? "Listening…" : "Ask about your day")}
               autoComplete="off"
               className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/70"
             />
@@ -341,7 +344,7 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
             </button>
             <button
               type="submit"
-              disabled={working || !typed.trim()}
+              disabled={working || Boolean(waiting) || !typed.trim()}
               aria-label="Send"
               title="Send"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-cloud hover:bg-ink/90 disabled:bg-ink/25"
