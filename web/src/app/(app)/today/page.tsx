@@ -354,6 +354,7 @@ export default function TodayPage() {
               key={plan.date}
               briefing={plan.briefing}
               onCommand={day.command}
+              waiting={day.switching ? `Planning ${formatDay(chosen.date)}…` : undefined}
               onListeningChange={setListening}
               onSpeakingChange={setSpeaking}
             />

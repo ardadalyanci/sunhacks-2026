@@ -471,6 +471,8 @@ export function useDay(date?: string) {
   async function command(text: string, history: ChatTurn[] = []): Promise<string> {
     const current = shown.current;
     if (!current) return "Your day is still loading.";
+    // Another day is still loading (a spoken question can land mid-switch): answering would describe the old day.
+    if (chosen.current && current.plan.date !== chosen.current) return `I'm still planning ${formatDay(chosen.current)}. Ask me again in a moment.`;
     const plan = visible(current.plan, hiddenRef.current);
     // `now` is set for the sample day (it replays 8 am) and while "What if I oversleep?" is on; otherwise a real
     // day uses the server clock.
