@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import CalendarButton from "@/components/CalendarButton";
 import DayList from "@/components/DayList";
 import DayPicker from "@/components/DayPicker";
+import DueSoon from "@/components/DueSoon";
 import HowSolPlanned from "@/components/HowSolPlanned";
 import Mascot from "@/components/Mascot";
 import SkyDay from "@/components/SkyDay";
@@ -42,8 +43,8 @@ const isCourse = (title: string) => /^[A-Z]{2,4} \d{3}[A-Z]?$/.test(title); // "
 const weekdayOf = (date: string) => formatDay(date).split(",")[0];
 
 /*
- * One DOM order for every screen: the phone order (hero, heat, Sol, sky, Due soon, Fits your day, walks, How Sol
- * planned). From lg up the same elements are placed on a two-column grid, so the sky starts right under the hero
+ * One DOM order for every screen: the phone order (hero with Due soon, heat, Sol, sky, Fits your day, walks, How
+ * Sol planned). From lg up the same elements are placed on a two-column grid, so the sky starts right under the hero
  * and Sol talks from the right column. On a hot day the laptop shows the heat card under Sol's bubble instead of
  * across the page (see HeatCard), so the hot sky stays on the first screen. Keyboard and screen-reader order still
  * follow what is seen.
@@ -106,7 +107,7 @@ export default function TodayPage() {
   const hasPlan = Boolean(plan);
 
   // On a laptop Sol's bubble is usually taller than the hero beside it. How much taller goes into --sol-over, so
-  // the sky can start right under the hero while Due soon waits under Sol. Written straight to the style, so it
+  // the sky can start right under the hero while the side column waits under Sol. Written straight to the style, so it
   // lands before the next paint. The side column's height goes into --side-h for its sticky offset (see the aside).
   useEffect(() => {
     const box = grid.current;
@@ -193,8 +194,8 @@ export default function TodayPage() {
   const dueDay = (date: string) =>
     date === chosen.today ? "today" : date === tomorrow ? "tomorrow" : formatDay(date);
   const heat = plan.weather?.isHot ? plan.weather : undefined;
-  // Sol (with the heat card under his bubble on a hot day) may hang below the hero into the sky's row; Due soon
-  // then starts under him.
+  // Sol (with the heat card under his bubble on a hot day) may hang below the hero into the sky's row; the side
+  // column then starts under him.
   const overhang = { sol: "lg:mb-[calc(var(--sol-over,0px)*-1)]", side: "lg:mt-[calc(var(--sol-over,0px)+1.5rem)]" };
   const heatTitle = heat
     ? later
@@ -305,6 +306,18 @@ export default function TodayPage() {
           </div>
         )}
         {tight && <p className="mt-2 max-w-prose font-semibold text-[#8C1D40]">{tight}</p>}
+        {/* Homework comes right after the next walk: the most important thing on the page after leaving on time. */}
+        <div aria-busy={day.switching} className={dim}>
+          <DueSoon
+            deadlines={deadlines}
+            items={plan.items}
+            help={plan.help}
+            nowMs={nowMs}
+            dueDay={dueDay}
+            today={chosen.today || plan.date}
+            tomorrow={tomorrow ?? ""}
+          />
+        </div>
         <DayPicker days={chosen.days} date={chosen.date} />
         {/* "What if…" pills (heat, oversleeping, a cancelled class) and Sol's one-line note on what changed. */}
         {!later && <WhatIfBar day={day} />}
@@ -499,47 +512,8 @@ export default function TodayPage() {
           )}
         </div>
 
-        <section className={`rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
-          <h2 className="font-display text-xl font-bold">Due soon</h2>
-          {deadlines.length === 0 && (
-            <p className="mt-2 text-ink-soft">Nothing due. Add your Canvas token in Setup to see assignments.</p>
-          )}
-          <ul className="mt-2">
-            {deadlines.map((d) => {
-              const date = parseLocal(d.start).date;
-              const help = d.done ? undefined : plan.help?.find((h) => h.deadlineId === d.id);
-              return (
-                <li key={d.id} className="border-t border-ink/10 py-3 first:border-t-0">
-                  <p className="font-semibold leading-snug">{d.title}</p>
-                  <p className="text-ink-soft">
-                    Due {dueDay(date)} at {clock(d.start)}
-                  </p>
-                  <p className={`text-sm font-bold ${d.done ? "text-saguaro" : "text-[#8C1D40]"}`}>
-                    {d.done ? "Turned in" : "Not turned in yet"}
-                  </p>
-                  {/* Free ASU drop-in tutoring that fits before the due time (lib/tutoring.ts). */}
-                  {help && (
-                    <p className="mt-2 rounded-xl bg-page px-3 py-2 text-sm leading-snug">
-                      Free tutoring:{" "}
-                      <a href={help.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
-                        {help.center}
-                      </a>
-                      {help.place ? `, ${help.place}` : ""}.{" "}
-                      <span className="text-ink-soft">
-                        {help.from && help.to
-                          ? `Usually open while you’re free, ${clock(help.from)} to ${clock(help.to)}.`
-                          : "Hours vary by location."}
-                      </span>
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
         {plan.suggestions.length > 0 && (
-          <section className={`mt-4 rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
+          <section className={`rounded-2xl border border-line bg-surface p-5 ${underCard}`}>
             <h2 className="font-display text-xl font-bold">Fits your day</h2>
             <ul className="mt-2">
               {plan.suggestions.map((s) => (
