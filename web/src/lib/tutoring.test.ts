@@ -28,24 +28,24 @@ describe("tutoringHelp", () => {
     const due = deadline("d1", "MAT 343: Homework 9", at("23:59"));
     const [help] = tutoringHelp([due], classes, DATE, ms("08:00"));
     expect(help).toMatchObject({ deadlineId: "d1", center: "Math Tutoring Center", place: "Wexler Hall 116" });
-    // Opens at 10 am; the student leaves for CSE 230 at 10:20 (10-minute buffer), so the first 30 minutes free
-    // while it's open start after that class.
-    expect(help.from).toBe(at("11:20"));
+    // Open 10 to 5. Before CSE 230 only 10:00-10:20 is left (under 30 minutes); after it, the walk there first.
+    // The longest stretch wins over 4:00-5:00 after CSE 240.
+    expect(help.from).toBe(at("11:30"));
     expect(help.to).toBe(at("14:50"));
   });
 
   it("sends a writing assignment to the Writing Center", () => {
     const [help] = tutoringHelp([deadline("d1", "ENG 102: Reading response", at("12:00", "2026-11-17"))], classes, DATE, ms("08:00"));
-    expect(help).toMatchObject({ center: "Writing Center", place: "Noble Library 280", from: at("11:20"), to: at("14:50") });
+    expect(help).toMatchObject({ center: "Writing Center", place: "Noble Library 280", from: at("11:30"), to: at("14:50") });
   });
 
   it("counts study time for the same assignment as free, but not study time for another", () => {
     const due = deadline("d1", "MAT 343: Homework 9", at("23:59"));
     const study = (title: string): DayItem => ({ id: "s", type: "study_block", title: `Work on: ${title}`, start: at("11:20"), end: at("14:50"), source: "planner" });
-    expect(tutoringHelp([due], [...classes, study(due.title)], DATE, ms("08:00"))[0].from).toBe(at("11:20"));
-    // Other homework fills 11:20-2:50, so the next free stretch is after CSE 240, until the center closes at 6.
+    expect(tutoringHelp([due], [...classes, study(due.title)], DATE, ms("08:00"))[0].from).toBe(at("11:30"));
+    // Other homework fills 11:20-2:50, so the next free stretch is after CSE 240 (and the walk), until 5.
     const [later] = tutoringHelp([due], [...classes, study("PHY 121: Problem set 8")], DATE, ms("08:00"));
-    expect(later).toMatchObject({ center: "Math Tutoring Center", from: at("15:50"), to: at("18:00") });
+    expect(later).toMatchObject({ center: "Math Tutoring Center", from: at("16:00"), to: at("17:00") });
   });
 
   it("stops at the due time, and needs 30 minutes before it", () => {
@@ -63,6 +63,18 @@ describe("tutoringHelp", () => {
     const [online] = tutoringHelp([deadline("d1", "MAT 343: Homework 9", at("23:59", sunday))], [], sunday, Date.parse(at("08:00", sunday)));
     expect(online.center).toBe("Online Tutoring Center (Zoom)");
     expect(online.place).toBeUndefined();
+  });
+
+  it("prefers the stretch around the assignment's own study time over a longer one", () => {
+    const due = deadline("d1", "MAT 343: Homework 9", at("23:59"));
+    const study: DayItem = { id: "s", type: "study_block", title: `Work on: ${due.title}`, start: at("16:00"), end: at("16:45"), source: "planner" };
+    expect(tutoringHelp([due], [...classes, study], DATE, ms("08:00"))[0]).toMatchObject({ from: at("16:00"), to: at("17:00") });
+  });
+
+  it("helps with a final draft or project, not with a graded quiz, exam or midterm", () => {
+    const titles = ["ENG 102: Final draft", "ENG 102: Quiz 4", "MAT 343: Exam 2 review", "PHY 121: Midterm"];
+    const help = tutoringHelp(titles.map((t, i) => deadline(`d${i}`, t, at("23:59"))), [], DATE, ms("08:00"));
+    expect(help.map((h) => h.deadlineId)).toEqual(["d0"]);
   });
 
   it("skips turned-in, past-due and graded quizzes or exams, and courses no center covers", () => {

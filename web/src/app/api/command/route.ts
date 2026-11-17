@@ -18,7 +18,7 @@ import { sanitizeCommandContext, sanitizePlanForCommand } from "@/lib/sanitize";
 import { dayOpener, spokenEvent, spokenItem, spokenWhere } from "@/lib/say";
 import type { CommandAction, DayItem } from "@/lib/types";
 import { type EditAnswer, ruleEdit, toEdit } from "./edits";
-import { type CommandDay, TUTORING, dayFacts, dueReply, freeReply, relativeReply, timesIn, tutoringReply, weatherReply, withoutHeatTips } from "./facts";
+import { type CommandDay, dayFacts, isTutoringQuestion, dueReply, freeReply, relativeReply, timesIn, tutoringReply, weatherReply, withoutHeatTips } from "./facts";
 import { tutoringHelp } from "@/lib/tutoring";
 
 type Turn = { from: "you" | "sol"; text: string };
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   const relative = relativeReply(text, context.history, day);
   if (relative) return Response.json({ action: "briefing", reply: polishLine(relative) } satisfies CommandAction);
   // "Where can I get help with ENG 102?": the tutoring centers that fit, worked out in code.
-  if (TUTORING.test(text)) return Response.json({ action: "briefing", reply: polishLine(tutoringReply(text, day)) } satisfies CommandAction);
+  if (isTutoringQuestion(text)) return Response.json({ action: "briefing", reply: polishLine(tutoringReply(text, day)) } satisfies CommandAction);
 
   // "Drop the study block" is answered by the keyword rule, with no Gemini call: Gemini sees study blocks only as
   // "Work on: …" titles and sometimes answers that there is none (and that answer gets cached). Only when the

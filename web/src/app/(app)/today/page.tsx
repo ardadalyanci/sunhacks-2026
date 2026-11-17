@@ -527,7 +527,7 @@ export default function TodayPage() {
                       {help.place ? `, ${help.place}` : ""}.{" "}
                       <span className="text-ink-soft">
                         {help.from && help.to
-                          ? `Open while you’re free, ${clock(help.from)} to ${clock(help.to)}.`
+                          ? `Usually open while you’re free, ${clock(help.from)} to ${clock(help.to)}.`
                           : "Hours vary by location."}
                       </span>
                     </p>

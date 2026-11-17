@@ -157,28 +157,43 @@ function helpParts(day: CommandDay, help = day.help ?? []): { what: string; wher
     const d = day.deadlines.find((x) => x.id === h.deadlineId);
     if (!d) return [];
     const where = [h.center, h.place].filter(Boolean).join(", ");
-    const when = h.from && h.to ? `open while you're free ${t(h.from)} to ${t(h.to)}` : "hours vary by location, the link is on Due soon";
+    const when = h.from && h.to ? `usually open while you're free ${t(h.from)} to ${t(h.to)}` : "hours vary by location, the link is on Due soon";
     return [{ what: spokenAssignment(d.title), where, when }];
   });
 }
 
-/** "the Reading response for ENG 102: Writing Center, Noble Library 280, open while you're free 11:20 am to 1:20 pm." */
+/** "the Reading response for ENG 102: Writing Center, Noble Library 280, usually open while you're free 11:20 am to 1:20 pm." */
 function helpLines(day: CommandDay): string[] {
   return helpParts(day).map((p) => `${p.what}: ${p.where}, ${p.when}.`);
 }
 
-/** Asking for tutoring or help with homework: "where can I get help with ENG 102?", "is there tutoring for MAT 343?" */
-export const TUTORING = /\b(tutor|tutors|tutoring|get help|need help|help with|stuck on)\b/i;
+const COURSE = /\b([A-Z]{2,4}) ?(\d{3}[A-Z]?)\b/i;
+const SCHOOLWORK = /\b(homework|hw|assignments?|labs?|essays?|problem sets?|papers?|readings?|projects?|math|physics|chemistry|writing)\b/i;
+
+/**
+ * Asking for tutoring: "is there tutoring for MAT 343?", "where can I get help with ENG 102?", "I'm stuck on my
+ * lab". Not an edit ("add tutoring at 5", "skip my tutoring shift"), and "help" alone ("I need help planning
+ * today") only counts next to a course or schoolwork.
+ */
+export function isTutoringQuestion(text: string): boolean {
+  if (/\b(add|put|schedule|block|join|go to|attend|remove|drop|cancel|skip|delete|move)\b/i.test(text)) return false;
+  if (/\b(tutor|tutors|tutoring)\b/i.test(text)) return true;
+  return /\b(get help|need help|help with|stuck on)\b/i.test(text) && (COURSE.test(text) || SCHOOLWORK.test(text));
+}
 
 /** Sol's answer about tutoring, in code. Only the deadlines of a course the student names, when they name one. */
 export function tutoringReply(text: string, day: CommandDay): string {
-  const said = text.toUpperCase();
-  const named = (day.help ?? []).filter((h) => {
-    const course = /^([A-Z]{2,4} \d{3}[A-Z]?)/.exec(day.deadlines.find((x) => x.id === h.deadlineId)?.title ?? "")?.[1];
-    return course !== undefined && said.includes(course);
-  });
-  const parts = helpParts(day, named.length ? named : day.help);
-  if (!parts.length) return "I don't see free tutoring that fits before your deadlines today. Online hours are on tutoring.asu.edu.";
+  const m = COURSE.exec(text);
+  const asked = m ? `${m[1]} ${m[2]}`.toUpperCase() : undefined;
+  const help = asked
+    ? (day.help ?? []).filter((h) => day.deadlines.find((x) => x.id === h.deadlineId)?.title.toUpperCase().startsWith(asked))
+    : day.help;
+  const parts = helpParts(day, help);
+  if (!parts.length) {
+    return asked
+      ? `I don't see free tutoring that fits before your ${asked} work is due. The hours are on tutoring.asu.edu.`
+      : "I don't see free tutoring that fits before your deadlines today. Online hours are on tutoring.asu.edu.";
+  }
   return parts
     .slice(0, 2)
     .map((p) => `For ${p.what}, try the ${p.where}, ${p.when}.`)
