@@ -5,17 +5,20 @@ import type { DayItem, TutoringHelp } from "@/lib/types";
 
 const clock = (iso: string) => formatTime(parseLocal(iso).hours);
 
+const FULL = 2; // the most urgent get a full card; the rest a line each, so the sky still starts near the top
+
 // The card's edge, tint and countdown colour by urgency. The words carry it too ("Overdue", "Due today at…").
 const LOOK: Record<Urgency, { edge: string; card: string; left: string }> = {
-  overdue: { edge: "bg-[#8C1D40]", card: "border-[#8C1D40]/35 bg-[#8C1D40]/[0.06]", left: "text-[#8C1D40]" },
-  today: { edge: "bg-[#8C1D40]", card: "border-[#8C1D40]/35 bg-[#8C1D40]/[0.06]", left: "text-[#8C1D40]" },
-  tomorrow: { edge: "bg-sun", card: "border-sun/60 bg-sun-soft/45", left: "text-ink" },
+  overdue: { edge: "bg-[#8C1D40]", card: "border-[#8C1D40]/40 bg-[#8C1D40]/[0.08]", left: "text-[#8C1D40]" },
+  today: { edge: "bg-[#8C1D40]", card: "border-[#8C1D40]/40 bg-[#8C1D40]/[0.08]", left: "text-[#8C1D40]" },
+  tomorrow: { edge: "bg-sun", card: "border-line bg-surface", left: "text-ink" },
   later: { edge: "bg-ink/25", card: "border-line bg-surface", left: "text-ink" },
 };
 
 /**
  * The student's homework, right under the leave headline: one card per assignment not turned in, with a big
- * countdown, the time Sol saved for it on the sky and free tutoring that fits; turned-in work in one quiet line.
+ * countdown, the time Sol saved for it on the sky and free tutoring that fits (the two due first; the rest get a
+ * line each); turned-in work in one quiet line.
  */
 export default function DueSoon({
   deadlines,
@@ -55,7 +58,7 @@ export default function DueSoon({
 
       {open.length > 0 && (
         <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-          {open.map((d) => {
+          {open.slice(0, FULL).map((d) => {
             const { urgency, left } = dueStatus(d.start, nowMs, today, tomorrow);
             const look = LOOK[urgency];
             const { course, task } = splitCourse(d.title);
@@ -92,6 +95,30 @@ export default function DueSoon({
                     </span>
                   </p>
                 )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {open.length > FULL && (
+        <ul className="mt-3 overflow-hidden rounded-2xl border border-line bg-surface">
+          {open.slice(FULL).map((d) => {
+            const { urgency, left } = dueStatus(d.start, nowMs, today, tomorrow);
+            const { course, task } = splitCourse(d.title);
+            return (
+              <li key={d.id} className="relative border-t border-ink/10 py-2.5 pr-4 pl-6 first:border-t-0">
+                <span aria-hidden className={`absolute inset-y-0 left-0 w-2 ${LOOK[urgency].edge}`} />
+                <p className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <span className="font-semibold">
+                    {course && <span className="text-ink-soft">{course} </span>}
+                    {task}
+                  </span>
+                  <span className={`font-bold ${LOOK[urgency].left}`}>{left || `Due ${clock(d.start)}`}</span>
+                </p>
+                <p className="text-[15px] text-ink-soft">
+                  Due {dueDay(parseLocal(d.start).date)} at {clock(d.start)}
+                </p>
               </li>
             );
           })}
