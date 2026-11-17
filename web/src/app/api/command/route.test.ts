@@ -265,6 +265,31 @@ describe("Sol's chat: chips, answers from the day's facts, and memory", () => {
     expect((await command({ text: "when is my lab due", plan, now: at, ...day })).json.reply).toContain("Lab 7 for CSE 230 is due today at 11:59 pm.");
   });
 
+  it("answers where to get help in code: tutoring that is open while the student is free", async () => {
+    const essay = { id: "canvas-assignment-3", type: "deadline", title: "ENG 102: Reading response", start: "2026-11-17T12:00:00-07:00", source: "canvas", done: false };
+    const withEssay = { ...day, deadlines: [...day.deadlines, essay] };
+    const ask = (text: string) => command({ text, plan, now: at, ...withEssay }).then((r) => r.json.reply);
+    // Noble's Writing Center is open 10 to 5: the longest free stretch in it is after CSE 230 (and the walk) until
+    // the walk to the 5 pm event.
+    const writing = "For the Reading response for ENG 102, try the Writing Center, Noble Library 280, usually open while you're free 11:30 am to 4:50 pm.";
+    expect(await ask("Where can I get help with ENG 102?")).toBe(writing);
+    expect(await ask("is there tutoring for eng102")).toBe(writing);
+    expect(await ask("Where can I get help?")).toBe(
+      `For Lab 7 for CSE 230, try the Engineering Tutoring Centers, hours vary by location, the link is on Due soon. ${writing}`,
+    );
+    // A course with nothing that fits says so, instead of answering about other courses.
+    expect(await ask("I need help with MAT 343")).toBe("I don't see free tutoring that fits before your MAT 343 work is due. The hours are on tutoring.asu.edu.");
+    expect(generateJson).not.toHaveBeenCalled();
+  });
+
+  it("does not take an edit or a general request for help as a tutoring question", async () => {
+    const ask = (text: string) => command({ text, plan, now: at, ...day }).then((r) => r.json);
+    expect(await ask("add tutoring at 5 for an hour")).toEqual({ action: "add_block", title: "Tutoring", start: "17:00", minutes: 60 });
+    generateJson.mockClear();
+    await ask("I need help planning today");
+    expect(generateJson).toHaveBeenCalledTimes(1); // went to Gemini, not the tutoring answer
+  });
+
   it("keeps only the last 8 turns of the chat, and only well-formed ones", async () => {
     generateJson.mockResolvedValueOnce({ action: "unknown", reply: "I can help with your day." });
     const history = [...Array.from({ length: 12 }, (_, i) => ({ from: i % 2 ? "sol" : "you", text: `turn ${i}` })), { from: "admin", text: "x" }];

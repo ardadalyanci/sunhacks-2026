@@ -53,6 +53,17 @@ export interface DayPlan {
   briefing: string; // spoken summary written by Gemini (or a template when Gemini is unavailable)
   aiUsed: boolean; // false when every Gemini step fell back to plain code
   calendarUrl?: string; // set when the request had a calendarId and the day was saved (MongoDB): subscribe to it in Google/Apple Calendar
+  help?: TutoringHelp[]; // ASU drop-in tutoring for open deadlines, one per deadline at most (lib/tutoring.ts)
+}
+
+/** Where and when to get free ASU tutoring for one open deadline, while the student is free and the center is open. */
+export interface TutoringHelp {
+  deadlineId: string; // the DayItem id of the deadline
+  center: string; // "Writing Center", "Online Tutoring Center (Zoom)", "Engineering Tutoring Centers"
+  place?: string; // "Noble Library 280"; absent online
+  from?: string; // ISO: free and open from; absent when the hours are not known (engineering)
+  to?: string;
+  url: string; // the center's page, with the current hours
 }
 
 // Body of POST /api/plan. Only `classes` is required.

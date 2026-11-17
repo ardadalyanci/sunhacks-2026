@@ -5,6 +5,7 @@ export const CHIPS = [
   { text: "When should I leave?", topic: "next" },
   { text: "Do I have free time?", topic: "free" },
   { text: "How hot is it?", topic: "weather" },
+  { text: "Where can I get help?", topic: "help" },
 ] as const;
 
 export type ChipTopic = (typeof CHIPS)[number]["topic"];

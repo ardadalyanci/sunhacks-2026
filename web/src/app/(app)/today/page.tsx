@@ -507,6 +507,7 @@ export default function TodayPage() {
           <ul className="mt-2">
             {deadlines.map((d) => {
               const date = parseLocal(d.start).date;
+              const help = d.done ? undefined : plan.help?.find((h) => h.deadlineId === d.id);
               return (
                 <li key={d.id} className="border-t border-ink/10 py-3 first:border-t-0">
                   <p className="font-semibold leading-snug">{d.title}</p>
@@ -516,6 +517,21 @@ export default function TodayPage() {
                   <p className={`text-sm font-bold ${d.done ? "text-saguaro" : "text-[#8C1D40]"}`}>
                     {d.done ? "Turned in" : "Not turned in yet"}
                   </p>
+                  {/* Free ASU drop-in tutoring that fits before the due time (lib/tutoring.ts). */}
+                  {help && (
+                    <p className="mt-2 rounded-xl bg-page px-3 py-2 text-sm leading-snug">
+                      Free tutoring:{" "}
+                      <a href={help.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
+                        {help.center}
+                      </a>
+                      {help.place ? `, ${help.place}` : ""}.{" "}
+                      <span className="text-ink-soft">
+                        {help.from && help.to
+                          ? `Usually open while you’re free, ${clock(help.from)} to ${clock(help.to)}.`
+                          : "Hours vary by location."}
+                      </span>
+                    </p>
+                  )}
                 </li>
               );
             })}

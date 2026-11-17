@@ -33,6 +33,7 @@ import { FULL_DAY, isCourse, spokenItem, tidyBriefing } from "@/lib/say";
 import { savePlan } from "@/lib/saved-plans";
 import type { DayItem, DayPlan, PlanRequest } from "@/lib/types";
 import { shuttleLeg } from "@/lib/shuttles";
+import { tutoringHelp } from "@/lib/tutoring";
 
 const MAX_SUGGESTIONS = 3;
 const MAX_PICKS = 6; // Gemini ranks a few extra, because study blocks may take the time of some
@@ -126,6 +127,8 @@ export async function POST(request: Request) {
       aiBriefing ?? templateBriefing(items, suggestions, body.weather, ahead ? ahead[0].toUpperCase() + ahead.slice(1) : undefined, nowMs),
     ),
     aiUsed: ranked !== null || estimated !== null || aiBriefing !== null,
+    // ASU drop-in tutoring for each open deadline, when a center that covers it is open while the student is free.
+    help: tutoringHelp(deadlines, items, date, nowMs, body.homeCampus),
   };
   // MongoDB Atlas (optional): save the day so a calendar app can subscribe to it. Never blocks the plan.
   if (body.calendarId && (await savePlan(body.calendarId, plan))) {
