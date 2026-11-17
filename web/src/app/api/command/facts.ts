@@ -266,8 +266,12 @@ export function whereReply(text: string, day: CommandDay): string | undefined {
   if (!/\bwhere\b/i.test(text)) return undefined;
   const said = text.toLowerCase().replace(/\s+/g, "");
   const stop = day.items.find((i) => (i.type === "class" || i.type === "event") && said.includes(i.title.toLowerCase().replace(/\s+/g, "")));
-  if (!stop) return undefined;
   const ahead = dayAhead(day);
+  if (!stop) {
+    // "Where is CSE 230?" on a day without it: say so, instead of the generic help line.
+    const m = COURSE.exec(text);
+    return m ? `${ahead ?? "Today"}, ${`${m[1]} ${m[2]}`.toUpperCase()} isn't on your schedule.` : undefined;
+  }
   const leave = stop.leaveAt ? ` Leave at ${t(stop.leaveAt)}.` : "";
   return `${ahead ? `${ahead}, ` : ""}${stop.title} is at ${t(stop.start)}${spokenWhere(stop)}.${leave}`;
 }

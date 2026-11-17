@@ -385,6 +385,11 @@ describe("a coming day the student picked (it is Monday, the day on screen is We
     expect(prompt).not.toContain("NOW:");
   });
 
+  it("prefers the code's answer when Gemini calls a day question off-topic", async () => {
+    generateJson.mockResolvedValue({ action: "unknown" });
+    expect(await ask("where is CSE 230?")).toBe("On Wednesday, CSE 230 is at 10:30 am in Brickyard 210. Leave at 10:13 am.");
+  });
+
   it("still answers where a class is and what is on in the morning when Gemini is out", async () => {
     expect(await ask("where is CSE 230?")).toBe("On Wednesday, CSE 230 is at 10:30 am in Brickyard 210. Leave at 10:13 am.");
     expect(await ask("what do I have in the morning")).toBe(

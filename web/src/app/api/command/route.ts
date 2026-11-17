@@ -81,6 +81,8 @@ export async function POST(request: Request) {
     rules;
   // A clear edit the rules understood ("skip MAT 343") beats Gemini saying it can't help.
   if (decision.action === "unknown" && ["add_block", "skip_class", "restore_class", "study_from"].includes(rules.action)) decision = rules;
+  // Gemini calling a day question "not about your day" loses to an answer the code has ("where is CSE 230?").
+  if (decision.action === "unknown" && rules.action === "briefing" && rules.reply) decision = rules;
   // "Add the robotics meeting" once came back as "I couldn't find a robotics meeting" while robotics night was a
   // pick (Gemini does not always see "meeting" in "build night"). When the student asks to add something and a pick
   // shares its words, add it. Not for questions: "should I go to the lunch talk?" gets Gemini's answer.

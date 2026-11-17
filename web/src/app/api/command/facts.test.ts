@@ -39,6 +39,8 @@ describe("day facts", () => {
   it("answers what's due and when the student is free in plain words", () => {
     expect(dueReply(day, Date.parse(at("09:00")))).toBe("Lab 7 for CSE 230 is due today at 11:59 pm. The Essay for ENG 102 is due Wednesday at noon.");
     expect(dueReply({ ...day, deadlines: [] }, 0)).toMatch(/Canvas token/);
+    const tomorrow = item({ id: "d3", type: "deadline", title: "MAT 343: HW 10", start: "2026-11-17T17:00:00-07:00" });
+    expect(dueReply({ ...day, deadlines: [tomorrow] }, Date.parse(at("09:00")))).toBe("HW 10 for MAT 343 is due tomorrow at 5 pm.");
     expect(freeReply(day, Date.parse(at("17:30")))).toBe("You're free 5:30 pm to 10 pm (4 h 30 min).");
   });
 
@@ -108,5 +110,6 @@ describe("a coming day the student picked (Monday, looking at Wednesday)", () =>
     expect(scheduleReply("can I add the mixer", day)).toBeUndefined();
     expect(whereReply("where is cse230?", ahead)).toBe("On Wednesday, CSE 230 is at 10:30 am in Brickyard 210. Leave at 10:13 am.");
     expect(whereReply("where is the gym?", ahead)).toBeUndefined();
+    expect(whereReply("where is MAT 343?", ahead)).toBe("On Wednesday, MAT 343 isn't on your schedule.");
   });
 });

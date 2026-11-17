@@ -155,7 +155,9 @@ export default function VoiceBar({ briefing, onCommand, onListeningChange, onSpe
   }
 
   async function handle(text: string, aloud = false) {
-    if (working || waiting) return;
+    // While another day loads, typed questions and chips wait; a spoken one goes through, and Sol says he is
+    // still planning (useDay), so it is not dropped without a word.
+    if (working || (waiting && !aloud)) return;
     if (!aloud) stopTalking(); // typing while Sol reads the last answer: he stops
     const before = history.current;
     add({ from: "you", text });
